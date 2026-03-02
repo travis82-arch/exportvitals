@@ -23,6 +23,40 @@ const clearBtn = document.getElementById('clearBtn');
 const status = document.getElementById('status');
 const debugContent = document.getElementById('debugContent');
 const ingestReportEl = document.getElementById('ingestReportContent');
+const baselineWindowLabel = document.getElementById('baselineWindowLabel');
+
+const ROUTES = ['/vitals', '/import', '/debug'];
+
+function normalizeRoute(routeLike) {
+  const route = String(routeLike || '').replace(/^#/, '').replace(/\/$/, '');
+  return ROUTES.includes(route) ? route : '/vitals';
+}
+
+function renderRoute(routeLike = location.hash || '/vitals') {
+  const route = normalizeRoute(routeLike);
+  document.querySelectorAll('.page').forEach((page) => {
+    page.classList.toggle('active', page.id === `${route.slice(1)}Page`);
+  });
+  document.querySelectorAll('.tab-link').forEach((link) => {
+    link.classList.toggle('active', link.dataset.route === route);
+    link.setAttribute('aria-current', link.dataset.route === route ? 'page' : 'false');
+  });
+}
+
+function navigateTo(routeLike) {
+  const route = normalizeRoute(routeLike);
+  if (location.hash !== `#${route}`) location.hash = route;
+  renderRoute(route);
+}
+
+document.querySelectorAll('.tab-link').forEach((link) => {
+  link.addEventListener('click', (event) => {
+    event.preventDefault();
+    navigateTo(link.dataset.route || '/vitals');
+  });
+});
+
+window.addEventListener('hashchange', () => renderRoute(location.hash));
 
 function parseCsvWithDebug(text) {
   const sniff = sniffDelimiter(text);
@@ -183,6 +217,8 @@ async function readZip(file) {
 function render(result) {
   const { snapshot, series, tables } = result;
   document.getElementById('latestNightDate').textContent = snapshot.latestDate || '—';
+  const baselineEnding = series.filter((row) => row.date !== snapshot.latestDate).at(-1)?.date || '—';
+  baselineWindowLabel.textContent = `Baseline window: 14-day median ending ${baselineEnding}`;
   const setMetric = (k, latestFmt, baselineFmt) => {
     const latest = snapshot.latest[k]; const baseline = snapshot.baseline[k];
     document.getElementById(`${k}Latest`).textContent = latest == null ? '—' : latestFmt(latest);
@@ -205,6 +241,21 @@ function render(result) {
   status.textContent = `Parsed datasets: ${result.ingestReport.datasetsFound.join(', ') || 'none'}`;
 }
 
+function clearRenderedData() {
+  document.getElementById('latestNightDate').textContent = '—';
+  baselineWindowLabel.textContent = 'Baseline window: 14-day median ending —';
+  ['rhr', 'hrv', 'spo2', 'temp'].forEach((k) => {
+    document.getElementById(`${k}Latest`).textContent = '—';
+    document.getElementById(`${k}Baseline`).textContent = '—';
+    document.getElementById(`${k}Delta`).textContent = '';
+    document.getElementById(`${k}Trend`).innerHTML = '';
+  });
+  document.getElementById('qualityInfo').textContent = '';
+  debugContent.textContent = 'No import yet.';
+  ingestReportEl.textContent = 'No ingest yet.';
+  status.textContent = 'No file selected.';
+}
+
 zipInput.addEventListener('change', async () => {
   const file = zipInput.files?.[0];
   if (!file) return;
@@ -215,10 +266,13 @@ zipInput.addEventListener('change', async () => {
 
 clearBtn.addEventListener('click', () => {
   localStorage.removeItem(STORAGE_KEY);
-  location.reload();
+  zipInput.value = '';
+  clearRenderedData();
 });
 
 const cached = localStorage.getItem(STORAGE_KEY);
 if (cached) {
   try { render(JSON.parse(cached)); } catch { /* noop */ }
 }
+
+renderRoute(location.hash || '#/vitals');
