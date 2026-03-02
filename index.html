@@ -7,31 +7,46 @@
   <link rel="stylesheet" href="./src/style.css" />
 </head>
 <body>
-  <header class="topbar"><div class="title">Oura Dashboard</div></header>
+  <header class="topbar">
+    <div class="title">Oura Dashboard</div>
+    <nav class="tabs" aria-label="Primary">
+      <a class="tab-link" data-route="/vitals" href="#/vitals">Vitals</a>
+      <a class="tab-link" data-route="/import" href="#/import">Import</a>
+      <a class="tab-link" data-route="/debug" href="#/debug">Debug</a>
+    </nav>
+  </header>
+
   <main class="container">
-    <section class="card">
-      <h2>Import Oura Export (ZIP)</h2>
-      <div class="row">
-        <input id="zipInput" type="file" accept=".zip" />
-        <button id="clearBtn" class="btn secondary">Forget data</button>
-      </div>
-      <div id="status" class="status">No file selected.</div>
+    <section id="vitalsPage" class="page">
+      <section class="card">
+        <h2>Vitals - Latest + 14-day Baseline</h2>
+        <p class="muted">Latest night: <span id="latestNightDate">—</span></p>
+        <p id="baselineWindowLabel" class="muted small">Baseline window: 14-day median ending —</p>
+        <div class="grid vitals-grid">
+          <div class="kpi"><div class="kpi-label">RHR Night</div><div id="rhrLatest" class="kpi-value">—</div><div id="rhrBaseline" class="kpi-reason">—</div><div id="rhrDelta" class="kpi-reason"></div><div id="rhrTrend" class="trend"></div></div>
+          <div class="kpi"><div class="kpi-label">Estimated HRV RMSSD proxy</div><div id="hrvLatest" class="kpi-value">—</div><div id="hrvBaseline" class="kpi-reason">—</div><div id="hrvDelta" class="kpi-reason"></div><div id="hrvTrend" class="trend"></div></div>
+          <div class="kpi"><div class="kpi-label">SpO2 Night Avg</div><div id="spo2Latest" class="kpi-value">—</div><div id="spo2Baseline" class="kpi-reason">—</div><div id="spo2Delta" class="kpi-reason"></div><div id="spo2Trend" class="trend"></div></div>
+          <div class="kpi"><div class="kpi-label">Temperature Deviation</div><div id="tempLatest" class="kpi-value">—</div><div id="tempBaseline" class="kpi-reason">—</div><div id="tempDelta" class="kpi-reason"></div><div id="tempTrend" class="trend"></div></div>
+        </div>
+        <div id="qualityInfo" class="muted small"></div>
+      </section>
     </section>
 
-    <section class="card">
-      <h2>Vitals - Latest + 14-day Baseline</h2>
-      <p class="muted">Latest night: <span id="latestNightDate">—</span></p>
-      <div class="grid vitals-grid">
-        <div class="kpi"><div class="kpi-label">RHR Night</div><div id="rhrLatest" class="kpi-value">—</div><div id="rhrBaseline" class="kpi-reason">—</div><div id="rhrDelta" class="kpi-reason"></div><div id="rhrTrend" class="trend"></div></div>
-        <div class="kpi"><div class="kpi-label">Estimated HRV RMSSD proxy</div><div id="hrvLatest" class="kpi-value">—</div><div id="hrvBaseline" class="kpi-reason">—</div><div id="hrvDelta" class="kpi-reason"></div><div id="hrvTrend" class="trend"></div></div>
-        <div class="kpi"><div class="kpi-label">SpO2 Night Avg</div><div id="spo2Latest" class="kpi-value">—</div><div id="spo2Baseline" class="kpi-reason">—</div><div id="spo2Delta" class="kpi-reason"></div><div id="spo2Trend" class="trend"></div></div>
-        <div class="kpi"><div class="kpi-label">Temperature Deviation</div><div id="tempLatest" class="kpi-value">—</div><div id="tempBaseline" class="kpi-reason">—</div><div id="tempDelta" class="kpi-reason"></div><div id="tempTrend" class="trend"></div></div>
-      </div>
-      <div id="qualityInfo" class="muted small"></div>
+    <section id="importPage" class="page">
+      <section class="card">
+        <h2>Import Oura Export (ZIP)</h2>
+        <div class="row">
+          <input id="zipInput" type="file" accept=".zip" />
+          <button id="clearBtn" class="btn secondary">Forget data</button>
+        </div>
+        <div id="status" class="status">No file selected.</div>
+      </section>
     </section>
 
-    <section class="card"><h3>Ingest Report</h3><pre id="ingestReportContent" class="debug-content">No ingest yet.</pre></section>
-    <section class="card"><h3>Debug Inspector</h3><pre id="debugContent" class="debug-content">No import yet.</pre></section>
+    <section id="debugPage" class="page">
+      <section class="card"><h3>Ingest Report</h3><pre id="ingestReportContent" class="debug-content">No ingest yet.</pre></section>
+      <section class="card"><h3>Debug Inspector</h3><pre id="debugContent" class="debug-content">No import yet.</pre></section>
+    </section>
   </main>
 
   <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>

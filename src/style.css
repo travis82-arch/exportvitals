@@ -1,7 +1,13 @@
 :root { --bg:#0b1220; --card:#0f172a; --text:#e5e7eb; --muted:#9ca3af; --border:#1f2937; --accent:#60a5fa; }
 *{box-sizing:border-box} body{margin:0;font-family:system-ui;background:var(--bg);color:var(--text)}
-.topbar{padding:14px 18px;border-bottom:1px solid var(--border)} .title{font-weight:700}
+.topbar{padding:14px 18px;border-bottom:1px solid var(--border);position:sticky;top:0;background:var(--bg);z-index:5}
+.title{font-weight:700;margin-bottom:10px}
+.tabs{display:flex;gap:8px;flex-wrap:wrap}
+.tab-link{display:inline-block;padding:8px 12px;border:1px solid var(--border);border-radius:10px;color:var(--text);text-decoration:none;background:#111827}
+.tab-link.active{border-color:var(--accent);box-shadow:inset 0 0 0 1px var(--accent);color:#bfdbfe}
 .container{max-width:1100px;margin:0 auto;padding:18px;display:grid;gap:14px}
+.page{display:none;gap:14px}
+.page.active{display:grid}
 .card{border:1px solid var(--border);background:var(--card);border-radius:12px;padding:14px}
 .row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
 input[type=file]{border:1px dashed var(--border);border-radius:10px;padding:9px;background:#0a1020;color:var(--text)}
