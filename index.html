@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Oura Dashboard (Starter)</title>
+  <title>Oura Dashboard</title>
   <meta name="theme-color" content="#111827" />
   <link rel="manifest" href="./manifest.webmanifest" />
   <link rel="stylesheet" href="./src/style.css" />
@@ -14,7 +14,7 @@
       <div class="logo">◯</div>
       <div>
         <div class="title">Oura Dashboard</div>
-        <div class="subtitle">Starter PWA (local-first)</div>
+        <div class="subtitle">Local-only import + baseline insights</div>
       </div>
     </div>
     <button id="installBtn" class="btn secondary" hidden>Install</button>
@@ -24,30 +24,19 @@
     <section class="card">
       <h1>Import Oura Export (ZIP)</h1>
       <p class="muted">
-        This starter is designed for a future step where you upload your Oura Export ZIP and we parse CSV files locally in your browser.
-        For now, it verifies file selection and stores it locally (in-memory only).
+        Processing is local-only in your browser. Your ZIP is parsed in-memory and not uploaded.
       </p>
 
       <div class="row">
         <input id="zipInput" type="file" accept=".zip" />
-        <button id="clearBtn" class="btn secondary">Clear</button>
+        <button id="clearBtn" class="btn secondary">Forget data</button>
       </div>
 
       <div id="status" class="status">No file selected.</div>
-
-      <details class="details">
-        <summary>Planned metrics (next steps)</summary>
-        <ul>
-          <li>Sleep: total sleep, efficiency, latency, deep/REM/light, sleep HR/HRV</li>
-          <li>Readiness: score, temperature deviation, HRV balance, resting HR</li>
-          <li>Activity: steps, active calories, MET minutes</li>
-          <li>Optional: SpO₂ (Gen 3), tags, workouts</li>
-        </ul>
-      </details>
     </section>
 
     <section class="card">
-      <h2>Dashboard (placeholder)</h2>
+      <h2>Latest KPIs</h2>
       <div class="grid">
         <div class="kpi">
           <div class="kpi-label">Latest Readiness</div>
@@ -62,28 +51,31 @@
           <div class="kpi-value" id="kpiHrv">—</div>
         </div>
         <div class="kpi">
-          <div class="kpi-label">Latest RHR</div>
+          <div class="kpi-label" id="kpiRhrLabel">Latest RHR</div>
           <div class="kpi-value" id="kpiRhr">—</div>
         </div>
       </div>
-      <p class="muted small">
-        Once we parse your export, these tiles will populate from the most recent day/sleep period.
-      </p>
+
+      <div class="details" style="margin-top:12px;">
+        <h3 style="margin:0 0 8px; font-size:15px;">Deviations vs baseline (14-day median)</h3>
+        <div id="deviations" class="muted small">Import a ZIP to calculate deviations.</div>
+      </div>
     </section>
 
     <section class="card">
       <h2>Privacy</h2>
       <p class="muted">
-        The intent is <strong>local-only processing</strong> in your browser.
-        Do not commit any personal exports (ZIP/CSV) into GitHub.
+        No server. No analytics. Raw ZIP data is not permanently stored.
       </p>
     </section>
   </main>
 
   <footer class="footer">
-    <span class="muted small">v0.1 starter</span>
+    <span class="muted small">v0.2 import prototype</span>
   </footer>
 
+  <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
   <script type="module" src="./src/app.js"></script>
 </body>
 </html>
