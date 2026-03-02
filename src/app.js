@@ -23,6 +23,8 @@ const FIELD_ALIASES = {
   temperatureDeviation: ['temperaturedeviation', 'tempdeviation', 'temperature_deviation']
 };
 
+const DELIMITER_CANDIDATES = [';', ',', '\t', '|'];
+
 window.addEventListener('beforeinstallprompt', (e) => {
   e.preventDefault();
   deferredPrompt = e;
@@ -59,6 +61,18 @@ function normalizeName(value) {
 
 function stripBom(text) {
   return String(text || '').replace(/^\uFEFF/, '');
+}
+
+function safeJsonParse(value) {
+  if (value && typeof value === 'object') return value;
+  if (typeof value !== 'string') return null;
+  const trimmed = value.trim();
+  if (!trimmed.startsWith('{') || !trimmed.endsWith('}')) return null;
+  try {
+    return JSON.parse(trimmed);
+  } catch {
+    return null;
+  }
 }
 
 function toNumber(value) {
@@ -107,6 +121,65 @@ function parseDurationToMinutes(value) {
   return Math.round(n * 60);
 }
 
+function splitOutsideQuotes(line, delimiter) {
+  const out = [];
+  let current = '';
+  let inQuotes = false;
+  for (let i = 0; i < line.length; i += 1) {
+    const char = line[i];
+    if (char === '"') {
+      if (inQuotes && line[i + 1] === '"') {
+        current += '"';
+        i += 1;
+      } else {
+        inQuotes = !inQuotes;
+      }
+      continue;
+    }
+    if (!inQuotes && char === delimiter) {
+      out.push(current);
+      current = '';
+      continue;
+    }
+    current += char;
+  }
+  out.push(current);
+  return out;
+}
+
+function sniffDelimiter(text) {
+  const sample = stripBom(text).slice(0, 8192);
+  const lines = sample.split(/\r?\n/).map((line) => line.trim()).filter(Boolean).slice(0, 3);
+  if (!lines.length) {
+    return { delimiter: ',', headerSample: '', headerFieldsCount: 0, candidates: [] };
+  }
+
+  const header = lines[0];
+  const scored = DELIMITER_CANDIDATES.map((delimiter) => {
+    const counts = lines.map((line) => splitOutsideQuotes(line, delimiter).length);
+    const headerFieldsCount = counts[0];
+    const avg = counts.reduce((sum, n) => sum + n, 0) / counts.length;
+    const variance = counts.reduce((sum, n) => sum + ((n - avg) ** 2), 0) / counts.length;
+    return { delimiter, headerFieldsCount, variance };
+  });
+
+  scored.sort((a, b) => {
+    if (b.headerFieldsCount !== a.headerFieldsCount) return b.headerFieldsCount - a.headerFieldsCount;
+    return a.variance - b.variance;
+  });
+
+  const semicolonCount = (header.match(/;/g) || []).length;
+  const commaCount = (header.match(/,/g) || []).length;
+  const semicolonHeavy = semicolonCount >= 2 && semicolonCount > commaCount;
+  const winner = semicolonHeavy ? (scored.find((item) => item.delimiter === ';') || scored[0]) : scored[0];
+  return {
+    delimiter: winner.delimiter,
+    headerSample: header,
+    headerFieldsCount: winner.headerFieldsCount,
+    candidates: scored
+  };
+}
+
 function median(values) {
   if (!values.length) return null;
   const sorted = [...values].sort((a, b) => a - b);
@@ -148,16 +221,19 @@ function detectDatasetRegistry(zipFiles) {
 
 function parseCsvWithDebug(text) {
   const cleaned = stripBom(text);
+  const sniff = sniffDelimiter(cleaned);
   const result = Papa.parse(cleaned, {
     header: true,
     skipEmptyLines: true,
     dynamicTyping: false,
-    delimiter: ''
+    delimiter: sniff.delimiter,
+    quotes: true
   });
   return {
     rows: result.data || [],
-    delimiter: result.meta?.delimiter || 'auto',
-    fields: result.meta?.fields || []
+    delimiter: result.meta?.delimiter || sniff.delimiter,
+    fields: result.meta?.fields || [],
+    sniff
   };
 }
 
@@ -190,20 +266,50 @@ function readinessMapper(row, chosen) {
 function sleepMapper(row, chosen) {
   const date = parseDateToLocal(row[chosen.date]);
   if (!date) return null;
-  const sleepMinutes = chosen.sleepTime ? parseDurationToMinutes(row[chosen.sleepTime]) : null;
+  let sleepMinutes = chosen.sleepTime ? parseDurationToMinutes(row[chosen.sleepTime]) : null;
+  const contributors = chosen.contributors ? safeJsonParse(row[chosen.contributors]) : null;
+  let sleepBalanceScore = null;
+  if (sleepMinutes == null && contributors?.total_sleep != null) {
+    const contributorTotalSleep = toNumber(contributors.total_sleep);
+    if (contributorTotalSleep != null) {
+      if (contributorTotalSleep > 250) sleepMinutes = parseDurationToMinutes(contributorTotalSleep);
+      else if (contributorTotalSleep <= 100) sleepBalanceScore = contributorTotalSleep;
+    }
+  }
   const hrv = chosen.hrv ? toNumber(row[chosen.hrv]) : null;
   const rhr = chosen.rhr ? toNumber(row[chosen.rhr]) : null;
   const sleepScore = chosen.sleepScore ? toNumber(row[chosen.sleepScore]) : null;
-  return { date, sleepMinutes, hrv, rhr, sleepScore };
+  return { date, sleepMinutes, hrv, rhr, sleepScore, sleepBalanceScore };
+}
+
+function dailyActivityMapper(row, chosen) {
+  const date = parseDateToLocal(row[chosen.date]);
+  if (!date) return null;
+  return {
+    date,
+    activityScore: chosen.score ? toNumber(row[chosen.score]) : null,
+    steps: chosen.steps ? toNumber(row[chosen.steps]) : null
+  };
+}
+
+function dailySpo2Mapper(row, chosen) {
+  const date = parseDateToLocal(row[chosen.date]);
+  if (!date) return null;
+  const direct = chosen.spo2 ? toNumber(row[chosen.spo2]) : null;
+  const spo2Json = chosen.spo2Json ? safeJsonParse(row[chosen.spo2Json]) : null;
+  const extracted = toNumber(spo2Json?.average);
+  return { date, spo2: direct ?? extracted };
 }
 
 function buildDatasetDebug(key, parsed, chosenColumns, reason) {
   return {
     dataset: key,
-    delimiter: parsed.delimiter,
+    delimiterChosen: parsed.delimiter,
+    headerSample: parsed.sniff?.headerSample || '',
+    headerFieldsCount: parsed.sniff?.headerFieldsCount || 0,
     rowCount: parsed.rows.length,
     columns: parsed.fields.slice(0, 30),
-    chosenColumns,
+    mappingDecisions: chosenColumns,
     sampleRows: parsed.rows.slice(0, 3),
     reason: reason || null
   };
@@ -222,6 +328,12 @@ async function readZip(file) {
 
   const allRowsByDate = new Map();
   const notes = [];
+  const reasons = {
+    sleep: null,
+    totalSleepTime: null,
+    hrv: 'HRV not available: no clearly mapped dataset/column in this export.',
+    rhr: 'Resting Heart Rate not available: no clearly mapped dataset/column in this export.'
+  };
 
   async function parseRegisteredDataset(key) {
     const entry = datasetRegistry[key];
@@ -241,12 +353,13 @@ async function readZip(file) {
     };
 
     let reason = null;
+    const missingColumns = [];
     if (!readinessDataset.parsed.rows.length) {
       reason = 'Parsed 0 rows after header.';
-    } else if (!chosen.date) {
-      reason = 'No valid rows: could not find a date column.';
-    } else if (!chosen.score) {
-      reason = 'No valid rows: could not find a readiness score column.';
+    } else {
+      if (!chosen.date) missingColumns.push('day');
+      if (!chosen.score) missingColumns.push('score');
+      if (missingColumns.length) reason = `Missing required column(s): ${missingColumns.join(', ')}.`;
     }
 
     const mappedRows = reason ? [] : summarizeRows(readinessDataset.parsed.rows, chosen, readinessMapper);
@@ -267,7 +380,7 @@ async function readZip(file) {
     debug.readinessFailureReason = reason;
   }
 
-  const sleepDataset = (await parseRegisteredDataset('sleepSession')) || (await parseRegisteredDataset('dailySleep')) || (await parseRegisteredDataset('sleepTime'));
+  const sleepDataset = (await parseRegisteredDataset('dailySleep')) || (await parseRegisteredDataset('sleepSession')) || (await parseRegisteredDataset('sleepTime'));
   if (sleepDataset) {
     const headers = sleepDataset.parsed.fields;
     const chosen = {
@@ -275,28 +388,79 @@ async function readZip(file) {
       sleepTime: pickBestColumn(headers, FIELD_ALIASES.totalSleepTime),
       hrv: pickBestColumn(headers, FIELD_ALIASES.averageHrv),
       rhr: pickBestColumn(headers, FIELD_ALIASES.restingHeartRate),
-      sleepScore: pickBestColumn(headers, FIELD_ALIASES.sleepScore)
+      sleepScore: pickBestColumn(headers, FIELD_ALIASES.sleepScore),
+      contributors: pickBestColumn(headers, ['contributors'])
     };
 
     let reason = null;
+    const missingColumns = [];
     if (!sleepDataset.parsed.rows.length) reason = 'Parsed 0 rows after header.';
-    else if (!chosen.date) reason = 'No valid rows: could not find a date column.';
+    else {
+      if (!chosen.date) missingColumns.push('day');
+      if (!chosen.sleepScore) missingColumns.push('score');
+      if (missingColumns.length) reason = `Missing required column(s): ${missingColumns.join(', ')}.`;
+    }
 
     const mappedRows = reason ? [] : summarizeRows(sleepDataset.parsed.rows, chosen, sleepMapper);
     for (const row of mappedRows) {
       allRowsByDate.set(row.date, { ...(allRowsByDate.get(row.date) || {}), ...row });
     }
     if (reason) notes.push(`Sleep dataset issue: ${reason}`);
+    reasons.sleep = reason || null;
     debug.datasets.push(buildDatasetDebug('sleep', sleepDataset.parsed, chosen, reason));
   } else {
     notes.push('Sleep session data not found in this export.');
+    reasons.sleep = 'Sleep dataset not found in this export.';
   }
 
-  for (const key of ['sleepHeartRate', 'sleepHrv', 'heartRate', 'dailyActivity', 'dailySpo2']) {
+  const activityDataset = await parseRegisteredDataset('dailyActivity');
+  if (activityDataset) {
+    const headers = activityDataset.parsed.fields;
+    const chosen = {
+      date: pickBestColumn(headers, ['day']),
+      score: pickBestColumn(headers, ['score']),
+      steps: pickBestColumn(headers, ['steps'])
+    };
+    const mappedRows = summarizeRows(activityDataset.parsed.rows, chosen, dailyActivityMapper);
+    for (const row of mappedRows) {
+      allRowsByDate.set(row.date, { ...(allRowsByDate.get(row.date) || {}), ...row });
+    }
+    debug.datasets.push(buildDatasetDebug('dailyActivity', activityDataset.parsed, chosen, null));
+  }
+
+  const spo2Dataset = await parseRegisteredDataset('dailySpo2');
+  if (spo2Dataset) {
+    const headers = spo2Dataset.parsed.fields;
+    const chosen = {
+      date: pickBestColumn(headers, FIELD_ALIASES.date),
+      spo2: pickBestColumn(headers, ['average_spo2', 'spo2', 'spo2_average']),
+      spo2Json: pickBestColumn(headers, ['spo2_percentage'])
+    };
+    const mappedRows = summarizeRows(spo2Dataset.parsed.rows, chosen, dailySpo2Mapper);
+    for (const row of mappedRows) {
+      allRowsByDate.set(row.date, { ...(allRowsByDate.get(row.date) || {}), ...row });
+    }
+    debug.datasets.push(buildDatasetDebug('dailySpo2', spo2Dataset.parsed, chosen, null));
+  }
+
+  for (const key of ['sleepHeartRate', 'sleepHrv', 'heartRate']) {
     const extra = await parseRegisteredDataset(key);
     if (extra) {
       debug.datasets.push(buildDatasetDebug(key, extra.parsed, {}, null));
     }
+  }
+
+  const latestDate = [...allRowsByDate.keys()].sort().pop() || null;
+
+  if (latestDate) {
+    const latest = allRowsByDate.get(latestDate) || {};
+    if (latest.sleepMinutes == null) {
+      reasons.totalSleepTime = latest.sleepBalanceScore != null
+        ? 'Total Sleep Time not available in this export schema (contributors.total_sleep appears to be a score).'
+        : 'Total Sleep Time not available in this export schema.';
+    }
+    if (latest.hrv != null) reasons.hrv = null;
+    if (latest.rhr != null) reasons.rhr = null;
   }
 
   const mergedRows = [...allRowsByDate.entries()]
@@ -309,10 +473,11 @@ async function readZip(file) {
       filename: file.name,
       found: Object.values(debug.detectedDatasets),
       missing: Object.keys(DATASET_ALIASES).filter((key) => !datasetRegistry[key]),
-      latestDate: mergedRows[mergedRows.length - 1]?.date || null,
+      latestDate,
       notes
     },
-    debug
+    debug,
+    reasons
   };
 }
 
@@ -341,18 +506,26 @@ function render(result) {
     : 'Loaded from daily readiness dataset.';
 
   kpis.sleep.value.textContent = latest.sleepMinutes != null ? formatMinutes(latest.sleepMinutes) : '—';
-  kpis.sleep.reason.textContent = latest.sleepMinutes == null
-    ? 'Sleep session data not found in this export.'
-    : 'Loaded from sleep dataset.';
+  if (latest.sleepScore != null && latest.sleepMinutes != null) {
+    kpis.sleep.value.textContent = `${latest.sleepScore}`;
+    kpis.sleep.reason.textContent = `Oura-provided sleep score from export. Total Sleep Time: ${formatMinutes(latest.sleepMinutes)}.`;
+  } else if (latest.sleepScore != null) {
+    kpis.sleep.value.textContent = `${latest.sleepScore}`;
+    kpis.sleep.reason.textContent = result.reasons.totalSleepTime || 'Oura-provided sleep score from export.';
+  } else if (latest.sleepMinutes != null) {
+    kpis.sleep.reason.textContent = `Sleep score unavailable; Total Sleep Time: ${formatMinutes(latest.sleepMinutes)}.`;
+  } else {
+    kpis.sleep.reason.textContent = result.reasons.sleep || result.reasons.totalSleepTime || 'Sleep data not found in this export.';
+  }
 
   kpis.hrv.value.textContent = latest.hrv != null ? `${latest.hrv} ms` : '—';
   kpis.hrv.reason.textContent = latest.hrv == null
-    ? 'HRV values not present in matched sleep dataset.'
+    ? result.reasons.hrv
     : 'Loaded from sleep dataset HRV columns.';
 
   kpis.rhr.value.textContent = latest.rhr != null ? `${latest.rhr} bpm` : '—';
   kpis.rhr.reason.textContent = latest.rhr == null
-    ? 'Resting heart-rate values not present in matched sleep dataset.'
+    ? result.reasons.rhr
     : 'Loaded from sleep dataset heart-rate columns.';
 
   const specs = [
@@ -394,10 +567,12 @@ function renderDebug(debug) {
   ];
   for (const dataset of debug.datasets) {
     lines.push(`Dataset: ${dataset.dataset}`);
-    lines.push(`  delimiter: ${dataset.delimiter}`);
+    lines.push(`  delimiterChosen: ${dataset.delimiterChosen}`);
+    lines.push(`  headerSample: ${dataset.headerSample}`);
+    lines.push(`  headerFieldsCount: ${dataset.headerFieldsCount}`);
     lines.push(`  rows parsed: ${dataset.rowCount}`);
     lines.push(`  columns: ${dataset.columns.join(', ') || '(none)'}`);
-    lines.push(`  chosen columns: ${JSON.stringify(dataset.chosenColumns)}`);
+    lines.push(`  mapping decisions: ${JSON.stringify(dataset.mappingDecisions)}`);
     if (dataset.reason) lines.push(`  reason: ${dataset.reason}`);
     lines.push(`  first rows: ${JSON.stringify(dataset.sampleRows, null, 2)}`);
     lines.push('');
@@ -445,6 +620,12 @@ function runSelfTests() {
   console.info(`Self-test ${passed ? 'passed' : 'failed'}.`, checks);
 }
 
+function runDelimiterSelfTest() {
+  const csv = 'id;contributors;day;score\n1;"{""total_sleep"": 24000, ""note"": ""a,b""}";2026-02-26;82';
+  const sniff = sniffDelimiter(csv);
+  console.assert(sniff.delimiter === ';', `Expected ';' delimiter, got '${sniff.delimiter}'`);
+}
+
 zipInput.addEventListener('change', async () => {
   const file = zipInput.files?.[0];
   if (!file) return;
@@ -469,6 +650,7 @@ clearBtn.addEventListener('click', () => {
 
 setupTabs();
 runSelfTests();
+runDelimiterSelfTest();
 
 const existing = loadDerived();
 if (existing?.mergedRows?.length) {
