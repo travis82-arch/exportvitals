@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Oura Dashboard (Starter)</title>
+  <meta name="theme-color" content="#111827" />
+  <link rel="manifest" href="./manifest.webmanifest" />
+  <link rel="stylesheet" href="./src/style.css" />
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <div class="logo">◯</div>
+      <div>
+        <div class="title">Oura Dashboard</div>
+        <div class="subtitle">Starter PWA (local-first)</div>
+      </div>
+    </div>
+    <button id="installBtn" class="btn secondary" hidden>Install</button>
+  </header>
+
+  <main class="container">
+    <section class="card">
+      <h1>Import Oura Export (ZIP)</h1>
+      <p class="muted">
+        This starter is designed for a future step where you upload your Oura Export ZIP and we parse CSV files locally in your browser.
+        For now, it verifies file selection and stores it locally (in-memory only).
+      </p>
+
+      <div class="row">
+        <input id="zipInput" type="file" accept=".zip" />
+        <button id="clearBtn" class="btn secondary">Clear</button>
+      </div>
+
+      <div id="status" class="status">No file selected.</div>
+
+      <details class="details">
+        <summary>Planned metrics (next steps)</summary>
+        <ul>
+          <li>Sleep: total sleep, efficiency, latency, deep/REM/light, sleep HR/HRV</li>
+          <li>Readiness: score, temperature deviation, HRV balance, resting HR</li>
+          <li>Activity: steps, active calories, MET minutes</li>
+          <li>Optional: SpO₂ (Gen 3), tags, workouts</li>
+        </ul>
+      </details>
+    </section>
+
+    <section class="card">
+      <h2>Dashboard (placeholder)</h2>
+      <div class="grid">
+        <div class="kpi">
+          <div class="kpi-label">Latest Readiness</div>
+          <div class="kpi-value" id="kpiReadiness">—</div>
+        </div>
+        <div class="kpi">
+          <div class="kpi-label">Latest Sleep</div>
+          <div class="kpi-value" id="kpiSleep">—</div>
+        </div>
+        <div class="kpi">
+          <div class="kpi-label">Latest HRV</div>
+          <div class="kpi-value" id="kpiHrv">—</div>
+        </div>
+        <div class="kpi">
+          <div class="kpi-label">Latest RHR</div>
+          <div class="kpi-value" id="kpiRhr">—</div>
+        </div>
+      </div>
+      <p class="muted small">
+        Once we parse your export, these tiles will populate from the most recent day/sleep period.
+      </p>
+    </section>
+
+    <section class="card">
+      <h2>Privacy</h2>
+      <p class="muted">
+        The intent is <strong>local-only processing</strong> in your browser.
+        Do not commit any personal exports (ZIP/CSV) into GitHub.
+      </p>
+    </section>
+  </main>
+
+  <footer class="footer">
+    <span class="muted small">v0.1 starter</span>
+  </footer>
+
+  <script type="module" src="./src/app.js"></script>
+</body>
+</html>
