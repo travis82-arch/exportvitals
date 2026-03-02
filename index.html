@@ -4,140 +4,35 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Oura Dashboard</title>
-  <meta name="theme-color" content="#111827" />
-  <link rel="manifest" href="./manifest.webmanifest" />
   <link rel="stylesheet" href="./src/style.css" />
 </head>
 <body>
-  <header class="topbar">
-    <div class="brand">
-      <div class="logo">◯</div>
-      <div>
-        <div class="title">Oura Dashboard</div>
-        <div class="subtitle">Local-only import + baseline insights</div>
-      </div>
-    </div>
-    <button id="installBtn" class="btn secondary" hidden>Install</button>
-  </header>
-
-  <nav class="tabs" aria-label="Primary">
-    <button class="tab active" data-tab="today">Today</button>
-    <button class="tab" data-tab="my-health">My Health</button>
-    <button class="tab" data-tab="vitals">Vitals</button>
-    <button class="tab" data-tab="sleep">Sleep</button>
-    <button class="tab" data-tab="activity">Activity</button>
-    <button class="tab" data-tab="readiness">Readiness</button>
-  </nav>
-
+  <header class="topbar"><div class="title">Oura Dashboard</div></header>
   <main class="container">
-    <section class="tab-panel" data-panel="today">
-      <section class="card">
-        <h1>Import Oura Export (ZIP)</h1>
-        <p class="muted">
-          Processing is local-only in your browser. Your ZIP is parsed in-memory and not uploaded.
-        </p>
-
-        <div class="row">
-          <input id="zipInput" type="file" accept=".zip" />
-          <button id="clearBtn" class="btn secondary">Forget data</button>
-        </div>
-
-        <div id="status" class="status">No file selected.</div>
-      </section>
-
-      <section class="card">
-        <h2>Today</h2>
-        <div class="grid">
-          <div class="kpi">
-            <div class="kpi-label">Readiness Score</div>
-            <div class="kpi-value" id="kpiReadiness">—</div>
-            <div class="kpi-reason" id="reasonReadiness">Import an Oura ZIP to calculate this metric.</div>
-          </div>
-          <div class="kpi">
-            <div class="kpi-label">Total Sleep Time</div>
-            <div class="kpi-value" id="kpiSleep">—</div>
-            <div class="kpi-reason" id="reasonSleep">Sleep session data not found in this export.</div>
-          </div>
-          <div class="kpi">
-            <div class="kpi-label">HRV</div>
-            <div class="kpi-value" id="kpiHrv">—</div>
-            <div class="kpi-reason" id="reasonHrv">Sleep session HRV data not found in this export.</div>
-          </div>
-          <div class="kpi">
-            <div class="kpi-label">Resting Heart Rate</div>
-            <div class="kpi-value" id="kpiRhr">—</div>
-            <div class="kpi-reason" id="reasonRhr">Sleep session heart-rate data not found in this export.</div>
-          </div>
-        </div>
-
-        <div class="details" style="margin-top:12px;">
-          <h3 style="margin:0 0 8px; font-size:15px;">Deviations vs baseline</h3>
-          <div id="deviations" class="muted small">Import a ZIP to calculate deviations.</div>
-        </div>
-      </section>
-
-      <section class="card">
-        <details id="debugInspector" open>
-          <summary>Debug Inspector</summary>
-          <pre id="debugContent" class="debug-content">No import yet.</pre>
-        </details>
-      </section>
-
-      <section class="card">
-        <h2>Privacy</h2>
-        <p class="muted">No server. No analytics. Raw ZIP data is not permanently stored.</p>
-      </section>
+    <section class="card">
+      <h2>Import Oura Export (ZIP)</h2>
+      <div class="row">
+        <input id="zipInput" type="file" accept=".zip" />
+        <button id="clearBtn" class="btn secondary">Forget data</button>
+      </div>
+      <div id="status" class="status">No file selected.</div>
     </section>
 
-    <section class="tab-panel hidden" data-panel="my-health">
-      <section class="card"><h2>My Health</h2><p class="muted">Placeholder for PR2 navigation.</p></section>
+    <section class="card">
+      <h2>Vitals - Latest + 14-day Baseline</h2>
+      <p class="muted">Latest night: <span id="latestNightDate">—</span></p>
+      <div class="grid vitals-grid">
+        <div class="kpi"><div class="kpi-label">RHR Night</div><div id="rhrLatest" class="kpi-value">—</div><div id="rhrBaseline" class="kpi-reason">—</div><div id="rhrDelta" class="kpi-reason"></div><div id="rhrTrend" class="trend"></div></div>
+        <div class="kpi"><div class="kpi-label">Estimated HRV RMSSD proxy</div><div id="hrvLatest" class="kpi-value">—</div><div id="hrvBaseline" class="kpi-reason">—</div><div id="hrvDelta" class="kpi-reason"></div><div id="hrvTrend" class="trend"></div></div>
+        <div class="kpi"><div class="kpi-label">SpO2 Night Avg</div><div id="spo2Latest" class="kpi-value">—</div><div id="spo2Baseline" class="kpi-reason">—</div><div id="spo2Delta" class="kpi-reason"></div><div id="spo2Trend" class="trend"></div></div>
+        <div class="kpi"><div class="kpi-label">Temperature Deviation</div><div id="tempLatest" class="kpi-value">—</div><div id="tempBaseline" class="kpi-reason">—</div><div id="tempDelta" class="kpi-reason"></div><div id="tempTrend" class="trend"></div></div>
+      </div>
+      <div id="qualityInfo" class="muted small"></div>
     </section>
-    <section class="tab-panel hidden" data-panel="vitals">
-      <section class="card">
-        <h2>Vitals</h2>
-        <p class="muted">Nightly trends from Oura exports, including derived metrics from heartRate.csv.</p>
-        <div class="grid">
-          <div class="kpi">
-            <div class="kpi-label">Resting Heart Rate (Night)</div>
-            <div class="kpi-value" id="vitalsRhrValue">—</div>
-            <div class="kpi-reason" id="vitalsRhrMeta">Derived from heartRate stream.</div>
-          </div>
-          <div class="kpi">
-            <div class="kpi-label">Estimated HRV (RMSSD proxy)</div>
-            <div class="kpi-value" id="vitalsHrvValue">—</div>
-            <div class="kpi-reason" id="vitalsHrvMeta">Estimated HRV (derived from BPM stream).</div>
-          </div>
-          <div class="kpi">
-            <div class="kpi-label">SpO2 (night average)</div>
-            <div class="kpi-value" id="vitalsSpo2Value">—</div>
-            <div class="kpi-reason" id="vitalsSpo2Meta">Loaded from dailySpO2 export rows.</div>
-          </div>
-          <div class="kpi">
-            <div class="kpi-label">Temperature Deviation</div>
-            <div class="kpi-value" id="vitalsTempValue">—</div>
-            <div class="kpi-reason" id="vitalsTempMeta">Loaded from dailyReadiness export rows.</div>
-          </div>
-        </div>
-        <div class="details" style="margin-top:12px;">
-          <h3 style="margin:0 0 8px; font-size:15px;">Vitals baseline deviations (14-day median)</h3>
-          <div id="vitalsDeviations" class="muted small">Import a ZIP to calculate deviations.</div>
-        </div>
-      </section>
-    </section>
-    <section class="tab-panel hidden" data-panel="sleep">
-      <section class="card"><h2>Sleep</h2><p class="muted">Placeholder for PR2 navigation.</p></section>
-    </section>
-    <section class="tab-panel hidden" data-panel="activity">
-      <section class="card"><h2>Activity</h2><p class="muted">Placeholder for PR2 navigation.</p></section>
-    </section>
-    <section class="tab-panel hidden" data-panel="readiness">
-      <section class="card"><h2>Readiness</h2><p class="muted">Placeholder for PR2 navigation.</p></section>
-    </section>
+
+    <section class="card"><h3>Ingest Report</h3><pre id="ingestReportContent" class="debug-content">No ingest yet.</pre></section>
+    <section class="card"><h3>Debug Inspector</h3><pre id="debugContent" class="debug-content">No import yet.</pre></section>
   </main>
-
-  <footer class="footer">
-    <span class="muted small">v0.3 robust import prototype</span>
-  </footer>
 
   <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
