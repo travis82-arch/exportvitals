@@ -9,6 +9,8 @@ import {
 } from './vitals-core.mjs';
 
 const STORAGE_KEY = 'ouraDerivedMetricsV3';
+const SETTINGS_KEY = 'ouraDashboardSettingsV1';
+const BASELINE_WINDOW_DAYS = 14;
 const DATASET_ALIASES = {
   dailyReadiness: ['dailyreadiness.csv'],
   dailySleep: ['dailysleep.csv'],
@@ -24,23 +26,61 @@ const status = document.getElementById('status');
 const debugContent = document.getElementById('debugContent');
 const ingestReportEl = document.getElementById('ingestReportContent');
 const baselineWindowLabel = document.getElementById('baselineWindowLabel');
+const todayImportPrompt = document.getElementById('todayImportPrompt');
+const developerModeToggle = document.getElementById('developerModeToggle');
+const developerDebugLinkWrap = document.getElementById('developerDebugLinkWrap');
 
-const ROUTES = ['/vitals', '/import', '/debug'];
+const PAGE_BY_ROUTE = {
+  '/today': 'todayPage',
+  '/vitals': 'vitalsPage',
+  '/my-health': 'myHealthPage',
+  '/my-health/trends': 'myHealthTrendsPage',
+  '/my-health/data-tools/import': 'myHealthDataToolsImportPage',
+  '/my-health/data-tools/debug': 'myHealthDataToolsDebugPage',
+  '/my-health/settings': 'myHealthSettingsPage'
+};
 
-function normalizeRoute(routeLike) {
-  const route = String(routeLike || '').replace(/^#/, '').replace(/\/$/, '');
-  return ROUTES.includes(route) ? route : '/vitals';
+const DEFAULT_ROUTE = '/today';
+
+function getSettings() {
+  const raw = localStorage.getItem(SETTINGS_KEY);
+  if (!raw) return { developerMode: false };
+  try {
+    const parsed = JSON.parse(raw);
+    return { developerMode: Boolean(parsed.developerMode) };
+  } catch {
+    return { developerMode: false };
+  }
 }
 
-function renderRoute(routeLike = location.hash || '/vitals') {
+function saveSettings(nextSettings) {
+  localStorage.setItem(SETTINGS_KEY, JSON.stringify(nextSettings));
+}
+
+function normalizeRoute(routeLike) {
+  const route = String(routeLike || '').replace(/^#/, '').replace(/\/$/, '') || DEFAULT_ROUTE;
+  const settings = getSettings();
+  if (route === '/my-health/data-tools/debug' && !settings.developerMode) return '/my-health/settings';
+  return PAGE_BY_ROUTE[route] ? route : DEFAULT_ROUTE;
+}
+
+function refreshDeveloperModeUi() {
+  const { developerMode } = getSettings();
+  developerModeToggle.checked = developerMode;
+  developerDebugLinkWrap.classList.toggle('hidden', !developerMode);
+}
+
+function renderRoute(routeLike = location.hash || DEFAULT_ROUTE) {
   const route = normalizeRoute(routeLike);
   document.querySelectorAll('.page').forEach((page) => {
-    page.classList.toggle('active', page.id === `${route.slice(1)}Page`);
+    page.classList.toggle('active', page.id === PAGE_BY_ROUTE[route]);
   });
   document.querySelectorAll('.tab-link').forEach((link) => {
-    link.classList.toggle('active', link.dataset.route === route);
-    link.setAttribute('aria-current', link.dataset.route === route ? 'page' : 'false');
+    const isActive = link.dataset.route === route || (route.startsWith('/my-health') && link.dataset.route === '/my-health');
+    link.classList.toggle('active', isActive);
+    link.setAttribute('aria-current', isActive ? 'page' : 'false');
   });
+  refreshDeveloperModeUi();
 }
 
 function navigateTo(routeLike) {
@@ -49,14 +89,21 @@ function navigateTo(routeLike) {
   renderRoute(route);
 }
 
-document.querySelectorAll('.tab-link').forEach((link) => {
+document.querySelectorAll('[data-route]').forEach((link) => {
   link.addEventListener('click', (event) => {
     event.preventDefault();
-    navigateTo(link.dataset.route || '/vitals');
+    navigateTo(link.dataset.route || DEFAULT_ROUTE);
   });
 });
 
 window.addEventListener('hashchange', () => renderRoute(location.hash));
+
+developerModeToggle.addEventListener('change', () => {
+  saveSettings({ ...getSettings(), developerMode: developerModeToggle.checked });
+  refreshDeveloperModeUi();
+  if (!developerModeToggle.checked && normalizeRoute(location.hash) === '/my-health/settings') return;
+  if (!developerModeToggle.checked && location.hash === '#/my-health/data-tools/debug') navigateTo('/my-health/settings');
+});
 
 function parseCsvWithDebug(text) {
   const sniff = sniffDelimiter(text);
@@ -150,9 +197,14 @@ async function readZip(file) {
   const sleepWindows = new Map();
 
   for (const [key, entry] of Object.entries(registry)) {
-    const text = await entry.async('string');
+    const text = await entry.async('text');
     const parsed = parseCsvWithDebug(text);
-    ingestReport.datasets[key] = { delimiterChosen: parsed.delimiter, rowsParsed: parsed.rows.length, fields: parsed.fields };
+    ingestReport.datasets[key] = {
+      rows: parsed.rows.length,
+      fields: parsed.fields,
+      delimiter: parsed.delimiter,
+      sniff: parsed.sniff
+    };
 
     for (const row of parsed.rows) {
       if (key === 'dailyReadiness') {
@@ -204,21 +256,39 @@ async function readZip(file) {
     latestDate,
     latest,
     baseline: {
-      rhr: baselineMedian(series, 'rhr', latestDate, 14),
-      hrv: baselineMedian(series, 'hrv', latestDate, 14),
-      spo2: baselineMedian(series, 'spo2', latestDate, 14),
-      temp: baselineMedian(series, 'temp', latestDate, 14)
+      rhr: baselineMedian(series, 'rhr', latestDate, BASELINE_WINDOW_DAYS),
+      hrv: baselineMedian(series, 'hrv', latestDate, BASELINE_WINDOW_DAYS),
+      spo2: baselineMedian(series, 'spo2', latestDate, BASELINE_WINDOW_DAYS),
+      temp: baselineMedian(series, 'temp', latestDate, BASELINE_WINDOW_DAYS)
     }
   };
 
   return { tables, ingestReport, ingestReportJson: JSON.stringify(ingestReport, null, 2), series, snapshot };
 }
 
+function renderTodayScores(tables) {
+  const latestReadiness = [...tables.oura_daily_readiness].sort((a, b) => a.date.localeCompare(b.date)).at(-1);
+  const latestSleep = [...tables.oura_daily_sleep].sort((a, b) => a.date.localeCompare(b.date)).at(-1);
+  const latestActivity = [...tables.oura_daily_activity].sort((a, b) => a.date.localeCompare(b.date)).at(-1);
+
+  const readinessScore = latestReadiness?.score;
+  const sleepScore = latestSleep?.score;
+  const activityScore = latestActivity?.score;
+
+  document.getElementById('todayReadinessScore').textContent = readinessScore == null ? '—' : readinessScore;
+  document.getElementById('todaySleepScore').textContent = sleepScore == null ? '—' : sleepScore;
+  document.getElementById('todayActivityScore').textContent = activityScore == null ? '—' : activityScore;
+
+  const isMissing = readinessScore == null && sleepScore == null && activityScore == null;
+  todayImportPrompt.classList.toggle('hidden', !isMissing);
+}
+
 function render(result) {
   const { snapshot, series, tables } = result;
+  renderTodayScores(tables);
   document.getElementById('latestNightDate').textContent = snapshot.latestDate || '—';
   const baselineEnding = series.filter((row) => row.date !== snapshot.latestDate).at(-1)?.date || '—';
-  baselineWindowLabel.textContent = `Baseline window: 14-day median ending ${baselineEnding}`;
+  baselineWindowLabel.textContent = `Baseline window: ${BASELINE_WINDOW_DAYS}-day median ending ${baselineEnding}`;
   const setMetric = (k, latestFmt, baselineFmt) => {
     const latest = snapshot.latest[k]; const baseline = snapshot.baseline[k];
     document.getElementById(`${k}Latest`).textContent = latest == null ? '—' : latestFmt(latest);
@@ -242,8 +312,12 @@ function render(result) {
 }
 
 function clearRenderedData() {
+  document.getElementById('todayReadinessScore').textContent = '—';
+  document.getElementById('todaySleepScore').textContent = '—';
+  document.getElementById('todayActivityScore').textContent = '—';
+  todayImportPrompt.classList.remove('hidden');
   document.getElementById('latestNightDate').textContent = '—';
-  baselineWindowLabel.textContent = 'Baseline window: 14-day median ending —';
+  baselineWindowLabel.textContent = `Baseline window: ${BASELINE_WINDOW_DAYS}-day median ending —`;
   ['rhr', 'hrv', 'spo2', 'temp'].forEach((k) => {
     document.getElementById(`${k}Latest`).textContent = '—';
     document.getElementById(`${k}Baseline`).textContent = '—';
@@ -272,7 +346,10 @@ clearBtn.addEventListener('click', () => {
 
 const cached = localStorage.getItem(STORAGE_KEY);
 if (cached) {
-  try { render(JSON.parse(cached)); } catch { /* noop */ }
+  try { render(JSON.parse(cached)); } catch { clearRenderedData(); }
+} else {
+  clearRenderedData();
 }
 
-renderRoute(location.hash || '#/vitals');
+refreshDeveloperModeUi();
+renderRoute(location.hash || `#${DEFAULT_ROUTE}`);

@@ -10,13 +10,26 @@
   <header class="topbar">
     <div class="title">Oura Dashboard</div>
     <nav class="tabs" aria-label="Primary">
+      <a class="tab-link" data-route="/today" href="#/today">Today</a>
       <a class="tab-link" data-route="/vitals" href="#/vitals">Vitals</a>
-      <a class="tab-link" data-route="/import" href="#/import">Import</a>
-      <a class="tab-link" data-route="/debug" href="#/debug">Debug</a>
+      <a class="tab-link" data-route="/my-health" href="#/my-health">My Health</a>
     </nav>
   </header>
 
   <main class="container">
+    <section id="todayPage" class="page">
+      <section class="card">
+        <h2>Today</h2>
+        <p class="muted">Daily Oura scores from your latest import.</p>
+        <div id="todayScoresGrid" class="grid vitals-grid">
+          <div class="kpi"><div class="kpi-label">Readiness Score</div><div id="todayReadinessScore" class="kpi-value">—</div></div>
+          <div class="kpi"><div class="kpi-label">Sleep Score</div><div id="todaySleepScore" class="kpi-value">—</div></div>
+          <div class="kpi"><div class="kpi-label">Activity Score</div><div id="todayActivityScore" class="kpi-value">—</div></div>
+        </div>
+        <p id="todayImportPrompt" class="status hidden">No Oura data imported yet. Go to <a href="#/my-health/data-tools/import" class="inline-link" data-route="/my-health/data-tools/import">My Health → Data Tools → Import</a> to upload your export ZIP.</p>
+      </section>
+    </section>
+
     <section id="vitalsPage" class="page">
       <section class="card">
         <h2>Vitals - Latest + 14-day Baseline</h2>
@@ -32,9 +45,28 @@
       </section>
     </section>
 
-    <section id="importPage" class="page">
+    <section id="myHealthPage" class="page">
       <section class="card">
-        <h2>Import Oura Export (ZIP)</h2>
+        <h2>My Health</h2>
+        <p class="muted">Manage trends, tools, and settings.</p>
+        <div class="grid hub-grid">
+          <a href="#/my-health/trends" class="hub-link" data-route="/my-health/trends"><strong>Trends</strong><span>Coming soon.</span></a>
+          <a href="#/my-health/data-tools/import" class="hub-link" data-route="/my-health/data-tools/import"><strong>Data Tools</strong><span>Import your Oura export ZIP.</span></a>
+          <a href="#/my-health/settings" class="hub-link" data-route="/my-health/settings"><strong>Settings</strong><span>Developer mode + baseline settings.</span></a>
+        </div>
+      </section>
+    </section>
+
+    <section id="myHealthTrendsPage" class="page">
+      <section class="card">
+        <h3>Trends</h3>
+        <p class="muted">Trend exploration will be expanded in upcoming PRs.</p>
+      </section>
+    </section>
+
+    <section id="myHealthDataToolsImportPage" class="page">
+      <section class="card">
+        <h3>Data Tools · Import Oura Export (ZIP)</h3>
         <div class="row">
           <input id="zipInput" type="file" accept=".zip" />
           <button id="clearBtn" class="btn secondary">Forget data</button>
@@ -43,9 +75,24 @@
       </section>
     </section>
 
-    <section id="debugPage" class="page">
+    <section id="myHealthDataToolsDebugPage" class="page">
       <section class="card"><h3>Ingest Report</h3><pre id="ingestReportContent" class="debug-content">No ingest yet.</pre></section>
       <section class="card"><h3>Debug Inspector</h3><pre id="debugContent" class="debug-content">No import yet.</pre></section>
+    </section>
+
+    <section id="myHealthSettingsPage" class="page">
+      <section class="card">
+        <h3>Settings</h3>
+        <label class="switch-row">
+          <input id="developerModeToggle" type="checkbox" />
+          <span>Developer Mode</span>
+        </label>
+        <p class="muted small">When enabled, Data Tools includes Debug (Ingest Report + Debug Inspector).</p>
+        <p class="muted">Baseline window configuration: <strong>14-day median</strong> (read-only in this PR).</p>
+        <div id="developerDebugLinkWrap" class="hidden top-gap">
+          <a href="#/my-health/data-tools/debug" class="btn" data-route="/my-health/data-tools/debug">Open Data Tools Debug</a>
+        </div>
+      </section>
     </section>
   </main>
 
