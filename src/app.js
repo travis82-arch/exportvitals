@@ -54,6 +54,13 @@ const kpis = {
   rhr: { value: document.getElementById('kpiRhr'), reason: document.getElementById('reasonRhr') }
 };
 const deviations = document.getElementById('deviations');
+const vitals = {
+  rhr: { value: document.getElementById('vitalsRhrValue'), meta: document.getElementById('vitalsRhrMeta') },
+  hrv: { value: document.getElementById('vitalsHrvValue'), meta: document.getElementById('vitalsHrvMeta') },
+  spo2: { value: document.getElementById('vitalsSpo2Value'), meta: document.getElementById('vitalsSpo2Meta') },
+  temp: { value: document.getElementById('vitalsTempValue'), meta: document.getElementById('vitalsTempMeta') },
+  deviations: document.getElementById('vitalsDeviations')
+};
 
 function normalizeName(value) {
   return String(value || '').toLowerCase().replace(/[\s_\-]+/g, '');
@@ -194,6 +201,100 @@ function formatMinutes(minutes) {
   return `${h}:${String(m).padStart(2, '0')}`;
 }
 
+function percentile(values, p) {
+  if (!values.length) return null;
+  const sorted = [...values].sort((a, b) => a - b);
+  const idx = (sorted.length - 1) * p;
+  const low = Math.floor(idx);
+  const high = Math.ceil(idx);
+  if (low === high) return sorted[low];
+  const weight = idx - low;
+  return sorted[low] * (1 - weight) + sorted[high] * weight;
+}
+
+function parseDateTime(value) {
+  if (value == null || value === '') return null;
+  const raw = String(value).trim();
+  if (!raw) return null;
+  if (/^\d{10,13}$/.test(raw)) {
+    const num = Number(raw);
+    const ms = raw.length === 13 ? num : num * 1000;
+    const d = new Date(ms);
+    return Number.isNaN(d.getTime()) ? null : d;
+  }
+  const d = new Date(raw);
+  return Number.isNaN(d.getTime()) ? null : d;
+}
+
+function parseTimeParts(value) {
+  if (value == null) return null;
+  const match = String(value).trim().match(/(\d{1,2}):(\d{2})/);
+  if (!match) return null;
+  const hours = Number(match[1]);
+  const minutes = Number(match[2]);
+  if (!Number.isFinite(hours) || !Number.isFinite(minutes)) return null;
+  if (hours < 0 || hours > 23 || minutes < 0 || minutes > 59) return null;
+  return { hours, minutes };
+}
+
+function deriveNightWindow(date, sleepWindows) {
+  const explicit = sleepWindows.get(date);
+  if (explicit) return explicit;
+  const [year, month, day] = date.split('-').map(Number);
+  const start = new Date(year, month - 1, day, 0, 0, 0, 0);
+  const end = new Date(year, month - 1, day, 6, 0, 0, 0);
+  return { start, end, mode: 'fallback' };
+}
+
+function computeNightlyHeartVitals(rows, sleepWindows) {
+  const grouped = new Map();
+  for (const row of rows) {
+    const bpm = toNumber(row.bpm);
+    if (bpm == null || bpm < 30 || bpm > 120) continue;
+    if (normalizeName(row.source) === 'awake') continue;
+    const ts = parseDateTime(row.timestamp);
+    if (!ts) continue;
+
+    const localDate = toLocalDateString(ts);
+    const window = deriveNightWindow(localDate, sleepWindows);
+    if (ts < window.start || ts > window.end) continue;
+
+    const bucket = grouped.get(localDate) || { date: localDate, bpms: [], rr: [], windowMode: window.mode };
+    bucket.bpms.push(bpm);
+    bucket.rr.push(60000 / bpm);
+    grouped.set(localDate, bucket);
+  }
+
+  const nights = [...grouped.values()].sort((a, b) => a.date.localeCompare(b.date)).map((bucket) => {
+    const samples = bucket.bpms.length;
+    const valid = samples >= 50;
+    const rhr = valid ? percentile(bucket.bpms, 0.05) : null;
+    const medianBpm = valid ? median(bucket.bpms) : null;
+    let estHrv = null;
+    if (valid && bucket.rr.length > 1) {
+      let sumSq = 0;
+      let count = 0;
+      for (let i = 1; i < bucket.rr.length; i += 1) {
+        const diff = bucket.rr[i] - bucket.rr[i - 1];
+        sumSq += diff * diff;
+        count += 1;
+      }
+      estHrv = count ? Math.sqrt(sumSq / count) : null;
+    }
+
+    return {
+      date: bucket.date,
+      samples,
+      valid,
+      rhr,
+      medianBpm,
+      estimatedHrv: estHrv,
+      windowMode: bucket.windowMode
+    };
+  });
+  return { nights };
+}
+
 function setupTabs() {
   const tabs = [...document.querySelectorAll('.tab')];
   const panels = [...document.querySelectorAll('.tab-panel')];
@@ -301,6 +402,38 @@ function dailySpo2Mapper(row, chosen) {
   return { date, spo2: direct ?? extracted };
 }
 
+
+function buildSleepWindows(rows, chosen) {
+  const windows = new Map();
+  for (const row of rows) {
+    const date = parseDateToLocal(row[chosen.date]);
+    if (!date) continue;
+    const [year, month, day] = date.split('-').map(Number);
+    const bedtimeRaw = row[chosen.bedtimeStart] || row[chosen.bedtime] || row[chosen.startTime];
+    const wakeRaw = row[chosen.bedtimeEnd] || row[chosen.wakeTime] || row[chosen.endTime];
+
+    let start = parseDateTime(bedtimeRaw);
+    let end = parseDateTime(wakeRaw);
+
+    if (!start) {
+      const bedtimeParts = parseTimeParts(bedtimeRaw);
+      if (bedtimeParts) start = new Date(year, month - 1, day, bedtimeParts.hours, bedtimeParts.minutes, 0, 0);
+    }
+    if (!end) {
+      const wakeParts = parseTimeParts(wakeRaw);
+      if (wakeParts) {
+        end = new Date(year, month - 1, day, wakeParts.hours, wakeParts.minutes, 0, 0);
+        if (start && end <= start) end.setDate(end.getDate() + 1);
+      }
+    }
+
+    if (start && end && end > start) {
+      windows.set(date, { start, end, mode: 'sleeptime' });
+    }
+  }
+  return windows;
+}
+
 function buildDatasetDebug(key, parsed, chosenColumns, reason) {
   return {
     dataset: key,
@@ -331,9 +464,10 @@ async function readZip(file) {
   const reasons = {
     sleep: null,
     totalSleepTime: null,
-    hrv: 'HRV not available: no clearly mapped dataset/column in this export.',
-    rhr: 'Resting Heart Rate not available: no clearly mapped dataset/column in this export.'
+    hrv: 'Estimated HRV unavailable: not enough valid heartRate sleep samples.',
+    rhr: 'Nightly resting heart rate unavailable: not enough valid heartRate sleep samples.'
   };
+  const sleepWindows = new Map();
 
   async function parseRegisteredDataset(key) {
     const entry = datasetRegistry[key];
@@ -378,6 +512,23 @@ async function readZip(file) {
     const reason = 'No readiness dataset detected in ZIP.';
     notes.push(reason);
     debug.readinessFailureReason = reason;
+  }
+
+  const sleepTimeDataset = await parseRegisteredDataset('sleepTime');
+  if (sleepTimeDataset) {
+    const headers = sleepTimeDataset.parsed.fields;
+    const chosen = {
+      date: pickBestColumn(headers, FIELD_ALIASES.date),
+      bedtimeStart: pickBestColumn(headers, ['bedtime_start', 'bedtimestart', 'bedtime_start_local', 'start_time']),
+      bedtimeEnd: pickBestColumn(headers, ['bedtime_end', 'bedtimeend', 'bedtime_end_local', 'end_time']),
+      bedtime: pickBestColumn(headers, ['bedtime', 'bed_time']),
+      wakeTime: pickBestColumn(headers, ['wake_time', 'waketime']),
+      startTime: pickBestColumn(headers, ['starttime']),
+      endTime: pickBestColumn(headers, ['endtime'])
+    };
+    const windows = chosen.date ? buildSleepWindows(sleepTimeDataset.parsed.rows, chosen) : new Map();
+    for (const [date, window] of windows.entries()) sleepWindows.set(date, window);
+    debug.datasets.push(buildDatasetDebug('sleepTime', sleepTimeDataset.parsed, chosen, null));
   }
 
   const sleepDataset = (await parseRegisteredDataset('dailySleep')) || (await parseRegisteredDataset('sleepSession')) || (await parseRegisteredDataset('sleepTime'));
@@ -443,11 +594,53 @@ async function readZip(file) {
     debug.datasets.push(buildDatasetDebug('dailySpo2', spo2Dataset.parsed, chosen, null));
   }
 
-  for (const key of ['sleepHeartRate', 'sleepHrv', 'heartRate']) {
+  for (const key of ['sleepHeartRate', 'sleepHrv']) {
     const extra = await parseRegisteredDataset(key);
     if (extra) {
       debug.datasets.push(buildDatasetDebug(key, extra.parsed, {}, null));
     }
+  }
+
+  const heartRateDataset = await parseRegisteredDataset('heartRate');
+  let heartVitalsDebug = null;
+  if (heartRateDataset) {
+    const headers = heartRateDataset.parsed.fields;
+    const chosen = {
+      timestamp: pickBestColumn(headers, ['timestamp', 'datetime', 'created_at', 'time']),
+      bpm: pickBestColumn(headers, ['bpm', 'heartrate', 'heart_rate', 'hr']),
+      source: pickBestColumn(headers, ['source', 'status'])
+    };
+    const heartRows = chosen.timestamp && chosen.bpm
+      ? summarizeRows(heartRateDataset.parsed.rows, chosen, (row, cols) => ({
+          timestamp: row[cols.timestamp],
+          bpm: row[cols.bpm],
+          source: cols.source ? row[cols.source] : ''
+        }))
+      : [];
+    const nightly = computeNightlyHeartVitals(heartRows, sleepWindows).nights;
+    for (const night of nightly) {
+      if (!night.valid) continue;
+      allRowsByDate.set(night.date, {
+        ...(allRowsByDate.get(night.date) || {}),
+        rhr: night.rhr,
+        hrv: night.estimatedHrv,
+        hrvSource: 'Estimated HRV (derived from BPM stream)',
+        rhrSource: 'Derived from heartRate stream'
+      });
+    }
+    heartVitalsDebug = {
+      nightsDetected: nightly.length,
+      validNights: nightly.filter((n) => n.valid).length,
+      sampleByNight: nightly.slice(-5).map((n) => ({
+        date: n.date,
+        samples: n.samples,
+        valid: n.valid,
+        rhr: n.rhr,
+        estimatedHrv: n.estimatedHrv,
+        windowMode: n.windowMode
+      }))
+    };
+    debug.datasets.push(buildDatasetDebug('heartRate', heartRateDataset.parsed, chosen, null));
   }
 
   const latestDate = [...allRowsByDate.keys()].sort().pop() || null;
@@ -461,6 +654,10 @@ async function readZip(file) {
     }
     if (latest.hrv != null) reasons.hrv = null;
     if (latest.rhr != null) reasons.rhr = null;
+  }
+  if (heartVitalsDebug && heartVitalsDebug.validNights < 7) {
+    reasons.hrv = reasons.hrv || 'Estimated HRV baseline unavailable: need at least 7 valid nights.';
+    reasons.rhr = reasons.rhr || 'Nightly RHR baseline unavailable: need at least 7 valid nights.';
   }
 
   const mergedRows = [...allRowsByDate.entries()]
@@ -476,7 +673,7 @@ async function readZip(file) {
       latestDate,
       notes
     },
-    debug,
+    debug: { ...debug, heartRateNights: heartVitalsDebug },
     reasons
   };
 }
@@ -494,6 +691,11 @@ function render(result) {
     kpis.hrv.value.textContent = '—';
     kpis.rhr.value.textContent = '—';
     deviations.textContent = 'No derived rows available from import.';
+    vitals.rhr.value.textContent = '—';
+    vitals.hrv.value.textContent = '—';
+    vitals.spo2.value.textContent = '—';
+    vitals.temp.value.textContent = '—';
+    vitals.deviations.textContent = 'Import a ZIP to calculate deviations.';
     return;
   }
 
@@ -518,34 +720,50 @@ function render(result) {
     kpis.sleep.reason.textContent = result.reasons.sleep || result.reasons.totalSleepTime || 'Sleep data not found in this export.';
   }
 
-  kpis.hrv.value.textContent = latest.hrv != null ? `${latest.hrv} ms` : '—';
+  kpis.hrv.value.textContent = latest.hrv != null ? `${latest.hrv.toFixed(1)} ms` : '—';
   kpis.hrv.reason.textContent = latest.hrv == null
     ? result.reasons.hrv
-    : 'Loaded from sleep dataset HRV columns.';
+    : (latest.hrvSource || 'Estimated HRV (derived from BPM stream).');
 
-  kpis.rhr.value.textContent = latest.rhr != null ? `${latest.rhr} bpm` : '—';
+  kpis.rhr.value.textContent = latest.rhr != null ? `${latest.rhr.toFixed(1)} bpm` : '—';
   kpis.rhr.reason.textContent = latest.rhr == null
     ? result.reasons.rhr
-    : 'Loaded from sleep dataset heart-rate columns.';
+    : (latest.rhrSource || 'Derived from heartRate stream.');
 
-  const specs = [
-    { key: 'readiness', label: 'Readiness Score', unit: '' },
-    { key: 'sleepMinutes', label: 'Total Sleep Time', unit: ' min' },
-    { key: 'hrv', label: 'HRV', unit: ' ms' },
-    { key: 'rhr', label: 'Resting Heart Rate', unit: ' bpm' }
-  ];
-
-  const lines = specs.map((spec) => {
-    const latestValue = latest[spec.key];
-    if (latestValue == null) return `${spec.label}: latest —`;
-    const baseline = baselineForMetric(rows, latestDate, spec.key);
-    if (baseline == null) return `${spec.label}: latest ${latestValue}${spec.unit}; Baseline not available (need ≥7 days).`;
+  const metricLine = (label, key, unit = '') => {
+    const latestValue = latest[key];
+    if (latestValue == null) return `${label}: latest —`;
+    const baseline = baselineForMetric(rows, latestDate, key);
+    if (baseline == null) return `${label}: latest ${latestValue.toFixed ? latestValue.toFixed(1) : latestValue}${unit}; Baseline not available (need ≥7 valid nights).`;
     const delta = latestValue - baseline;
     const pct = baseline !== 0 ? `${((delta / baseline) * 100).toFixed(1)}%` : 'n/a';
-    return `${spec.label}: latest ${latestValue}${spec.unit}, baseline ${baseline.toFixed(1)}${spec.unit}, Δ ${delta.toFixed(1)}${spec.unit} (${pct})`;
-  });
-  deviations.textContent = lines.join('\n');
+    return `${label}: latest ${latestValue.toFixed ? latestValue.toFixed(1) : latestValue}${unit}, baseline ${baseline.toFixed(1)}${unit}, Δ ${delta.toFixed(1)}${unit} (${pct})`;
+  };
+
+  deviations.textContent = [
+    metricLine('Readiness Score', 'readiness'),
+    metricLine('Total Sleep Time', 'sleepMinutes', ' min'),
+    metricLine('Estimated HRV', 'hrv', ' ms'),
+    metricLine('Resting Heart Rate', 'rhr', ' bpm')
+  ].join('\n');
   deviations.style.whiteSpace = 'pre-line';
+
+  vitals.rhr.value.textContent = latest.rhr != null ? `${latest.rhr.toFixed(1)} bpm` : '—';
+  vitals.rhr.meta.textContent = latest.rhr != null ? 'Derived from heartRate stream.' : result.reasons.rhr;
+  vitals.hrv.value.textContent = latest.hrv != null ? `${latest.hrv.toFixed(1)} ms` : '—';
+  vitals.hrv.meta.textContent = latest.hrv != null ? 'Estimated HRV (derived from BPM stream).' : result.reasons.hrv;
+  vitals.spo2.value.textContent = latest.spo2 != null ? `${latest.spo2.toFixed(1)}%` : '—';
+  vitals.spo2.meta.textContent = latest.spo2 != null ? 'Loaded from dailySpO2 JSON average.' : 'SpO2 unavailable in this export.';
+  vitals.temp.value.textContent = latest.temperatureDeviation != null ? `${latest.temperatureDeviation.toFixed(2)} °C` : '—';
+  vitals.temp.meta.textContent = latest.temperatureDeviation != null ? 'Loaded from dailyReadiness.' : 'Temperature deviation unavailable in this export.';
+
+  vitals.deviations.textContent = [
+    metricLine('Resting Heart Rate (Night)', 'rhr', ' bpm'),
+    metricLine('Estimated HRV', 'hrv', ' ms'),
+    metricLine('SpO2', 'spo2', '%'),
+    metricLine('Temperature Deviation', 'temperatureDeviation', ' °C')
+  ].join('\n');
+  vitals.deviations.style.whiteSpace = 'pre-line';
 }
 
 function buildStatus(info) {
@@ -578,6 +796,12 @@ function renderDebug(debug) {
     lines.push('');
   }
   if (debug.readinessFailureReason) lines.push(`Readiness KPI reason: ${debug.readinessFailureReason}`);
+  if (debug.heartRateNights) {
+    lines.push('HeartRate-derived nightly vitals:');
+    lines.push(`  nights detected: ${debug.heartRateNights.nightsDetected}`);
+    lines.push(`  valid nights (>=50 samples): ${debug.heartRateNights.validNights}`);
+    lines.push(`  sample: ${JSON.stringify(debug.heartRateNights.sampleByNight, null, 2)}`);
+  }
   debugContent.textContent = lines.join('\n');
 }
 
@@ -607,6 +831,15 @@ function clearUI() {
   status.textContent = 'No file selected.';
   deviations.textContent = 'Import a ZIP to calculate deviations.';
   debugContent.textContent = 'No import yet.';
+  vitals.rhr.value.textContent = '—';
+  vitals.hrv.value.textContent = '—';
+  vitals.spo2.value.textContent = '—';
+  vitals.temp.value.textContent = '—';
+  vitals.rhr.meta.textContent = 'Derived from heartRate stream.';
+  vitals.hrv.meta.textContent = 'Estimated HRV (derived from BPM stream).';
+  vitals.spo2.meta.textContent = 'Loaded from dailySpO2 export rows.';
+  vitals.temp.meta.textContent = 'Loaded from dailyReadiness export rows.';
+  vitals.deviations.textContent = 'Import a ZIP to calculate deviations.';
 }
 
 function runSelfTests() {
