@@ -1,5 +1,6 @@
 import { renderTopNav } from './components/TopNav.js';
-import { loadFromLocalCache, importZip, getAvailableDates, getDay, getRange, getBaseline, getStoreSnapshot } from './store/dataStore.js';
+import { createImportController } from './components/ImportController.jsx';
+import { loadFromLocalCache, importZip, getAvailableDates, getDay, getRange, getBaseline, getStoreSnapshot, setImportError } from './store/dataStore.js';
 import { getLastAvailableDays, loadSelectedDate, persistSelectedDate, resolveInitialSelectedDate } from './state/selectedDate.js';
 import { byDateUiMapping } from './mappings/byDateUiMapping.js';
 import { sleepUiMapping } from './mappings/sleepUiMapping.js';
@@ -57,6 +58,39 @@ function download(name, text) {
   URL.revokeObjectURL(a.href);
 }
 
+function renderDataBanner() {
+  const dates = getAvailableDates();
+  if (!dates.length) return;
+  const banner = document.createElement('div');
+  banner.className = 'import-banner';
+  banner.innerHTML = `<span>Data loaded: ${dates[0]} → ${dates.at(-1)} (${dates.length} days)</span><button class="btn secondary" id="changeImportBtn">Change</button>`;
+  app.before(banner);
+  document.getElementById('changeImportBtn')?.addEventListener('click', () => importController.open());
+}
+
+function showToast(message) {
+  const toast = document.createElement('div');
+  toast.className = 'toast';
+  toast.textContent = message;
+  document.body.appendChild(toast);
+  setTimeout(() => toast.remove(), 2600);
+}
+
+const importController = createImportController({
+  importZip,
+  onImported(result) {
+    if (result?.mostRecentDate) {
+      selectedDate = result.mostRecentDate;
+      persistSelectedDate(selectedDate);
+    }
+    showToast(`Imported Oura ZIP ✓ (${result?.dateRange?.days || 0} days)`);
+    location.reload();
+  },
+  onStateChange() {}
+});
+
+document.getElementById('globalImportBtn')?.addEventListener('click', () => importController.open());
+
 const dateFromQuery = new URLSearchParams(location.search).get('date');
 if (dateFromQuery) {
   selectedDate = dateFromQuery;
@@ -106,12 +140,12 @@ if (page === 'index') {
     location.reload();
   });
 } else if (page === 'data-tools-import') {
-  app.innerHTML = `<section class="card"><h2>Import</h2><input id="zip" type="file" accept=".zip" /><pre class="status" id="status">Pick a ZIP export file.</pre></section>`;
-  document.getElementById('zip').addEventListener('change', async (event) => {
-    const [file] = event.target.files;
-    if (!file) return;
-    const report = await importZip(file);
-    document.getElementById('status').textContent = JSON.stringify(report, null, 2);
+  const snapshot = getStoreSnapshot();
+  app.innerHTML = `<section class="card"><h2>Import</h2><div class="row"><button class="btn" id="openImport">Import ZIP</button><button class="btn secondary" id="clearBtn">Forget data</button></div><pre class="status" id="status">${JSON.stringify(snapshot.ingestReport || {}, null, 2)}</pre></section>`;
+  document.getElementById('openImport').addEventListener('click', () => importController.open());
+  document.getElementById('clearBtn').addEventListener('click', () => {
+    localStorage.clear();
+    location.reload();
   });
 } else if (page === 'data-tools-export') {
   const snapshot = getStoreSnapshot();
@@ -141,3 +175,6 @@ if (page === 'index') {
 } else if (page === 'my-health') {
   app.innerHTML = `<section class="card"><h2>My Health</h2><p>Use tabs for Trends, Journal, Import/Export, Glossary, Settings, and Debug.</p></section>`;
 }
+
+renderDataBanner();
+window.addEventListener('unhandledrejection', (event) => { setImportError(event.reason || new Error('Unhandled rejection')); });

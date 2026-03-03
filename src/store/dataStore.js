@@ -13,7 +13,8 @@ const DATASET_ALIASES = {
 const store = {
   datasets: { dailyReadiness: [], dailySleep: [], dailyActivity: [], dailySpo2: [], sleepTime: [], heartRate: [] },
   derivedNightlyVitals: [],
-  ingestReport: {}
+  ingestReport: {},
+  importState: { status: 'idle', phase: 'Idle', percent: 0, lastResult: null, lastError: null }
 };
 
 const byDate = (rows) => Object.fromEntries((rows || []).map((r) => [r.date, r]));
@@ -59,7 +60,8 @@ export function loadFromLocalCache(storage = localStorage) {
     Object.assign(store, {
       datasets: { ...store.datasets, ...(parsed.datasets || {}) },
       derivedNightlyVitals: parsed.derivedNightlyVitals || [],
-      ingestReport: parsed.ingestReport || {}
+      ingestReport: parsed.ingestReport || {},
+      importState: { ...store.importState, ...(parsed.importState || {}) }
     });
   } catch {
     // noop
@@ -71,25 +73,73 @@ export function saveToLocalCache(storage = localStorage) {
   storage.setItem(STORAGE_KEY, JSON.stringify(store));
 }
 
-export async function importZip(file) {
+function updateImportState(next, onProgress) {
+  store.importState = { ...store.importState, ...next };
+  if (onProgress) onProgress(store.importState);
+}
+
+function getDateRangeFromDatasets(datasets) {
+  const dates = Object.values(datasets)
+    .flatMap((rows) => rows.map((row) => row.date).filter(Boolean))
+    .sort();
+  if (!dates.length) return { start: null, end: null, days: 0 };
+  const unique = [...new Set(dates)];
+  return { start: unique[0], end: unique.at(-1), days: unique.length };
+}
+
+export async function importZip(file, onProgress) {
+  if (!file || !String(file.name || '').toLowerCase().endsWith('.zip')) {
+    throw new Error('Please choose a valid .zip export file from Oura.');
+  }
+
+  updateImportState({ status: 'importing', phase: 'Reading ZIP', percent: 5, lastError: null }, onProgress);
   const zip = await JSZip.loadAsync(file);
+  updateImportState({ phase: 'Decompressing files', percent: 25 }, onProgress);
+
   const found = {};
   const report = {};
+  const parsedFiles = [];
+
   for (const entryName of Object.keys(zip.files)) {
+    if (zip.files[entryName].dir) continue;
+    parsedFiles.push(entryName);
     const short = normalizeName(entryName.split('/').pop());
     for (const [dataset, aliases] of Object.entries(DATASET_ALIASES)) {
       if (aliases.some((alias) => normalizeName(alias) === short)) {
+        updateImportState({ phase: 'Parsing JSON/CSV', percent: 55 }, onProgress);
         const text = await zip.files[entryName].async('string');
         found[dataset] = normalizeRows(dataset, parseCsv(text));
         report[dataset] = found[dataset].length;
       }
     }
   }
+
+  updateImportState({ phase: 'Normalizing daily tables', percent: 75 }, onProgress);
   store.datasets = { ...store.datasets, ...found };
+
+  updateImportState({ phase: 'Deriving nightly vitals', percent: 90 }, onProgress);
   store.derivedNightlyVitals = deriveNightlyVitals(store.datasets.heartRate, store.datasets.sleepTime);
-  store.ingestReport = report;
+
+  const dateRange = getDateRangeFromDatasets({ ...store.datasets, derivedNightlyVitals: store.derivedNightlyVitals });
+  const rowCounts = {
+    ...Object.fromEntries(Object.entries(store.datasets).map(([name, rows]) => [name, rows.length])),
+    derivedNightlyVitals: store.derivedNightlyVitals.length
+  };
+  const daysPerDataset = Object.fromEntries(Object.entries(store.datasets).map(([name, rows]) => [name, new Set(rows.map((row) => row.date).filter(Boolean)).size]));
+
+  updateImportState({ phase: 'Saving + indexing dates', percent: 100 }, onProgress);
+  store.ingestReport = {
+    ...report,
+    parsedFiles,
+    dateRange,
+    daysPerDataset,
+    rowCounts,
+    mostRecentDate: dateRange.end
+  };
+  store.importState = { ...store.importState, status: 'success', lastResult: store.ingestReport, lastError: null };
   saveToLocalCache();
-  return report;
+  if (onProgress) onProgress(store.importState);
+  return store.ingestReport;
 }
 
 export function getAvailableDates() {
@@ -131,4 +181,21 @@ export function getBaseline(rows, key) {
 
 export function getStoreSnapshot() {
   return store;
+}
+
+export function getImportState() {
+  return store.importState;
+}
+
+export function setImportError(error, context = {}) {
+  store.importState = {
+    ...store.importState,
+    status: 'error',
+    lastError: {
+      message: error?.message || String(error),
+      stack: error?.stack || null,
+      ...context
+    }
+  };
+  saveToLocalCache();
 }
