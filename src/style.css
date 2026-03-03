@@ -37,6 +37,9 @@ input[type=file]{border:1px dashed var(--border);border-radius:10px;padding:9px;
 @media (max-width:900px){.insight-grid{grid-template-columns:1fr}}
 .insight-card,.insight-row{display:grid;gap:6px;border:1px solid var(--border);border-radius:12px;background:#0b1220;color:var(--text);padding:12px;text-align:left;cursor:pointer}
 .insight-card small,.insight-row small{color:var(--muted)}
+.insight-card details{cursor:default}
+.insight-card summary{cursor:pointer;color:#bfdbfe}
+.badge{display:inline-block;padding:2px 8px;border-radius:999px;font-size:11px;border:1px solid currentColor}
 .severity-good{border-color:var(--good)}
 .severity-warn{border-color:var(--warn)}
 .severity-info{border-color:var(--info)}
