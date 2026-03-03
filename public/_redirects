@@ -1,2 +1,12 @@
-# SPA fallback
-/*  /index.html  200
+/today /index.html 301
+/sleep /sleep.html 301
+/readiness /readiness.html 301
+/activity /activity.html 301
+/vitals /vitals.html 301
+/trends /trends.html 301
+/my-health /my-health.html 301
+/my-health/settings /settings.html 301
+/my-health/data-tools/import /data-tools-import.html 301
+/my-health/data-tools/debug /debug.html 301
+/my-health/data-tools/export /data-tools-export.html 301
+/my-health/data-tools/glossary /glossary.html 301

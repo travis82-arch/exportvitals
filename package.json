@@ -4,6 +4,11 @@
   "type": "module",
   "scripts": {
     "test": "node --test",
-    "check:nav": "node scripts/check-nav-manifest.mjs"
+    "check:nav": "node scripts/check-nav-manifest.mjs",
+    "build": "vite build",
+    "check:mpa": "node scripts/check-nav-manifest.mjs"
+  },
+  "devDependencies": {
+    "vite": "^5.4.0"
   }
 }

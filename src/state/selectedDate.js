@@ -9,10 +9,15 @@ export function persistSelectedDate(date, storage = localStorage) {
   storage.setItem(SELECTED_DATE_KEY, date);
 }
 
-export function resolveInitialSelectedDate(availableDates, fallbackDates = [], today = new Date().toISOString().slice(0, 10), preferredDate = null) {
-  const unique = [...new Set([...(availableDates || []), ...(fallbackDates || [])].filter(Boolean))].sort();
-  if (preferredDate && unique.includes(preferredDate)) return preferredDate;
-  return unique.at(-1) || today;
+export function resolveInitialSelectedDate(availableDates, preferredDate = null) {
+  const sorted = [...new Set((availableDates || []).filter(Boolean))].sort();
+  if (preferredDate && sorted.includes(preferredDate)) return preferredDate;
+  return sorted.at(-1) || new Date().toISOString().slice(0, 10);
+}
+
+export function getLastAvailableDays(availableDates, count = 7) {
+  const sorted = [...new Set((availableDates || []).filter(Boolean))].sort();
+  return sorted.slice(-count);
 }
 
 export { SELECTED_DATE_KEY };
