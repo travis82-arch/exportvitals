@@ -1,0 +1,9 @@
+{
+  "name": "oura-pwa-dashboard",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --test",
+    "check:nav": "node scripts/check-nav-manifest.mjs"
+  }
+}
