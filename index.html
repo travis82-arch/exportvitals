@@ -1,12 +1,22 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" data-build-stamp="2026-03-03T00:00:00Z">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Oura Dashboard</title>
   <link rel="stylesheet" href="./src/style.css" />
+  <style>body{background:#fff;color:#111;margin:0;padding:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;}</style>
 </head>
 <body>
+  <div id="bootShell" role="status" aria-live="polite" style="padding:16px;border-bottom:1px solid #ddd;background:#fff;color:#111;font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;">
+    <strong style="display:block;font-size:18px;">Oura Dashboard</strong>
+    <span id="bootStatus" style="display:block;margin-top:4px;">Loading...</span>
+    <button id="bootResetReload" type="button" style="margin-top:10px;padding:8px 12px;">Reset &amp; Reload</button>
+  </div>
+  <script>
+    window.__OURA_BUILD_STAMP__ = document.documentElement.dataset.buildStamp;
+  </script>
+  <div id="appRoot">
   <header class="topbar">
     <div class="title">Oura Dashboard</div>
     <nav class="tabs" aria-label="Primary" id="primaryTabs"></nav>
@@ -37,11 +47,13 @@
     <section id="myHealthDataToolsGlossaryPage" class="page"><section class="card"><h2>Data Tools · Glossary</h2><table class="simple-table"><thead><tr><th>Metric</th><th>Source</th><th>Units</th></tr></thead><tbody><tr><td>Readiness Score</td><td>dailyReadiness.score</td><td>score</td></tr><tr><td>Sleep Score</td><td>dailySleep.score</td><td>score</td></tr><tr><td>Activity Score</td><td>dailyActivity.score</td><td>score</td></tr><tr><td>RHR Night</td><td>derived heartRate + sleepTime</td><td>bpm</td></tr><tr><td>Estimated HRV (RMSSD proxy)</td><td>derived heartRate + sleepTime</td><td>ms</td></tr><tr><td>SpO2 Night Avg</td><td>dailySpo2.spo2_percentage.average</td><td>%</td></tr><tr><td>Temperature Deviation</td><td>dailyReadiness.temperature_deviation</td><td>°C</td></tr></tbody></table><div id="sleepMappingGlossary"></div></section></section>
     <section id="myHealthDataToolsDebugPage" class="page"><section class="card"><details open><summary>Ingest Report</summary><pre id="ingestReportContent" class="debug-content"></pre></details></section><section class="card"><details><summary>Debug Inspector</summary><pre id="debugContent" class="debug-content"></pre></details></section></section>
 
-    <section id="myHealthSettingsPage" class="page"><section class="card"><h2>Settings</h2><label>Baseline window <select id="baselineWindow"><option value="7">7</option><option value="14">14</option><option value="30">30</option></select></label><label><input id="developerMode" type="checkbox" /> Developer Mode (enables Debug)</label><label><input id="rememberDerived" type="checkbox" /> Remember last import (derived-only) in this browser</label><label>Night window mode <select id="nightMode"><option value="auto">Auto</option><option value="fallback">Fallback</option></select></label><label>Fallback window start <input id="fallbackStart" type="time" value="20:00" /></label><label>Fallback window end <input id="fallbackEnd" type="time" value="10:00" /></label><label>Distance units <select id="distanceUnit"><option value="km">km</option><option value="mi">mi</option></select></label></section></section>
+    <section id="myHealthSettingsPage" class="page"><section class="card"><h2>Settings</h2><div id="safeModeBanner" class="hidden" style="margin-bottom:12px;padding:8px;border:1px solid #f59e0b;background:#fffbeb;color:#78350f;border-radius:8px;">Safe Mode enabled</div><label>Baseline window <select id="baselineWindow"><option value="7">7</option><option value="14">14</option><option value="30">30</option></select></label><label><input id="developerMode" type="checkbox" /> Developer Mode (enables Debug)</label><label><input id="rememberDerived" type="checkbox" /> Remember last import (derived-only) in this browser</label><label>Night window mode <select id="nightMode"><option value="auto">Auto</option><option value="fallback">Fallback</option></select></label><label>Fallback window start <input id="fallbackStart" type="time" value="20:00" /></label><label>Fallback window end <input id="fallbackEnd" type="time" value="10:00" /></label><label>Distance units <select id="distanceUnit"><option value="km">km</option><option value="mi">mi</option></select></label></section></section>
+    <p id="buildStamp" class="muted" style="margin-top:16px;"></p>
   </main>
+</div>
 
   <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
-  <script type="module" src="./src/app.js"></script>
+  <script type="module" src="./src/main.js"></script>
 </body>
 </html>

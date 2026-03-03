@@ -32,10 +32,12 @@ import {
   medianForDateWindow
 } from './domain/sleepTransforms.js';
 import { loadSelectedDate, persistSelectedDate, resolveInitialSelectedDate } from './state/selectedDate.js';
+import { getBuildStamp } from './buildStamp.js';
 
 const STORAGE_KEY = 'ouraDerivedMetricsV4';
 const SETTINGS_KEY = 'ouraDashboardSettingsV2';
 const JOURNAL_KEY = 'ouraJournalEntriesV1';
+const SAFE_MODE = new URLSearchParams(window.location.search).get('safe') === '1';
 
 const DATASET_ALIASES = {
   dailyReadiness: ['dailyreadiness.csv'], dailySleep: ['dailysleep.csv'], dailyActivity: ['dailyactivity.csv'], dailySpo2: ['dailyspo2.csv'], sleepTime: ['sleeptime.csv'], heartRate: ['heartrate.csv']
@@ -58,7 +60,13 @@ const fmt = (v, d = 1, s = '') => (v == null ? '—' : `${Number(v).toFixed(d)}$
 
 function parseDate(raw) { const d = new Date(raw); return Number.isNaN(d.getTime()) ? (/^\d{4}-\d{2}-\d{2}$/.test(raw) ? raw : null) : d.toISOString().slice(0, 10); }
 function normalizeRoute(routeLike) { const route = String(routeLike || '').replace(/^#/, '').replace(/\/$/, '') || '/by-date'; return ROUTES[route] ? route : '/by-date'; }
-function navigate(route) { location.hash = normalizeRoute(route); }
+function normalizeSafeRoute(routeLike) {
+  if (!SAFE_MODE) return normalizeRoute(routeLike);
+  const safeRoutes = new Set(['/my-health', '/my-health/data-tools/import', '/my-health/settings']);
+  const route = normalizeRoute(routeLike);
+  return safeRoutes.has(route) ? route : '/my-health/data-tools/import';
+}
+function navigate(route) { location.hash = normalizeSafeRoute(route); }
 
 function parseCsvWithDebug(text) { const sniff = sniffDelimiter(text); const parsed = Papa.parse(text, { header: true, skipEmptyLines: true, delimiter: sniff.delimiter }); return { rows: parsed.data || [] }; }
 function detectRegistry(entries) { const registry = {}; for (const entry of entries) { const n = normalizeName(entry.name.split('/').pop()); for (const [dataset, aliases] of Object.entries(DATASET_ALIASES)) if (aliases.some((a) => normalizeName(a) === n)) registry[dataset] = entry; } return registry; }
@@ -219,9 +227,12 @@ function renderSleepMappingGlossary() {
 
 function renderNav() {
   const top = document.getElementById('primaryTabs');
-  top.innerHTML = navManifest.primary.map((item) => `<a class="tab-link" data-route="${item.route}" href="#${item.route}">${item.label}</a>`).join('');
-  document.getElementById('myHealthSubnav').innerHTML = navManifest.myHealth.map((item) => `<a data-subroute="${item.route}" href="#${item.route}">${item.label}</a>`).join('');
-  document.getElementById('dataToolsSubnav').innerHTML = navManifest.dataTools.map((item) => `<a data-subroute="${item.route}" ${item.debugOnly ? 'data-debug-link' : ''} href="#${item.route}">${item.label}</a>`).join('');
+  const primary = SAFE_MODE ? navManifest.primary.filter((item) => item.route === '/my-health') : navManifest.primary;
+  const myHealth = SAFE_MODE ? navManifest.myHealth.filter((item) => ['/my-health/data-tools/import', '/my-health/settings'].includes(item.route)) : navManifest.myHealth;
+  const dataTools = SAFE_MODE ? navManifest.dataTools.filter((item) => item.route === '/my-health/data-tools/import') : navManifest.dataTools;
+  top.innerHTML = primary.map((item) => `<a class="tab-link" data-route="${item.route}" href="#${item.route}">${item.label}</a>`).join('');
+  document.getElementById('myHealthSubnav').innerHTML = myHealth.map((item) => `<a data-subroute="${item.route}" href="#${item.route}">${item.label}</a>`).join('');
+  document.getElementById('dataToolsSubnav').innerHTML = dataTools.map((item) => `<a data-subroute="${item.route}" ${item.debugOnly ? 'data-debug-link' : ''} href="#${item.route}">${item.label}</a>`).join('');
 }
 
 function render() {
@@ -280,13 +291,25 @@ function renderScorePage(targetId, rows, scoreKey, names, contributorKey) {
 }
 
 function renderRoute(routeLike = location.hash || '/by-date') {
-  const route = normalizeRoute(routeLike);
+  const route = normalizeSafeRoute(routeLike);
   if (route === '/my-health/data-tools/debug' && !app.settings.developerMode) navigate('/my-health/data-tools/import');
-  const resolved = normalizeRoute(location.hash || route);
+  const resolved = normalizeSafeRoute(location.hash || route);
   document.querySelectorAll('.page').forEach((el) => el.classList.toggle('active', el.id === ROUTES[resolved]));
   document.querySelectorAll('.tab-link').forEach((el) => el.classList.toggle('active', el.dataset.route === resolved || (resolved.startsWith('/my-health') && el.dataset.route === '/my-health')));
   document.querySelectorAll('[data-subnav-root]').forEach((el) => el.classList.toggle('hidden', !resolved.startsWith(el.dataset.subnavRoot)));
   document.querySelectorAll('[data-subroute]').forEach((el) => el.classList.toggle('active', el.dataset.subroute === resolved));
+}
+
+function applySafeMode() {
+  if (!SAFE_MODE) return;
+  const banner = document.getElementById('safeModeBanner');
+  if (banner) banner.classList.remove('hidden');
+  app.state = null;
+}
+
+function renderBuildStamp() {
+  const stamp = document.getElementById('buildStamp');
+  if (stamp) stamp.textContent = `Build: ${getBuildStamp()}`;
 }
 
 async function readZip(file) {
@@ -366,17 +389,21 @@ function initStatic() {
   document.getElementById('journalDate').value = new Date().toISOString().slice(0, 10);
 }
 
-renderNav();
-hookEvents();
-initStatic();
-if (localStorage.getItem(STORAGE_KEY)) {
-  try {
-    app.state = JSON.parse(localStorage.getItem(STORAGE_KEY));
-    const preferred = loadSelectedDate();
-    const selected = resolveInitialSelectedDate(app.state.dailySleepRows?.map((r) => r.date) || [], app.state.dailyReadinessRows?.map((r) => r.date) || [], undefined, preferred);
-    app.dateCtx = createDateContext(app.state.availableDates || [], selected);
-    persistSelectedDate(app.dateCtx.selectedDate);
-  } catch { /* noop */ }
+export function bootApp() {
+  renderNav();
+  hookEvents();
+  initStatic();
+  applySafeMode();
+  renderBuildStamp();
+  if (!SAFE_MODE && localStorage.getItem(STORAGE_KEY)) {
+    try {
+      app.state = JSON.parse(localStorage.getItem(STORAGE_KEY));
+      const preferred = loadSelectedDate();
+      const selected = resolveInitialSelectedDate(app.state.dailySleepRows?.map((r) => r.date) || [], app.state.dailyReadinessRows?.map((r) => r.date) || [], undefined, preferred);
+      app.dateCtx = createDateContext(app.state.availableDates || [], selected);
+      persistSelectedDate(app.dateCtx.selectedDate);
+    } catch { /* noop */ }
+  }
+  render();
+  renderRoute(location.hash || (SAFE_MODE ? '#/my-health/data-tools/import' : '#/by-date'));
 }
-render();
-renderRoute(location.hash || '#/by-date');
