@@ -242,7 +242,22 @@ function buildInsightCards(snapshot, latestNightRow) {
   const insights = [];
   const latest = snapshot.latest || {};
   const baseline = snapshot.baseline || {};
+  const nowIso = new Date().toISOString();
+  const toMetric = (name, latestValue, baselineValue) => {
+    const delta = latestValue == null || baselineValue == null ? null : latestValue - baselineValue;
+    const deltaModel = metricDelta(name, latestValue, baselineValue);
+    return {
+      name,
+      latest: latestValue ?? null,
+      baseline: baselineValue ?? null,
+      delta,
+      ...(deltaModel.percent == null ? {} : { deltaPct: deltaModel.percent })
+    };
+  };
   const add = (card) => insights.push({
+    id: `${card.ruleId}-${snapshot.latestDate}`,
+    date: snapshot.latestDate,
+    createdAt: nowIso,
     ...card,
     rank: normalizeSeverityValue(card.severity) * 100 + Math.abs(Number(card.magnitude || 0))
   });
@@ -250,40 +265,30 @@ function buildInsightCards(snapshot, latestNightRow) {
   if (latest.rhr != null && latest.hrv != null && baseline.rhr != null && baseline.hrv != null) {
     if (latest.rhr <= baseline.rhr - 3 && latest.hrv >= baseline.hrv + 2) {
       add({
-        id: `recovery-positive-${snapshot.latestDate}`,
-        ruleId: 'recovery-positive',
-        title: 'Recovery Positive',
+        ruleId: 'recovery-looks-strong',
+        title: 'Recovery Looks Strong',
         severity: 'good',
-        metricRefs: ['rhr', 'hrv'],
-        latest: { rhr: latest.rhr, hrv: latest.hrv },
-        baseline: { rhr: baseline.rhr, hrv: baseline.hrv },
-        delta: { rhr: latest.rhr - baseline.rhr, hrv: latest.hrv - baseline.hrv },
+        metrics: [toMetric('rhr', latest.rhr, baseline.rhr), toMetric('hrv', latest.hrv, baseline.hrv)],
         message: 'Recovery looks strong vs baseline.',
-        reasonLines: [
-          `RHR Night is at least 3 bpm lower than baseline (${fmt(latest.rhr, 'rhr')} vs ${fmt(baseline.rhr, 'rhr')}).`,
-          `Estimated HRV is at least 2 ms above baseline (${fmt(latest.hrv, 'hrv')} vs ${fmt(baseline.hrv, 'hrv')}).`
+        thresholdsText: [
+          'RHR Night ≤ baseline - 3 bpm',
+          'Estimated HRV (RMSSD proxy) ≥ baseline + 2 ms'
         ],
-        thresholds: 'RHR ≤ baseline - 3 bpm and HRV ≥ baseline + 2 ms',
         magnitude: Math.abs((latest.rhr - baseline.rhr)) + Math.abs((latest.hrv - baseline.hrv))
       });
     }
 
     if (latest.rhr >= baseline.rhr + 3 && latest.hrv <= baseline.hrv - 2) {
       add({
-        id: `possible-strain-${snapshot.latestDate}`,
         ruleId: 'possible-strain',
         title: 'Possible Strain',
         severity: 'warn',
-        metricRefs: ['rhr', 'hrv'],
-        latest: { rhr: latest.rhr, hrv: latest.hrv },
-        baseline: { rhr: baseline.rhr, hrv: baseline.hrv },
-        delta: { rhr: latest.rhr - baseline.rhr, hrv: latest.hrv - baseline.hrv },
+        metrics: [toMetric('rhr', latest.rhr, baseline.rhr), toMetric('hrv', latest.hrv, baseline.hrv)],
         message: 'Strain signals up vs baseline.',
-        reasonLines: [
-          `RHR Night is at least 3 bpm above baseline (${fmt(latest.rhr, 'rhr')} vs ${fmt(baseline.rhr, 'rhr')}).`,
-          `Estimated HRV is at least 2 ms below baseline (${fmt(latest.hrv, 'hrv')} vs ${fmt(baseline.hrv, 'hrv')}).`
+        thresholdsText: [
+          'RHR Night ≥ baseline + 3 bpm',
+          'Estimated HRV (RMSSD proxy) ≤ baseline - 2 ms'
         ],
-        thresholds: 'RHR ≥ baseline + 3 bpm and HRV ≤ baseline - 2 ms',
         magnitude: Math.abs((latest.rhr - baseline.rhr)) + Math.abs((latest.hrv - baseline.hrv))
       });
     }
@@ -291,54 +296,39 @@ function buildInsightCards(snapshot, latestNightRow) {
 
   if (latest.temp != null && baseline.temp != null && Math.abs(latest.temp - baseline.temp) >= 0.2) {
     add({
-      id: `temperature-shift-${snapshot.latestDate}`,
       ruleId: 'temperature-shift',
       title: 'Temperature Shift',
       severity: 'info',
-      metricRefs: ['temp'],
-      latest: { temp: latest.temp },
-      baseline: { temp: baseline.temp },
-      delta: { temp: latest.temp - baseline.temp },
+      metrics: [toMetric('temp', latest.temp, baseline.temp)],
       message: 'Temperature deviation shifted vs baseline.',
-      reasonLines: [`Temperature deviation differs by at least 0.2 °C (${fmt(latest.temp, 'temp')} vs ${fmt(baseline.temp, 'temp')}).`],
-      thresholds: '|tempDeviation - tempBaseline| ≥ 0.2 °C',
+      thresholdsText: ['|Temperature deviation - baseline| ≥ 0.20 °C'],
       magnitude: Math.abs(latest.temp - baseline.temp)
     });
   }
 
   if (latest.spo2 != null && baseline.spo2 != null && latest.spo2 <= baseline.spo2 - 0.5) {
     add({
-      id: `spo2-dip-${snapshot.latestDate}`,
       ruleId: 'spo2-dip',
       title: 'SpO2 Dip',
       severity: 'warn',
-      metricRefs: ['spo2'],
-      latest: { spo2: latest.spo2 },
-      baseline: { spo2: baseline.spo2 },
-      delta: { spo2: latest.spo2 - baseline.spo2 },
+      metrics: [toMetric('spo2', latest.spo2, baseline.spo2)],
       message: 'SpO2 is lower than baseline.',
-      reasonLines: [`SpO2 Night Avg is at least 0.5 pp below baseline (${fmt(latest.spo2, 'spo2')} vs ${fmt(baseline.spo2, 'spo2')}).`],
-      thresholds: 'SpO2 ≤ baseline - 0.5 pp',
+      thresholdsText: ['SpO2 Night Avg ≤ baseline - 0.5 pp'],
       magnitude: Math.abs(latest.spo2 - baseline.spo2)
     });
   }
 
   if (latestNightRow && (latestNightRow.samples < 50 || latestNightRow.windowMode === 'fallback')) {
     add({
-      id: `data-quality-warning-${snapshot.latestDate}`,
-      ruleId: 'data-quality-warning',
-      title: 'Data Quality Warning',
+      ruleId: 'data-quality-night-window-estimated',
+      title: 'Data Quality (Night Window Estimated)',
       severity: 'warn',
-      metricRefs: ['rhr', 'hrv'],
-      latest: { samples: latestNightRow.samples, windowMode: latestNightRow.windowMode },
-      baseline: {},
-      delta: {},
+      metrics: [{ name: 'samples', latest: latestNightRow.samples ?? null, baseline: null, delta: null }],
       message: 'Night window is estimated; verify patterns over multiple nights.',
-      reasonLines: [
-        `Latest night samples: ${latestNightRow.samples}.`,
-        `Window mode: ${latestNightRow.windowMode}.`
+      thresholdsText: [
+        'windowMode === fallback OR latest night samples < 50',
+        `latest samples: ${latestNightRow.samples ?? '—'}, windowMode: ${latestNightRow.windowMode || '—'}`
       ],
-      thresholds: 'samples < 50 OR windowMode === fallback',
       magnitude: latestNightRow.samples < 50 ? 100 - latestNightRow.samples : 10
     });
   }
@@ -416,8 +406,10 @@ async function readZip(file) {
   const series = [...byDate.entries()].map(([date, v]) => ({ date, ...v })).sort((a, b) => a.date.localeCompare(b.date));
   const latest = series.at(-1) || {};
   const latestDate = latest.date;
+  const latestNightDate = tables.oura_nightly_vitals.map((row) => row.date).sort().at(-1) || null;
   const snapshot = {
     latestDate,
+    latestNightDate,
     latest,
     baseline: {
       rhr: baselineMedian(series, 'rhr', latestDate, BASELINE_WINDOW_DAYS),
@@ -469,7 +461,7 @@ function renderTodayScores(tables, snapshot) {
   document.getElementById('todayReadinessScore').textContent = readinessScore == null ? '—' : readinessScore;
   document.getElementById('todaySleepScore').textContent = sleepScore == null ? '—' : sleepScore;
   document.getElementById('todayActivityScore').textContent = activityScore == null ? '—' : activityScore;
-  document.getElementById('todayLatestNightDate').textContent = snapshot.latestDate || '—';
+  document.getElementById('todayLatestNightDate').textContent = snapshot.latestNightDate || '—';
 
   const isMissing = readinessScore == null && sleepScore == null && activityScore == null;
   todayImportPrompt.classList.toggle('hidden', !isMissing);
@@ -478,15 +470,31 @@ function renderTodayScores(tables, snapshot) {
 function renderInsightsSection(insights) {
   const list = document.getElementById('todayInsightsList');
   const top3 = insights.slice(0, 3);
-  list.innerHTML = top3.length ? '' : '<div class="muted">No insight cards yet. Import more data to generate signals.</div>';
+  list.innerHTML = top3.length ? '' : '<div class="muted">No insights triggered for your latest night.</div>';
+
+  const severityLabel = { warn: 'Warn', good: 'Good', info: 'Info' };
 
   for (const card of top3) {
-    const btn = document.createElement('button');
-    btn.className = `insight-card severity-${card.severity}`;
-    btn.type = 'button';
-    btn.innerHTML = `<strong>${card.title}</strong><span>${card.message}</span><small>${card.metricRefs.map((m) => METRIC_DEFS[m]?.label || m).join(' • ')}</small>`;
-    btn.addEventListener('click', () => openInsightDrawer(card.id));
-    list.appendChild(btn);
+    const panel = document.createElement('article');
+    panel.className = `insight-card severity-${card.severity}`;
+    const metricsHtml = card.metrics.map((metric) => {
+      const metricKey = METRIC_DEFS[metric.name] ? metric.name : null;
+      const label = METRIC_DEFS[metric.name]?.label || metric.name;
+      const latestText = metricKey ? fmt(metric.latest, metricKey) : (metric.latest ?? '—');
+      const baselineText = metricKey ? fmt(metric.baseline, metricKey) : (metric.baseline ?? '—');
+      const deltaText = metricKey ? formatDelta(metricKey, metric.latest, metric.baseline) : '—';
+      return `<li><strong>${label}</strong>: latest ${latestText}, baseline ${baselineText}, delta ${deltaText}</li>`;
+    }).join('');
+    panel.innerHTML = `
+      <div class="row split-row"><strong>${card.title}</strong><span class="badge severity-${card.severity}">${severityLabel[card.severity] || 'Info'}</span></div>
+      <span>${card.message}</span>
+      <details>
+        <summary>Why?</summary>
+        <ul>${metricsHtml}</ul>
+        <ul>${card.thresholdsText.map((line) => `<li>${line}</li>`).join('')}</ul>
+      </details>
+    `;
+    list.appendChild(panel);
   }
   document.getElementById('viewAllInsightsBtn').disabled = !insights.length;
 }
@@ -506,15 +514,17 @@ function renderInsightDrawer() {
   drawer.setAttribute('aria-hidden', card ? 'false' : 'true');
   if (!card) return;
   document.getElementById('insightDrawerTitle').textContent = card.title;
-  document.getElementById('insightDrawerThresholds').textContent = `Thresholds: ${card.thresholds}`;
+  document.getElementById('insightDrawerThresholds').textContent = `Thresholds: ${(card.thresholdsText || []).join(' · ')}`;
   document.getElementById('insightDrawerMessage').textContent = card.message;
-  document.getElementById('insightDrawerLatestBaseline').innerHTML = card.metricRefs.map((metric) => {
-    const latest = card.latest?.[metric];
-    const baseline = card.baseline?.[metric];
-    const delta = card.delta?.[metric];
-    return `<li><strong>${METRIC_DEFS[metric]?.label || metric}:</strong> latest ${fmt(latest, metric)} vs baseline ${fmt(baseline, metric)} (Δ ${delta == null ? '—' : delta.toFixed(metric === 'temp' ? 2 : 1)})</li>`;
+  document.getElementById('insightDrawerLatestBaseline').innerHTML = card.metrics.map((metric) => {
+    const metricKey = METRIC_DEFS[metric.name] ? metric.name : null;
+    const label = METRIC_DEFS[metric.name]?.label || metric.name;
+    const latestText = metricKey ? fmt(metric.latest, metricKey) : (metric.latest ?? '—');
+    const baselineText = metricKey ? fmt(metric.baseline, metricKey) : (metric.baseline ?? '—');
+    const deltaText = metricKey ? formatDelta(metricKey, metric.latest, metric.baseline) : '—';
+    return `<li><strong>${label}:</strong> latest ${latestText} vs baseline ${baselineText} (Δ ${deltaText})</li>`;
   }).join('');
-  document.getElementById('insightDrawerReasons').innerHTML = card.reasonLines.map((line) => `<li>${line}</li>`).join('');
+  document.getElementById('insightDrawerReasons').innerHTML = (card.thresholdsText || []).map((line) => `<li>${line}</li>`).join('');
 }
 
 function renderAllInsightsModal() {
@@ -528,7 +538,7 @@ function renderAllInsightsModal() {
     const row = document.createElement('button');
     row.type = 'button';
     row.className = `insight-row severity-${card.severity}`;
-    row.innerHTML = `<strong>${card.title}</strong><span>${card.message}</span><small>${card.thresholds}</small>`;
+    row.innerHTML = `<strong>${card.title}</strong><span>${card.message}</span><small>${(card.thresholdsText || []).join(' • ')}</small>`;
     row.addEventListener('click', () => {
       modal.classList.remove('open');
       openInsightDrawer(card.id);
@@ -558,7 +568,9 @@ function renderVitalsDetail() {
 
   const selectedNight = result.tables.oura_nightly_vitals.find((n) => n.date === latestPoint?.date);
   document.getElementById('vitalsDetailQuality').textContent = selectedNight ? `Data quality (${selectedNight.date}): samples ${selectedNight.samples}, windowMode ${selectedNight.windowMode}` : 'Data quality: not applicable for selected point.';
-  document.getElementById('vitalsDefinition').textContent = `${METRIC_DEFS[metricKey].label} is shown from your locally-derived nightly vitals and compared with your 14-day baseline median.`;
+  document.getElementById('vitalsDefinition').textContent = metricKey === 'hrv'
+    ? 'Estimated HRV (RMSSD proxy) is derived from BPM stream in your locally derived nightly vitals and compared with your 14-day baseline median.'
+    : `${METRIC_DEFS[metricKey].label} is shown from your locally-derived nightly vitals and compared with your 14-day baseline median.`;
 }
 
 function renderTrendsDashboard() {
@@ -618,9 +630,9 @@ function appendInsightsLog(insights, snapshot) {
       date: snapshot.latestDate,
       ruleId: insight.ruleId,
       severity: insight.severity,
-      latest: JSON.stringify(insight.latest || {}),
-      baseline: JSON.stringify(insight.baseline || {}),
-      delta: JSON.stringify(insight.delta || {}),
+      latest: JSON.stringify((insight.metrics || []).map((metric) => ({ name: metric.name, latest: metric.latest })), null, 0),
+      baseline: JSON.stringify((insight.metrics || []).map((metric) => ({ name: metric.name, baseline: metric.baseline })), null, 0),
+      delta: JSON.stringify((insight.metrics || []).map((metric) => ({ name: metric.name, delta: metric.delta })), null, 0),
       message: insight.message,
       createdAt: new Date().toISOString()
     });
