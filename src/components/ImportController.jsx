@@ -173,6 +173,10 @@ export function createImportController({ importZip, onImported, onStateChange })
   return {
     open() {
       modal.classList.add('open');
+    },
+    async openWithFile(file) {
+      modal.classList.add('open');
+      await handleFile(file);
     }
   };
 }
