@@ -1,0 +1,13 @@
+export const sleepUiMapping = [
+  { section: 'Sleep Score', element: 'Primary score', primarySource: 'dailySleep.score', transform: 'numeric score', fallback: 'Show — when missing', notes: 'Date selected row only' },
+  { section: 'Sleep Score', element: 'Score label', primarySource: 'dailySleep.score', transform: 'scoreToLabel(score)', fallback: 'Show "No score"', notes: 'Deterministic banding' },
+  { section: 'Contributors', element: 'Contributor bars', primarySource: 'dailySleep.contributors.{total_sleep,efficiency,restfulness,rem_sleep,deep_sleep,latency,timing}', transform: 'contributorsToBars + 14-day median delta', fallback: 'Show empty-state row', notes: 'Arrow shown only when baseline exists' },
+  { section: 'Blood oxygen', element: 'Average SpO2', primarySource: 'dailySpo2.spo2_percentage.average', transform: 'parseSpo2Average()', fallback: 'Show —', notes: 'JSON-derived from export field' },
+  { section: 'Breathing regularity', element: 'Breathing label', primarySource: 'dailySpo2.breathing_disturbance_index', transform: 'breathingIndexToLabel(bdi)', fallback: 'Show "Not available"', notes: 'Optimal/Good/Pay attention' },
+  { section: 'Lowest heart rate', element: 'Night HR chart', primarySource: 'heartRate.timestamp + heartRate.bpm + sleepTime window/fallback window', transform: 'selectNightWindow + seriesFromHeartRate', fallback: 'Show no-data message', notes: 'Computes min/avg from selected night window' },
+  { section: 'Average HRV', element: 'Estimated HRV (RMSSD proxy)', primarySource: 'heartRate.timestamp + heartRate.bpm + sleepTime window/fallback window', transform: 'seriesFromHrvProxy over selected window', fallback: 'Show — + no-data chart', notes: 'Label explicitly marked estimated proxy' },
+  { section: 'Details', element: 'Sleep stage timeline', primarySource: 'sleep stage/session dataset (if present)', transform: 'timeline rendering', fallback: 'Show "Not available in this export"', notes: 'No fabrication when missing' },
+  { section: 'Details', element: 'Time asleep / time in bed / efficiency durations', primarySource: 'duration fields from session data', transform: 'format hh:mm + percentage', fallback: 'Show "Not available in this export"', notes: 'Never fabricate values' },
+  { section: 'Key metrics', element: 'Resting heart rate', primarySource: 'derived nightlyVitalsRows.rhr_night_bpm', transform: 'numeric bpm', fallback: 'Show —', notes: 'Derived locally only' },
+  { section: 'Sleep debt gauge', element: '14-day debt gauge', primarySource: 'duration-based debt calculation', transform: 'gauge', fallback: 'Show "Requires duration fields"', notes: 'Placeholder while durations unavailable' }
+];

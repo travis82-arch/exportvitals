@@ -19,6 +19,20 @@ import {
   monthStart
 } from './vitals-core.mjs';
 
+import { renderDateStrip } from './components/DateStrip.jsx';
+import { sleepUiMapping } from './mappings/sleepUiMapping.js';
+import { navManifest } from './nav/navManifest.js';
+import {
+  scoreToLabel,
+  breathingIndexToLabel,
+  contributorsToBars,
+  selectNightWindow,
+  seriesFromHeartRate,
+  seriesFromHrvProxy,
+  medianForDateWindow
+} from './domain/sleepTransforms.js';
+import { loadSelectedDate, persistSelectedDate, resolveInitialSelectedDate } from './state/selectedDate.js';
+
 const STORAGE_KEY = 'ouraDerivedMetricsV4';
 const SETTINGS_KEY = 'ouraDashboardSettingsV2';
 const JOURNAL_KEY = 'ouraJournalEntriesV1';
@@ -114,20 +128,22 @@ function contributorsTable(map, obj) {
   return `<table class="simple-table"><thead><tr><th>Contributor</th><th>Value</th></tr></thead><tbody>${Object.entries(map).map(([k, n]) => `<tr><td>${n}</td><td>${fmt(obj[k], 0)}</td></tr>`).join('')}</tbody></table>`;
 }
 
+function updateSelectedDate(nextDate) {
+  app.dateCtx.selectedDate = nextDate;
+  persistSelectedDate(nextDate);
+  if (app.dateCtx.latestDate && nextDate < shiftIsoDate(app.dateCtx.latestDate, -6) && app.dateCtx.scope === 'day') app.dateCtx.scope = 'week';
+  render();
+}
+
 function renderDateControls() {
   const el = document.getElementById('sharedDateControls');
   const latest = app.dateCtx.latestDate;
   if (!latest) { el.innerHTML = '<div class="muted">Import data to begin.</div>'; return; }
-  const strip = [];
-  for (let i = 6; i >= 0; i -= 1) {
-    const d = shiftIsoDate(latest, -i); const has = app.dateCtx.availableDates.includes(d);
-    const tag = app.state.journalEntries.some((j) => j.date === d) ? ' •' : '';
-    strip.push(`<button class="btn ${app.dateCtx.selectedDate === d ? 'active' : ''}" data-date-pick="${d}" ${has ? '' : 'disabled'}>${d.slice(5)}${tag}</button>`);
-  }
   el.innerHTML = `<div class="row"><strong>${scopeLabel()}</strong><span class="muted">Latest date: ${latest}</span></div>
     <div class="segmented"><button class="btn ${app.dateCtx.scope === 'day' ? 'active' : ''}" data-scope="day">Day</button><button class="btn ${app.dateCtx.scope === 'week' ? 'active' : ''}" data-scope="week">Week</button><button class="btn ${app.dateCtx.scope === 'month' ? 'active' : ''}" data-scope="month">Month</button></div>
-    <div class="row">${strip.join('')}</div>
-    <div class="row"><input id="datePicker" type="date" value="${app.dateCtx.selectedDate}"/><button class="btn secondary" data-nav="prev">Prev ${app.dateCtx.scope}</button><button class="btn secondary" data-nav="next">Next ${app.dateCtx.scope}</button></div>`;
+    <div id="sharedDateStripHost"></div>
+    <div class="row"><button class="btn secondary" data-nav="prev">Prev ${app.dateCtx.scope}</button><button class="btn secondary" data-nav="next">Next ${app.dateCtx.scope}</button></div>`;
+  renderDateStrip({ target: document.getElementById('sharedDateStripHost'), availableDates: app.dateCtx.availableDates, selectedDate: app.dateCtx.selectedDate, onChange: updateSelectedDate });
 }
 
 function miniTrend(rows, key, count) {
@@ -137,8 +153,83 @@ function miniTrend(rows, key, count) {
   return `<svg viewBox="0 0 200 50" width="100%" height="60"><polyline fill="none" stroke="#8db3ff" stroke-width="2" points="${d}"/></svg>`;
 }
 
+function sparkline(series) {
+  if (!series.length) return '<div class="placeholder">No overnight data in window.</div>';
+  const min = Math.min(...series.map((p) => p.v));
+  const max = Math.max(...series.map((p) => p.v));
+  const span = max - min || 1;
+  const points = series.map((p, i) => `${(i / Math.max(1, series.length - 1)) * 200},${50 - ((p.v - min) / span) * 40}`).join(' ');
+  return `<svg class="sparkline" viewBox="0 0 200 50"><polyline fill="none" stroke="#8db3ff" stroke-width="2" points="${points}"/></svg>`;
+}
+
+function renderSleepPage() {
+  if (!app.state) {
+    document.getElementById('sleepContent').innerHTML = '<section class="card"><div class="sleep-header"><h2>Sleep</h2><div class="sleep-icons"><button class="btn secondary">←</button><button class="btn secondary">⇪</button></div></div><p class="placeholder">Import data to populate sleep insights.</p></section>';
+    return;
+  }
+  const date = app.dateCtx.selectedDate;
+  const sleepRow = rowByDate(app.state.dailySleepRows, date);
+  const spo2Row = rowByDate(app.state.dailySpo2Rows, date);
+  const vitalsRow = rowByDate(app.state.nightlyVitalsRows, date);
+  const score = sleepRow?.sleepScore ?? null;
+  const scoreLabel = scoreToLabel(score);
+  const bdi = breathingIndexToLabel(spo2Row?.breathingDisturbanceIndex ?? null);
+  const bars = contributorsToBars(sleepRow?.sleepContributors || null);
+  const sleepTimeRows = app.state.sleepTimeRows || [];
+  const window = selectNightWindow(date, app.settings, sleepTimeRows, app.state.heartRateRows || []);
+  const hrSeries = seriesFromHeartRate(window, app.state.heartRateRows || []);
+  const hrvSeries = seriesFromHrvProxy(window, app.state.heartRateRows || []);
+  const hrMin = hrSeries.length ? Math.min(...hrSeries.map((p) => p.v)) : null;
+  const hrAvg = hrSeries.length ? hrSeries.reduce((a, p) => a + p.v, 0) / hrSeries.length : null;
+  const hrvAvg = hrvSeries.length ? hrvSeries.reduce((a, p) => a + p.v, 0) / hrvSeries.length : null;
+  const hrvMax = hrvSeries.length ? Math.max(...hrvSeries.map((p) => p.v)) : null;
+  const typicalSleep = medianForDateWindow(app.state.dailySleepRows, 'sleepScore', date, app.settings.baselineWindow || 14);
+  const sleepHealth = scoreToLabel(typicalSleep);
+
+  const contributorRows = bars.map((item) => {
+    const base = medianForDateWindow(app.state.dailySleepRows.map((r) => ({ date: r.date, [item.key]: r.sleepContributors?.[item.key] ?? null })), item.key, date, 14);
+    const delta = item.value != null && base != null ? item.value - base : null;
+    const arrow = delta == null ? '' : delta >= 0 ? '↑' : '↓';
+    return `<div><div class="row split-row"><span>${sleepNames[item.key] || item.key}</span><span>${fmt(item.value, 0)} ${arrow}</span></div><div class="progress"><span style="width:${Math.max(0, Math.min(100, item.value || 0))}%"></span></div></div>`;
+  }).join('');
+
+  const insight = scoreLabel.band === 'optimal' ? 'Great recovery foundation from sleep.' : scoreLabel.band === 'good' ? 'Sleep looked solid with room to improve.' : scoreLabel.band === 'fair' ? 'Sleep signals suggest extra recovery focus.' : 'Import sleep data to populate this card.';
+
+  document.getElementById('sleepContent').innerHTML = `<section class="card sleep-page"><div class="sleep-header"><h2>Sleep</h2><div class="sleep-icons"><button class="btn secondary">←</button><button class="btn secondary">⇪</button></div></div><div id="sleepDateStrip"></div></section>
+    <section class="card"><h3>Sleep Score</h3><div class="kpi-value">${fmt(score, 0)}</div><div class="badge">${scoreLabel.label}</div><p class="muted">${insight}</p></section>
+    <section class="card"><h3>Contributors</h3><div class="grid">${contributorRows || '<div class="placeholder">No contributor data for this date.</div>'}</div></section>
+    <div class="sleep-grid">
+      <section class="card"><h3>Blood oxygen</h3><div class="kpi-value">${fmt(spo2Row?.spo2Average, 1, '%')}</div></section>
+      <section class="card"><h3>Breathing regularity</h3><div class="kpi-value">${bdi.label}</div><p class="muted">${bdi.explainer}</p></section>
+    </div>
+    <section class="card"><h3>Lowest heart rate</h3><p class="muted">Window mode: ${window.windowMode}</p><div class="row"><div class="kpi"><div class="kpi-label">Lowest HR</div><div class="kpi-value">${fmt(hrMin, 1)}</div></div><div class="kpi"><div class="kpi-label">Average HR</div><div class="kpi-value">${fmt(hrAvg, 1)}</div></div></div>${sparkline(hrSeries)}</section>
+    <section class="card"><h3>Average HRV</h3><div class="kpi-label">Estimated HRV (RMSSD proxy)</div><div class="row"><div class="kpi"><div class="kpi-label">Avg</div><div class="kpi-value">${fmt(hrvAvg, 1)}</div></div><div class="kpi"><div class="kpi-label">Max</div><div class="kpi-value">${fmt(hrvMax, 1)}</div></div></div>${sparkline(hrvSeries)}</section>
+    <section class="card"><h3>Sleep Health</h3><div class="kpi-label">Typical Sleep Score (${app.settings.baselineWindow || 14}d median)</div><div class="kpi-value">${fmt(typicalSleep, 0)}</div><div class="badge">${sleepHealth.label}</div></section>
+    <section class="card"><h3>Details</h3><div class="grid"><div>Time asleep: <span class="placeholder">Not available in this export</span></div><div>Time in bed: <span class="placeholder">Not available in this export</span></div><div>Sleep stage timeline: <span class="placeholder">Not available in this export</span></div><div>Movement timeline: <span class="placeholder">Not available in this export</span></div></div></section>
+    <section class="card"><h3>Key metrics</h3><div class="sleep-grid"><div class="kpi"><div class="kpi-label">Total sleep time</div><div class="placeholder">Not available in this export</div></div><div class="kpi"><div class="kpi-label">Time in bed</div><div class="placeholder">Not available in this export</div></div><div class="kpi"><div class="kpi-label">Sleep efficiency</div><div class="placeholder">Not available in this export</div></div><div class="kpi"><div class="kpi-label">Resting heart rate</div><div class="kpi-value">${fmt(vitalsRow?.rhr_night_bpm, 1)}</div></div></div></section>
+    <section class="card"><h3>Sleep debt (past 14 days)</h3><div class="gauge">Requires duration fields</div></section>`;
+
+  renderDateStrip({ target: document.getElementById('sleepDateStrip'), availableDates: app.dateCtx.availableDates, selectedDate: app.dateCtx.selectedDate, onChange: updateSelectedDate });
+}
+
+function renderSleepMappingGlossary() {
+  const target = document.getElementById('sleepMappingGlossary');
+  target.innerHTML = `<h3>Sleep UI Element Mapping</h3><table class="simple-table"><thead><tr><th>Section</th><th>Element</th><th>Source</th><th>Fallback</th><th>Notes</th></tr></thead><tbody>${sleepUiMapping.map((row) => `<tr><td>${row.section}</td><td>${row.element}</td><td><code>${row.primarySource}</code><br/><span class="muted">${row.transform}</span></td><td>${row.fallback}</td><td>${row.notes}</td></tr>`).join('')}</tbody></table>`;
+}
+
+function renderNav() {
+  const top = document.getElementById('primaryTabs');
+  top.innerHTML = navManifest.primary.map((item) => `<a class="tab-link" data-route="${item.route}" href="#${item.route}">${item.label}</a>`).join('');
+  document.getElementById('myHealthSubnav').innerHTML = navManifest.myHealth.map((item) => `<a data-subroute="${item.route}" href="#${item.route}">${item.label}</a>`).join('');
+  document.getElementById('dataToolsSubnav').innerHTML = navManifest.dataTools.map((item) => `<a data-subroute="${item.route}" ${item.debugOnly ? 'data-debug-link' : ''} href="#${item.route}">${item.label}</a>`).join('');
+}
+
 function render() {
-  if (!app.state) return;
+  if (!app.state) {
+    renderSleepPage();
+    renderSleepMappingGlossary();
+    return;
+  }
   renderDateControls();
   const cards = [
     ['Readiness Score', getContextual(app.state.dailyReadinessRows, 'readinessScore')], ['Sleep Score', getContextual(app.state.dailySleepRows, 'sleepScore')], ['Activity Score', getContextual(app.state.dailyActivityRows, 'activityScore')],
@@ -150,8 +241,9 @@ function render() {
   document.getElementById('byDateInsights').innerHTML = insights.slice(0, 6).map((i) => `<div class="insight-card"><strong>${i.title}</strong><span class="badge severity-${i.severity}">${i.severity}</span><small>Latest ${fmt(i.latest, 1)} vs baseline ${fmt(i.baseline, 1)} (Δ ${fmt(i.delta, 1)})</small><small>Why you're seeing this: ${i.why}</small><small>What to try: ${i.tryText}</small></div>`).join('');
 
   renderScorePage('readinessContent', app.state.dailyReadinessRows, 'readinessScore', readinessNames, 'readinessContributors');
-  renderScorePage('sleepContent', app.state.dailySleepRows, 'sleepScore', sleepNames, 'sleepContributors');
+  renderSleepPage();
   renderScorePage('activityContent', app.state.dailyActivityRows, 'activityScore', activityNames, 'activityContributors');
+  renderSleepMappingGlossary();
 
   document.getElementById('vitalsSummary').innerHTML = `<div class="kpi"><div class="kpi-label">RHR Night</div><div class="kpi-value">${fmt(getContextual(app.state.nightlyVitalsRows, 'rhr_night_bpm').value, 1)}</div></div><div class="kpi"><div class="kpi-label">Estimated HRV (RMSSD proxy)</div><div class="kpi-value">${fmt(getContextual(app.state.nightlyVitalsRows, 'hrv_rmssd_proxy_ms').value, 1)}</div></div>`;
 
@@ -202,19 +294,30 @@ async function readZip(file) {
   for (const [key, entry] of Object.entries(registry)) datasets[key] = parseCsvWithDebug(await entry.async('text')).rows;
   const dailyReadinessRows = (datasets.dailyReadiness || []).map((row) => ({ date: parseDate(row.day || row.date), readinessScore: toNumber(row.score), temperatureDeviation: toNumber(row.temperature_deviation), readinessContributors: parseContributors(row.contributors) })).filter((r) => r.date).sort((a, b) => a.date.localeCompare(b.date));
   const dailySleepRows = (datasets.dailySleep || []).map((row) => ({ date: parseDate(row.day || row.date), sleepScore: toNumber(row.score), sleepContributors: parseContributors(row.contributors) })).filter((r) => r.date).sort((a, b) => a.date.localeCompare(b.date));
+  const sleepTimeRows = (datasets.sleepTime || []).map((row) => ({ date: parseDate(row.day || row.date), bedtimeStart: row.bedtime_start || row.start_datetime || null, bedtimeEnd: row.bedtime_end || row.end_datetime || null })).filter((r) => r.date);
   const dailyActivityRows = (datasets.dailyActivity || []).map((row) => ({ date: parseDate(row.day || row.date), activityScore: toNumber(row.score), steps: toNumber(row.steps), activeCalories: toNumber(row.active_calories), totalCalories: toNumber(row.total_calories), activityContributors: parseContributors(row.contributors), metSeriesSummary: summarizeMet(row.met) })).filter((r) => r.date).sort((a, b) => a.date.localeCompare(b.date));
   const dailySpo2Rows = (datasets.dailySpo2 || []).map((row) => ({ date: parseDate(row.day || row.date), spo2Average: parseSpo2Average(row.spo2_percentage, row.average_spo2), breathingDisturbanceIndex: toNumber(row.breathing_disturbance_index) })).filter((r) => r.date).sort((a, b) => a.date.localeCompare(b.date));
   const nightlyVitalsRows = buildNightlyVitals(datasets.heartRate || [], datasets.sleepTime || []);
   const availableDates = [...new Set([...dailyReadinessRows, ...dailySleepRows, ...dailyActivityRows, ...dailySpo2Rows, ...nightlyVitalsRows].map((r) => r.date).filter(Boolean))].sort();
-  return { dailyReadinessRows, dailySleepRows, dailyActivityRows, dailySpo2Rows, nightlyVitalsRows, journalEntries: readJournalEntries(localStorage, JOURNAL_KEY), ingestReport: { datasetsFound: Object.keys(registry), counts: { readiness: dailyReadinessRows.length, sleep: dailySleepRows.length, activity: dailyActivityRows.length, spo2: dailySpo2Rows.length, nights: nightlyVitalsRows.length } }, availableDates };
+  return { dailyReadinessRows, dailySleepRows, dailyActivityRows, dailySpo2Rows, nightlyVitalsRows, sleepTimeRows, heartRateRows: datasets.heartRate || [], journalEntries: readJournalEntries(localStorage, JOURNAL_KEY), ingestReport: { datasetsFound: Object.keys(registry), counts: { readiness: dailyReadinessRows.length, sleep: dailySleepRows.length, activity: dailyActivityRows.length, spo2: dailySpo2Rows.length, nights: nightlyVitalsRows.length } }, availableDates };
 }
 
 function hookEvents() {
-  document.querySelectorAll('[data-route],[data-subroute]').forEach((el) => el.addEventListener('click', (e) => { e.preventDefault(); navigate(el.dataset.route || el.dataset.subroute); }));
+  document.addEventListener('click', (e) => {
+    const routeNode = e.target.closest('[data-route],[data-subroute]');
+    if (!routeNode) return;
+    e.preventDefault();
+    navigate(routeNode.dataset.route || routeNode.dataset.subroute);
+  });
   window.addEventListener('hashchange', () => renderRoute(location.hash));
   document.getElementById('zipInput').addEventListener('change', async () => {
     const file = document.getElementById('zipInput').files?.[0]; if (!file) return;
-    app.state = await readZip(file); app.dateCtx = createDateContext(app.state.availableDates); render();
+    app.state = await readZip(file);
+    const preferred = loadSelectedDate();
+    const selected = resolveInitialSelectedDate(app.state.dailySleepRows.map((r) => r.date), app.state.dailyReadinessRows.map((r) => r.date), undefined, preferred);
+    app.dateCtx = createDateContext(app.state.availableDates, selected);
+    persistSelectedDate(app.dateCtx.selectedDate);
+    render();
     if (app.settings.rememberDerived) localStorage.setItem(STORAGE_KEY, JSON.stringify(app.state));
   });
   document.getElementById('clearBtn').addEventListener('click', () => { localStorage.removeItem(STORAGE_KEY); location.reload(); });
@@ -230,19 +333,17 @@ function hookEvents() {
   });
 
   document.getElementById('sharedDateControls').addEventListener('click', (e) => {
-    const date = e.target.dataset.datePick; const scope = e.target.dataset.scope; const nav = e.target.dataset.nav;
-    if (date) app.dateCtx.selectedDate = date;
+    const scope = e.target.dataset.scope; const nav = e.target.dataset.nav;
     if (scope) app.dateCtx.scope = scope;
     if (nav) {
       const step = app.dateCtx.scope === 'day' ? 1 : app.dateCtx.scope === 'week' ? 7 : 31;
       const next = shiftIsoDate(app.dateCtx.selectedDate, nav === 'next' ? step : -step);
       const min = app.dateCtx.minDate; const max = app.dateCtx.latestDate;
-      if (next >= min && next <= max) app.dateCtx.selectedDate = next;
+      if (next >= min && next <= max) updateSelectedDate(next);
+      return;
     }
-    if (app.dateCtx.selectedDate < shiftIsoDate(app.dateCtx.latestDate, -6) && app.dateCtx.scope === 'day') app.dateCtx.scope = 'week';
     render();
   });
-  document.getElementById('sharedDateControls').addEventListener('change', (e) => { if (e.target.id === 'datePicker') { app.dateCtx.selectedDate = e.target.value; if (app.dateCtx.selectedDate < shiftIsoDate(app.dateCtx.latestDate, -6)) app.dateCtx.scope = 'week'; render(); } });
 
   const doExport = (name, rows) => { const blob = new Blob([toCsv(rows)], { type: 'text/csv' }); const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name; a.click(); URL.revokeObjectURL(a.href); };
   document.getElementById('exportReadiness').addEventListener('click', () => doExport('normalized_daily_readiness.csv', app.state?.dailyReadinessRows || []));
@@ -265,10 +366,17 @@ function initStatic() {
   document.getElementById('journalDate').value = new Date().toISOString().slice(0, 10);
 }
 
+renderNav();
 hookEvents();
 initStatic();
 if (localStorage.getItem(STORAGE_KEY)) {
-  try { app.state = JSON.parse(localStorage.getItem(STORAGE_KEY)); app.dateCtx = createDateContext(app.state.availableDates || []); } catch { /* noop */ }
+  try {
+    app.state = JSON.parse(localStorage.getItem(STORAGE_KEY));
+    const preferred = loadSelectedDate();
+    const selected = resolveInitialSelectedDate(app.state.dailySleepRows?.map((r) => r.date) || [], app.state.dailyReadinessRows?.map((r) => r.date) || [], undefined, preferred);
+    app.dateCtx = createDateContext(app.state.availableDates || [], selected);
+    persistSelectedDate(app.dateCtx.selectedDate);
+  } catch { /* noop */ }
 }
 render();
 renderRoute(location.hash || '#/by-date');
