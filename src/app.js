@@ -19,7 +19,7 @@ import {
   monthStart
 } from './vitals-core.mjs';
 
-import { renderDateStrip } from './components/DateStrip.jsx';
+import { renderDateStrip } from './components/DateStrip.js';
 import { sleepUiMapping } from './mappings/sleepUiMapping.js';
 import { navManifest } from './nav/navManifest.js';
 import {

@@ -1,30 +1,11 @@
-# 1) Allow real files through (do NOT rewrite)
-/assets/*              /assets/:splat              200
-/src/*                 /src/:splat                 200
-
-# Allow common static file types to pass through unchanged
-/*.js                  /:splat                     200
-/*.css                 /:splat                     200
-/*.map                 /:splat                     200
-/*.json                /:splat                     200
-/*.webmanifest         /:splat                     200
-/*.ico                 /:splat                     200
-/*.png                 /:splat                     200
-/*.svg                 /:splat                     200
-/*.html                /:splat                     200
-
-# 2) Optional "pretty" routes (no .html)
-/sleep                 /sleep.html                 301
-/readiness             /readiness.html             301
-/activity              /activity.html              301
-/vitals                /vitals.html                301
-/trends                /trends.html                301
-/journal               /journal.html               301
-/import                /data-tools-import.html     301
-/export                /data-tools-export.html     301
-/glossary              /glossary.html              301
-/settings              /settings.html              301
-/debug                 /debug.html                 301
-
-# 3) FINAL fallback (ONLY for unknown non-file routes)
-/*                     /index.html                 200
+/sleep       /sleep.html               301
+/readiness   /readiness.html           301
+/activity    /activity.html            301
+/vitals      /vitals.html              301
+/trends      /trends.html              301
+/journal     /journal.html             301
+/import      /data-tools-import.html   301
+/export      /data-tools-export.html   301
+/glossary    /glossary.html            301
+/settings    /settings.html            301
+/debug       /debug.html               301
