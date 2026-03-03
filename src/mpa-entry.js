@@ -41,7 +41,13 @@ const titleCase = (key) => key.replaceAll('_', ' ').replace(/\b\w/g, (c) => c.to
 function loadSettings() { try { return { ...defaults, ...(JSON.parse(localStorage.getItem(SETTINGS_KEY) || '{}')) }; } catch { return { ...defaults }; } }
 function saveSettings(settings) { localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings)); }
 function ensureMount(id, tag = 'div') { let el = document.getElementById(id); if (!el) { el = document.createElement(tag); el.id = id; document.body.appendChild(el); } return el; }
-function inferPage() { return document.body.dataset.page || pageByPath[location.pathname] || 'index'; }
+function inferPage() {
+  const bodyPage = document.body.dataset.page;
+  const inferred = pageByPath[location.pathname] || (location.pathname.split('/').pop()?.replace('.html', '') || 'index');
+  if (!bodyPage) return inferred;
+  if (pageByPath[location.pathname] && bodyPage !== pageByPath[location.pathname]) return inferred;
+  return bodyPage;
+}
 function renderDateStrip(selectedDate) { return `<div class="date-strip">${getLastAvailableDays(getAvailableDates(), 7).map((d) => `<a class="btn ${d === selectedDate ? 'active' : ''}" href="${location.pathname}?date=${d}">${d}</a>`).join('')}</div>`; }
 function showToast(message) { const toast = document.createElement('div'); toast.className = 'toast'; toast.textContent = message; document.body.appendChild(toast); setTimeout(() => toast.remove(), 2600); }
 function hrSparkline(hrSeries = []) {
@@ -74,11 +80,12 @@ function renderEmptyGuard(app) {
 }
 
 try {
+  console.log('mpa-entry boot', location.pathname);
   document.documentElement.dataset.js = '1';
   const topNav = ensureMount('topNav');
   const app = ensureMount('app', 'main');
   const settings = loadSettings();
-  const page = inferPage();
+  let page = inferPage();
 
   renderTopNav(topNav, location.pathname);
   loadFromLocalCache();
@@ -91,11 +98,23 @@ try {
 
   const importController = createImportController({
     importZip: (file, onProgress) => importZip(file, settings, onProgress),
-    onImported(result) { if (result?.mostRecentDate) persistSelectedDate(result.mostRecentDate); showToast(`Data loaded: ${result?.dateRange?.start} → ${result?.dateRange?.end} (${result?.dateRange?.days || 0} days)`); location.reload(); },
+    onImported(result) {
+      if (result?.mostRecentDate) persistSelectedDate(result.mostRecentDate);
+      showToast(`Imported ✓ (${result?.dateRange?.days || 0} days)`);
+      location.reload();
+    },
     onStateChange() {}
   });
 
-  document.getElementById('globalImportBtn')?.addEventListener('click', () => importController.open());
+
+  const fileInput = document.getElementById('globalImportInput');
+  fileInput?.addEventListener('change', async (event) => {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+    if (!file) return;
+    await importController.openWithFile(file);
+  });
+
   const day = selectedDate ? getDay(selectedDate, settings) : null;
   const snapshot = getStoreSnapshot();
 
