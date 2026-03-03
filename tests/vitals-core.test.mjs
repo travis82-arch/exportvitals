@@ -6,7 +6,10 @@ import {
   parseSpo2Average,
   baselineMedian,
   readJournalEntries,
-  saveJournalEntries
+  saveJournalEntries,
+  createDateContext,
+  getScopeRange,
+  toCsv
 } from '../src/vitals-core.mjs';
 
 test('contributors JSON parsing robustness', () => {
@@ -28,6 +31,14 @@ test('baseline median supports varying windows', () => {
   assert.equal(baselineMedian(rows, 'score', '2026-01-07', 7), 3.5);
 });
 
+test('date range grouping day/week/month', () => {
+  const ctx = createDateContext(['2026-02-01', '2026-02-02', '2026-02-10'], '2026-02-01');
+  assert.equal(ctx.scope, 'week');
+  assert.deepEqual(getScopeRange('day', '2026-02-10'), { start: '2026-02-10', end: '2026-02-10' });
+  assert.deepEqual(getScopeRange('week', '2026-02-10'), { start: '2026-02-09', end: '2026-02-15' });
+  assert.deepEqual(getScopeRange('month', '2026-02-10'), { start: '2026-02-01', end: '2026-02-28' });
+});
+
 test('journal storage roundtrip', () => {
   const memory = { _v: null, getItem() { return this._v; }, setItem(_k, v) { this._v = v; } };
   saveJournalEntries(memory, 'journal', [{ id: '1', tag: 'Alcohol', date: '2026-01-01' }]);
@@ -39,4 +50,10 @@ test('journal storage roundtrip', () => {
 test('delimiter auto-detect prefers semicolon when header sensible', () => {
   const csv = 'day;score;contributors\n2026-02-01;80;"{}"';
   assert.equal(sniffDelimiter(csv).delimiter, ';');
+});
+
+test('export CSV includes union of expected columns', () => {
+  const csv = toCsv([{ date: '2026-01-01', readinessScore: 80 }, { date: '2026-01-02', sleepScore: 75 }]);
+  const header = csv.split('\n')[0];
+  assert.equal(header, 'date,readinessScore,sleepScore');
 });

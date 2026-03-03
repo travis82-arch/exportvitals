@@ -124,6 +124,63 @@ export function saveJournalEntries(storage, key, entries) {
   storage.setItem(key, JSON.stringify(entries));
 }
 
+function toDate(isoDate) {
+  return new Date(`${isoDate}T00:00:00Z`);
+}
+
+export function shiftIsoDate(isoDate, days) {
+  const d = toDate(isoDate);
+  d.setUTCDate(d.getUTCDate() + days);
+  return d.toISOString().slice(0, 10);
+}
+
+export function isoWeekStart(isoDate) {
+  const d = toDate(isoDate);
+  const day = d.getUTCDay();
+  const diff = day === 0 ? -6 : 1 - day;
+  d.setUTCDate(d.getUTCDate() + diff);
+  return d.toISOString().slice(0, 10);
+}
+
+export function monthStart(isoDate) {
+  return `${isoDate.slice(0, 7)}-01`;
+}
+
+export function createDateContext(availableDates, requestedDate = null) {
+  const sorted = [...new Set(availableDates.filter(Boolean))].sort();
+  const latestDate = sorted.at(-1) || null;
+  const minDate = sorted[0] || null;
+  const selectedDate = sorted.includes(requestedDate) ? requestedDate : latestDate;
+  let scope = 'day';
+  if (selectedDate && latestDate) {
+    const cutoff = shiftIsoDate(latestDate, -6);
+    if (selectedDate < cutoff) scope = 'week';
+  }
+  return { availableDates: sorted, latestDate, minDate, selectedDate, scope };
+}
+
+export function getScopeRange(scope, selectedDate) {
+  if (!selectedDate) return null;
+  if (scope === 'day') return { start: selectedDate, end: selectedDate };
+  if (scope === 'week') {
+    const start = isoWeekStart(selectedDate);
+    return { start, end: shiftIsoDate(start, 6) };
+  }
+  const start = monthStart(selectedDate);
+  const [y, m] = start.split('-').map(Number);
+  const end = new Date(Date.UTC(y, m, 0)).toISOString().slice(0, 10);
+  return { start, end };
+}
+
+export function rowsForRange(rows, start, end) {
+  return rows.filter((r) => r.date >= start && r.date <= end);
+}
+
+export function aggregateKey(rows, key) {
+  const vals = rows.map((r) => r[key]).filter((v) => v != null);
+  return { median: median(vals), min: vals.length ? Math.min(...vals) : null, max: vals.length ? Math.max(...vals) : null, count: vals.length };
+}
+
 export function toCsv(rows) {
   if (!rows?.length) return '';
   const headers = [...new Set(rows.flatMap((r) => Object.keys(r)))];

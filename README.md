@@ -4,7 +4,7 @@ Static, local-only Oura-style dashboard (no build step, no backend).
 
 ## Navigation map
 Top tabs (always visible):
-- Today
+- By Date
 - Readiness
 - Sleep
 - Activity
@@ -21,9 +21,18 @@ Inside **Data Tools**:
 - Import
 - Export
 - Glossary
-- Debug
+- Debug (visible only in Developer Mode)
 
-Unknown routes fall back to Today.
+Unknown routes fall back to `/by-date`.
+
+## How “By Date” works
+- The app opens on `/by-date`.
+- A shared **Date Context** controls By Date, Readiness, Sleep, Activity, and Vitals.
+- **Day** mode shows latest date + previous 6 calendar days as chips.
+- Choosing a date older than latest-6 days auto-switches to **Week**.
+- **Week** uses ISO week (Mon–Sun), with prev/next navigation.
+- **Month** shows month-level aggregate medians and available-day counts.
+- Long-term history remains in **My Health → Trends**.
 
 ## Data import support
 ZIP parsing is in-browser only and keeps compatibility with semicolon-delimited CSV exports.
@@ -38,28 +47,21 @@ Optional:
 - `heart_rate.csv` + `sleep_time.csv` (derived nightly vitals)
 
 ## Exported vs derived metrics
-Exported (direct):
-- readiness_score
-- sleep_score
-- activity_score
-- temperature_deviation_c
-- spo2_avg
-- breathing_disturbance_index
-- contributors objects from readiness/sleep/activity
+Export files:
+- `normalized_daily_readiness.csv`
+- `normalized_daily_sleep.csv`
+- `normalized_daily_activity.csv`
+- `normalized_daily_spo2.csv`
+- `derived_nightly_vitals.csv`
+- `journal_tags.csv`
+- `normalized_all.json`
 
-Derived locally:
-- rhr_night_bpm
-- hrv_rmssd_proxy_ms
+Derived locally (not uploaded):
+- `rhr_night_bpm`
+- `hrv_rmssd_proxy_ms`
 - baseline medians (7/14/30)
-- insights cards (rule-based)
-- MET distribution summary
-
-## Features
-- Oura-style Readiness/Sleep/Activity pages with contributors + trend charts.
-- Today overview with scores at-a-glance and explainable insights.
-- Journal (Tags) with localStorage persistence and chart markers.
-- Data Tools export buttons for normalized CSV/JSON artifacts.
-- Settings for baseline window, night window mode, remember-derived toggle, and distance unit.
+- insight cards (rule-based, explainable)
+- week/month aggregates
 
 ## Testing
 Run:
