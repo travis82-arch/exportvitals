@@ -1,26 +1,42 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { sniffDelimiter, safeJsonParse, baselineMedian, metricDelta } from '../src/vitals-core.mjs';
+import {
+  sniffDelimiter,
+  parseContributors,
+  parseSpo2Average,
+  baselineMedian,
+  readJournalEntries,
+  saveJournalEntries
+} from '../src/vitals-core.mjs';
+
+test('contributors JSON parsing robustness', () => {
+  assert.deepEqual(parseContributors('{"deep_sleep":80}'), { deep_sleep: 80 });
+  assert.equal(parseContributors('{nope'), null);
+  assert.equal(parseContributors(null), null);
+  assert.equal(parseContributors('12'), null);
+});
+
+test('dailySpo2 JSON average parsing', () => {
+  assert.equal(parseSpo2Average('{"average":97.8}', null), 97.8);
+  assert.equal(parseSpo2Average('{bad', '95.2'), 95.2);
+  assert.equal(parseSpo2Average(null, null), null);
+});
+
+test('baseline median supports varying windows', () => {
+  const rows = [1, 2, 3, 4, 5, 6, 7].map((n) => ({ date: `2026-01-0${n}`, score: n }));
+  assert.equal(baselineMedian(rows, 'score', '2026-01-07', 3), 5);
+  assert.equal(baselineMedian(rows, 'score', '2026-01-07', 7), 3.5);
+});
+
+test('journal storage roundtrip', () => {
+  const memory = { _v: null, getItem() { return this._v; }, setItem(_k, v) { this._v = v; } };
+  saveJournalEntries(memory, 'journal', [{ id: '1', tag: 'Alcohol', date: '2026-01-01' }]);
+  const loaded = readJournalEntries(memory, 'journal');
+  assert.equal(loaded.length, 1);
+  assert.equal(loaded[0].tag, 'Alcohol');
+});
 
 test('delimiter auto-detect prefers semicolon when header sensible', () => {
   const csv = 'day;score;contributors\n2026-02-01;80;"{}"';
   assert.equal(sniffDelimiter(csv).delimiter, ';');
-});
-
-test('json-in-cell parser returns structured error without throwing', () => {
-  const bad = safeJsonParse('{nope');
-  assert.equal(bad.parsed, null);
-  assert.ok(bad.error);
-});
-
-test('baseline median and temp delta near-zero suppresses percent', () => {
-  const rows = [
-    { date: '2026-01-01', temp: 0.1 },
-    { date: '2026-01-02', temp: 0.2 },
-    { date: '2026-01-03', temp: -0.1 }
-  ];
-  const baseline = baselineMedian(rows, 'temp', '2026-01-03', 14);
-  assert.ok(Math.abs(baseline - 0.15) < 1e-9);
-  const delta = metricDelta('temp', -0.1, baseline);
-  assert.equal(delta.percent, null);
 });
