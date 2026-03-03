@@ -21,12 +21,23 @@
       <section class="card">
         <h2>Today</h2>
         <p class="muted">Daily Oura scores from your latest import.</p>
+        <p class="muted small">Latest night date: <span id="todayLatestNightDate">—</span></p>
         <div id="todayScoresGrid" class="grid vitals-grid">
           <div class="kpi"><div class="kpi-label">Readiness Score</div><div id="todayReadinessScore" class="kpi-value">—</div></div>
           <div class="kpi"><div class="kpi-label">Sleep Score</div><div id="todaySleepScore" class="kpi-value">—</div></div>
           <div class="kpi"><div class="kpi-label">Activity Score</div><div id="todayActivityScore" class="kpi-value">—</div></div>
         </div>
         <p id="todayImportPrompt" class="status hidden">No Oura data imported yet. Go to <a href="#/my-health/data-tools/import" class="inline-link" data-route="/my-health/data-tools/import">My Health → Data Tools → Import</a> to upload your export ZIP.</p>
+      </section>
+      <section class="card">
+        <div class="row split-row">
+          <div>
+            <h3>Insight Cards</h3>
+            <p class="muted small">Top signals compared to your baseline.</p>
+          </div>
+          <button id="viewAllInsightsBtn" type="button" class="btn secondary">View all</button>
+        </div>
+        <div id="todayInsightsList" class="grid insight-grid"></div>
       </section>
     </section>
 
@@ -36,10 +47,10 @@
         <p class="muted">Latest night: <span id="latestNightDate">—</span></p>
         <p id="baselineWindowLabel" class="muted small">Baseline window: 14-day median ending —</p>
         <div class="grid vitals-grid">
-          <div class="kpi"><div class="kpi-label">RHR Night</div><div id="rhrLatest" class="kpi-value">—</div><div id="rhrBaseline" class="kpi-reason">—</div><div id="rhrDelta" class="kpi-reason"></div><div id="rhrTrend" class="trend"></div></div>
-          <div class="kpi"><div class="kpi-label">Estimated HRV RMSSD proxy</div><div id="hrvLatest" class="kpi-value">—</div><div id="hrvBaseline" class="kpi-reason">—</div><div id="hrvDelta" class="kpi-reason"></div><div id="hrvTrend" class="trend"></div></div>
-          <div class="kpi"><div class="kpi-label">SpO2 Night Avg</div><div id="spo2Latest" class="kpi-value">—</div><div id="spo2Baseline" class="kpi-reason">—</div><div id="spo2Delta" class="kpi-reason"></div><div id="spo2Trend" class="trend"></div></div>
-          <div class="kpi"><div class="kpi-label">Temperature Deviation</div><div id="tempLatest" class="kpi-value">—</div><div id="tempBaseline" class="kpi-reason">—</div><div id="tempDelta" class="kpi-reason"></div><div id="tempTrend" class="trend"></div></div>
+          <button type="button" class="kpi kpi-button" data-vitals-metric="rhr"><div class="kpi-label">RHR Night</div><div id="rhrLatest" class="kpi-value">—</div><div id="rhrBaseline" class="kpi-reason">—</div><div id="rhrDelta" class="kpi-reason"></div><div id="rhrTrend" class="trend"></div></button>
+          <button type="button" class="kpi kpi-button" data-vitals-metric="hrv"><div class="kpi-label">Estimated HRV (RMSSD proxy)</div><div id="hrvLatest" class="kpi-value">—</div><div id="hrvBaseline" class="kpi-reason">—</div><div id="hrvDelta" class="kpi-reason"></div><div id="hrvTrend" class="trend"></div></button>
+          <button type="button" class="kpi kpi-button" data-vitals-metric="spo2"><div class="kpi-label">SpO2 Night Avg</div><div id="spo2Latest" class="kpi-value">—</div><div id="spo2Baseline" class="kpi-reason">—</div><div id="spo2Delta" class="kpi-reason"></div><div id="spo2Trend" class="trend"></div></button>
+          <button type="button" class="kpi kpi-button" data-vitals-metric="temp"><div class="kpi-label">Temperature Deviation</div><div id="tempLatest" class="kpi-value">—</div><div id="tempBaseline" class="kpi-reason">—</div><div id="tempDelta" class="kpi-reason"></div><div id="tempTrend" class="trend"></div></button>
         </div>
         <div id="qualityInfo" class="muted small"></div>
       </section>
@@ -50,8 +61,8 @@
         <h2>My Health</h2>
         <p class="muted">Manage trends, tools, and settings.</p>
         <div class="grid hub-grid">
-          <a href="#/my-health/trends" class="hub-link" data-route="/my-health/trends"><strong>Trends</strong><span>Coming soon.</span></a>
-          <a href="#/my-health/data-tools/import" class="hub-link" data-route="/my-health/data-tools/import"><strong>Data Tools</strong><span>Import your Oura export ZIP.</span></a>
+          <a href="#/my-health/trends" class="hub-link" data-route="/my-health/trends"><strong>Trends</strong><span>Scores + vitals dashboard.</span></a>
+          <a href="#/my-health/data-tools/import" class="hub-link" data-route="/my-health/data-tools/import"><strong>Data Tools</strong><span>Import your Oura export ZIP + export Insights Log.</span></a>
           <a href="#/my-health/settings" class="hub-link" data-route="/my-health/settings"><strong>Settings</strong><span>Developer mode + baseline settings.</span></a>
         </div>
       </section>
@@ -59,8 +70,17 @@
 
     <section id="myHealthTrendsPage" class="page">
       <section class="card">
-        <h3>Trends</h3>
-        <p class="muted">Trend exploration will be expanded in upcoming PRs.</p>
+        <div class="row split-row">
+          <div>
+            <h3>Trends</h3>
+            <p class="muted small">Scores and vitals trends across your selected range.</p>
+          </div>
+          <div class="segmented" role="group" aria-label="Trends range">
+            <button type="button" class="btn secondary active" data-trends-range="14">14d</button>
+            <button type="button" class="btn secondary" data-trends-range="30">30d</button>
+          </div>
+        </div>
+        <div id="trendsChartGrid" class="grid vitals-grid"></div>
       </section>
     </section>
 
@@ -72,6 +92,15 @@
           <button id="clearBtn" class="btn secondary">Forget data</button>
         </div>
         <div id="status" class="status">No file selected.</div>
+      </section>
+      <section class="card">
+        <h3>Insights Log</h3>
+        <p id="insightsLogStatus" class="muted small">Insights log is empty.</p>
+        <div class="row">
+          <button id="exportInsightsJsonBtn" class="btn secondary" type="button">Export Insights Log (JSON)</button>
+          <button id="exportInsightsCsvBtn" class="btn secondary" type="button">Export Insights Log (CSV)</button>
+          <button id="clearInsightsLogBtn" class="btn secondary" type="button">Clear Insights Log</button>
+        </div>
       </section>
     </section>
 
@@ -95,6 +124,48 @@
       </section>
     </section>
   </main>
+
+  <aside id="insightDrawer" class="drawer" aria-hidden="true">
+    <div class="card drawer-card">
+      <div class="row split-row"><h3 id="insightDrawerTitle">Insight</h3><button id="closeInsightDrawer" type="button" class="btn secondary">Close</button></div>
+      <p id="insightDrawerThresholds" class="muted small"></p>
+      <p id="insightDrawerMessage"></p>
+      <ul id="insightDrawerLatestBaseline"></ul>
+      <h4>Why this card?</h4>
+      <ul id="insightDrawerReasons"></ul>
+      <p class="muted small">This card highlights signals only and does not provide a medical diagnosis.</p>
+    </div>
+  </aside>
+
+  <section id="allInsightsModal" class="modal" aria-hidden="true">
+    <div class="card modal-card">
+      <div class="row split-row"><h3>All Insight Cards</h3><button id="closeAllInsights" type="button" class="btn secondary">Close</button></div>
+      <div class="row">
+        <button type="button" class="btn secondary active" data-insight-filter="all">All</button>
+        <button type="button" class="btn secondary" data-insight-filter="warn">Warn</button>
+        <button type="button" class="btn secondary" data-insight-filter="good">Good</button>
+        <button type="button" class="btn secondary" data-insight-filter="info">Info</button>
+      </div>
+      <div id="allInsightsList" class="grid"></div>
+    </div>
+  </section>
+
+  <section id="vitalsDetailModal" class="modal" aria-hidden="true">
+    <div class="card modal-card">
+      <div class="row split-row">
+        <h3 id="vitalsDetailTitle">Vitals Detail</h3>
+        <button id="closeVitalsDetail" type="button" class="btn secondary">Close</button>
+      </div>
+      <div class="segmented" role="group" aria-label="Vitals range">
+        <button type="button" class="btn secondary active" data-vitals-range="14">14d</button>
+        <button type="button" class="btn secondary" data-vitals-range="30">30d</button>
+      </div>
+      <div id="vitalsDetailTrend" class="trend large"></div>
+      <p id="vitalsDetailSummary" class="muted"></p>
+      <p id="vitalsDetailQuality" class="muted small"></p>
+      <section class="status"><strong>Definition</strong><div id="vitalsDefinition"></div></section>
+    </div>
+  </section>
 
   <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
