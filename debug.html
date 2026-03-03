@@ -3,13 +3,39 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Oura Dashboard</title>
+  <title>Oura Dashboard · Debug</title>
   <link rel="stylesheet" href="/src/style.css" />
 </head>
 <body data-page="debug">
+  <div id="bootShell" class="boot-shell">
+    <header class="boot-topbar">
+      <div>
+        <div class="title">Oura Dashboard</div>
+        <nav class="boot-tabs">
+          <a class="boot-tab" href="/index.html">By Date</a>
+          <a class="boot-tab" href="/sleep.html">Sleep</a>
+          <a class="boot-tab" href="/readiness.html">Readiness</a>
+          <a class="boot-tab" href="/activity.html">Activity</a>
+          <a class="boot-tab" href="/vitals.html">Vitals</a>
+          <a class="boot-tab" href="/trends.html">Trends</a>
+          <a class="boot-tab" href="/journal.html">Journal</a>
+          <a class="boot-tab" href="/data-tools-import.html">Import</a>
+          <a class="boot-tab" href="/data-tools-export.html">Export</a>
+          <a class="boot-tab" href="/glossary.html">Glossary</a>
+          <a class="boot-tab" href="/settings.html">Settings</a>
+          <a class="boot-tab" href="/debug.html">Debug</a>
+        </nav>
+      </div>
+      <a class="btn" href="/data-tools-import.html">Import</a>
+    </header>
+    <main class="container">
+      <section class="card">
+        <h1 class="boot-title">No data loaded. Import your Oura ZIP to populate the dashboard.</h1>
+      </section>
+    </main>
+  </div>
   <header class="topbar">
-    <div class="title">Oura Dashboard</div>
-    <nav class="tabs" id="topNav"></nav>
+    <div id="topNav"></div>
   </header>
   <main class="container" id="app"></main>
   <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>

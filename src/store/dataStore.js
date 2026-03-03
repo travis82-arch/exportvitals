@@ -257,6 +257,14 @@ export function getDay(date, options = {}) {
     const t = new Date(row.timestamp).getTime();
     return Number.isFinite(t) && t >= window.start && t <= window.end;
   });
+  const sortedHr = hrRows
+    .map((row) => ({ t: new Date(row.timestamp).getTime(), bpm: row.bpm }))
+    .filter((row) => Number.isFinite(row.t) && row.bpm != null)
+    .sort((a, b) => a.t - b.t);
+  const step = Math.max(1, Math.ceil(sortedHr.length / 48));
+  const hrSeries = sortedHr.filter((_, index) => index % step === 0).map((row) => ({ t: row.t, bpm: row.bpm }));
+  const hrMin = sortedHr.length ? Math.min(...sortedHr.map((row) => row.bpm)) : null;
+  const hrAvg = sortedHr.length ? sortedHr.reduce((sum, row) => sum + row.bpm, 0) / sortedHr.length : null;
 
   return {
     dailySleep: pick(store.datasets.dailySleep),
@@ -267,10 +275,13 @@ export function getDay(date, options = {}) {
     sleepTime: pick(store.datasets.sleepTime),
     heartRateWindowSummary: {
       points: hrRows.length,
-      min: hrRows.length ? Math.min(...hrRows.map((r) => r.bpm)) : null,
-      avg: hrRows.length ? hrRows.reduce((sum, row) => sum + row.bpm, 0) / hrRows.length : null,
+      min: hrMin,
+      avg: hrAvg,
       modeUsed: window.modeUsed
-    }
+    },
+    hrSeries,
+    hrMin,
+    hrAvg
   };
 }
 
