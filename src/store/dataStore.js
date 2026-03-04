@@ -1,4 +1,6 @@
-import { normalizeName, parseContributors, parseSpo2Average, toNumber, median } from '../vitals-core.mjs';
+import { normalizeName, parseContributors, parseSpo2Average, toNumber, median, sniffDelimiter, stripBom } from '../vitals-core.mjs';
+import JSZip from 'jszip';
+import Papa from 'papaparse';
 
 const STORAGE_KEY = 'ouraDerivedMetricsV3';
 
@@ -23,7 +25,9 @@ const store = {
 const byDate = (rows) => Object.fromEntries((rows || []).map((r) => [r.date, r]));
 
 function parseCsv(text) {
-  const { data } = Papa.parse(text, { header: true, skipEmptyLines: true });
+  const clean = stripBom(text);
+  const { delimiter } = sniffDelimiter(clean);
+  const { data } = Papa.parse(clean, { header: true, skipEmptyLines: true, delimiter });
   return data || [];
 }
 
@@ -150,7 +154,8 @@ function getDateRangeFromDatasets(datasets) {
   return { start: unique[0], end: unique.at(-1), days: unique.length };
 }
 
-export function loadFromLocalCache(storage = localStorage) {
+export function loadFromLocalCache(storage = (typeof localStorage !== 'undefined' ? localStorage : null)) {
+  if (!storage?.getItem) return store;
   try {
     const parsed = JSON.parse(storage.getItem(STORAGE_KEY) || '{}');
     Object.assign(store, {
@@ -167,18 +172,19 @@ export function loadFromLocalCache(storage = localStorage) {
   return store;
 }
 
-export function saveToLocalCache(storage = localStorage) {
+export function saveToLocalCache(storage = (typeof localStorage !== 'undefined' ? localStorage : null)) {
+  if (!storage?.setItem) return;
   storage.setItem(STORAGE_KEY, JSON.stringify(store));
 }
 
-export async function importZip(file, options = {}, onProgress) {
-  if (!file || !String(file.name || '').toLowerCase().endsWith('.zip')) {
+export async function importZipArrayBuffer({ fileName, arrayBuffer, options = {}, onProgress } = {}) {
+  if (!arrayBuffer || !String(fileName || '').toLowerCase().endsWith('.zip')) {
     throw new Error('Please choose a valid .zip export file from Oura.');
   }
 
   updateImportState({ status: 'importing', phase: 'Reading ZIP', percent: 5, lastError: null }, onProgress);
 
-  const zip = await JSZip.loadAsync(file);
+  const zip = await JSZip.loadAsync(arrayBuffer);
   updateImportState({ phase: 'Decompressing files', percent: 25 }, onProgress);
 
   const found = {};
@@ -237,6 +243,14 @@ export async function importZip(file, options = {}, onProgress) {
   saveToLocalCache();
   if (onProgress) onProgress(store.importState);
   return store.ingestReport;
+}
+
+export async function importZip(file, options = {}, onProgress) {
+  if (!file || !String(file.name || '').toLowerCase().endsWith('.zip') || typeof file.arrayBuffer !== 'function') {
+    throw new Error('Please choose a valid .zip export file from Oura.');
+  }
+  const arrayBuffer = await file.arrayBuffer();
+  return importZipArrayBuffer({ fileName: file.name, arrayBuffer, options, onProgress });
 }
 
 export function getAvailableDates() {
