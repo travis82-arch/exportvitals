@@ -1,0 +1,5 @@
+# Local-only personal data (never commit)
+OPS/_local/
+OPS/_local/*.zip
+OPS/_local/*.json
+OPS/_local/*.csv
