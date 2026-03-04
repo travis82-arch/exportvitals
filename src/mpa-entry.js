@@ -2,6 +2,7 @@ import { renderTopNav } from './components/TopNav.js';
 import { createImportController } from './components/ImportController.js';
 import {
   loadFromLocalCache,
+  importZip,
   getAvailableDates,
   getDay,
   getRange,
@@ -44,14 +45,28 @@ try {
 
   const settings = defaults;
   const dates = getAvailableDates();
-  const selectedDate = resolveInitialSelectedDate(new URLSearchParams(location.search).get('date') || loadSelectedDate() || dates.at(-1), dates);
+  const preferredDate = new URLSearchParams(location.search).get('date') || loadSelectedDate() || null;
+  const selectedDate = resolveInitialSelectedDate(dates, preferredDate);
   if (selectedDate) persistSelectedDate(selectedDate);
   const day = selectedDate ? getDay(selectedDate, settings) : null;
   const app = document.getElementById('app');
+
   const importController = createImportController({
-    target: document.body,
-    input: document.getElementById('globalImportInput'),
-    onImported: () => location.reload()
+    importZip: (file, onProgress) => importZip(file, settings, onProgress),
+    onImported: (result) => {
+      if (result?.mostRecentDate) persistSelectedDate(result.mostRecentDate);
+      location.reload();
+    },
+    onStateChange: null
+  });
+
+  // Top-right Import (label -> file input in TopNav). When a file is picked, run import.
+  const globalImportInput = document.getElementById('globalImportInput');
+  globalImportInput?.addEventListener('change', async (event) => {
+    const file = event.target.files?.[0];
+    event.target.value = ''; // allow picking same file again
+    if (!file) return;
+    await importController.openWithFile(file);
   });
 
   if (page === 'index') {
