@@ -49,14 +49,12 @@ export function sniffDelimiter(text) {
     if (b.headerFieldsCount !== a.headerFieldsCount) return b.headerFieldsCount - a.headerFieldsCount;
     return a.variance - b.variance;
   });
-
   const semicolon = scored.find((it) => it.delimiter === ';');
   const comma = scored.find((it) => it.delimiter === ',');
   const sensible = (n) => n >= 3;
   const semicolonPreferred = semicolon && sensible(semicolon.headerFieldsCount)
     && (!comma || !sensible(comma.headerFieldsCount) || semicolon.headerFieldsCount >= comma.headerFieldsCount);
   const winner = semicolonPreferred ? semicolon : scored[0];
-
   return { delimiter: winner?.delimiter || ',', headerFieldsCount: winner?.headerFieldsCount || 0, headerSample: header, candidates: scored };
 }
 
@@ -72,6 +70,29 @@ export function safeJsonParse(raw) {
   }
 }
 
+export function parseContributors(raw) {
+  const parsed = safeJsonParse(raw).parsed;
+  return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : null;
+}
+
+export function parseSpo2Average(rawJson, fallback) {
+  const parsed = safeJsonParse(rawJson).parsed;
+  return toNumber(parsed?.average) ?? toNumber(fallback);
+}
+
+export function summarizeMet(raw) {
+  const parsed = safeJsonParse(raw).parsed;
+  const items = Array.isArray(parsed?.items) ? parsed.items : [];
+  const summary = { lt_1_5: 0, b1_5_3: 0, b3_6: 0, gt_6: 0 };
+  for (const n of items.map((v) => toNumber(v)).filter((v) => v != null)) {
+    if (n < 1.5) summary.lt_1_5 += 1;
+    else if (n < 3) summary.b1_5_3 += 1;
+    else if (n <= 6) summary.b3_6 += 1;
+    else summary.gt_6 += 1;
+  }
+  return summary;
+}
+
 export function toNumber(value) {
   if (value == null) return null;
   const n = Number(String(value).trim());
@@ -85,27 +106,84 @@ export function median(values) {
   return sorted.length % 2 ? sorted[m] : (sorted[m - 1] + sorted[m]) / 2;
 }
 
-export function computePercentDelta(latest, baseline, { allowNearZeroPercent = true, nearZeroThreshold = 0 } = {}) {
-  if (latest == null || baseline == null) return null;
-  if (baseline === 0) return null;
-  if (!allowNearZeroPercent && Math.abs(baseline) < nearZeroThreshold) return null;
-  return ((latest - baseline) / baseline) * 100;
-}
-
-export function metricDelta(metricKey, latest, baseline) {
-  const absolute = latest == null || baseline == null ? null : latest - baseline;
-  if (metricKey === 'temp') {
-    const percent = computePercentDelta(latest, baseline, { allowNearZeroPercent: false, nearZeroThreshold: 0.3 });
-    return { absolute, percent, unit: '°C', deltaUnit: '°C' };
-  }
-  if (metricKey === 'spo2') {
-    const percent = computePercentDelta(latest, baseline);
-    return { absolute, percent, unit: '%', deltaUnit: 'pp' };
-  }
-  return { absolute, percent: computePercentDelta(latest, baseline), unit: metricKey === 'rhr' ? 'bpm' : 'ms', deltaUnit: metricKey === 'rhr' ? 'bpm' : 'ms' };
-}
-
 export function baselineMedian(rows, key, latestDate, window = 14) {
   const vals = rows.filter((r) => r.date !== latestDate && r[key] != null).slice(-window).map((r) => r[key]);
   return vals.length ? median(vals) : null;
+}
+
+export function readJournalEntries(storage, key) {
+  try {
+    const parsed = JSON.parse(storage.getItem(key) || '[]');
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+export function saveJournalEntries(storage, key, entries) {
+  storage.setItem(key, JSON.stringify(entries));
+}
+
+function toDate(isoDate) {
+  return new Date(`${isoDate}T00:00:00Z`);
+}
+
+export function shiftIsoDate(isoDate, days) {
+  const d = toDate(isoDate);
+  d.setUTCDate(d.getUTCDate() + days);
+  return d.toISOString().slice(0, 10);
+}
+
+export function isoWeekStart(isoDate) {
+  const d = toDate(isoDate);
+  const day = d.getUTCDay();
+  const diff = day === 0 ? -6 : 1 - day;
+  d.setUTCDate(d.getUTCDate() + diff);
+  return d.toISOString().slice(0, 10);
+}
+
+export function monthStart(isoDate) {
+  return `${isoDate.slice(0, 7)}-01`;
+}
+
+export function createDateContext(availableDates, requestedDate = null) {
+  const sorted = [...new Set(availableDates.filter(Boolean))].sort();
+  const latestDate = sorted.at(-1) || null;
+  const minDate = sorted[0] || null;
+  const selectedDate = sorted.includes(requestedDate) ? requestedDate : latestDate;
+  let scope = 'day';
+  if (selectedDate && latestDate) {
+    const cutoff = shiftIsoDate(latestDate, -6);
+    if (selectedDate < cutoff) scope = 'week';
+  }
+  return { availableDates: sorted, latestDate, minDate, selectedDate, scope };
+}
+
+export function getScopeRange(scope, selectedDate) {
+  if (!selectedDate) return null;
+  if (scope === 'day') return { start: selectedDate, end: selectedDate };
+  if (scope === 'week') {
+    const start = isoWeekStart(selectedDate);
+    return { start, end: shiftIsoDate(start, 6) };
+  }
+  const start = monthStart(selectedDate);
+  const [y, m] = start.split('-').map(Number);
+  const end = new Date(Date.UTC(y, m, 0)).toISOString().slice(0, 10);
+  return { start, end };
+}
+
+export function rowsForRange(rows, start, end) {
+  return rows.filter((r) => r.date >= start && r.date <= end);
+}
+
+export function aggregateKey(rows, key) {
+  const vals = rows.map((r) => r[key]).filter((v) => v != null);
+  return { median: median(vals), min: vals.length ? Math.min(...vals) : null, max: vals.length ? Math.max(...vals) : null, count: vals.length };
+}
+
+export function toCsv(rows) {
+  if (!rows?.length) return '';
+  const headers = [...new Set(rows.flatMap((r) => Object.keys(r)))];
+  const esc = (v) => `"${String(v ?? '').replaceAll('"', '""')}"`;
+  return `${headers.join(',')}\n${rows.map((r) => headers.map((h) => esc(r[h])).join(',')).join('\n')}`;
 }

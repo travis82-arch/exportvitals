@@ -1,0 +1,11 @@
+/sleep       /sleep.html               301
+/readiness   /readiness.html           301
+/activity    /activity.html            301
+/vitals      /vitals.html              301
+/trends      /trends.html              301
+/journal     /journal.html             301
+/import      /data-tools-import.html   301
+/export      /data-tools-export.html   301
+/glossary    /glossary.html            301
+/settings    /settings.html            301
+/debug       /debug.html               301

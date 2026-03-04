@@ -1,0 +1,14 @@
+{
+  "name": "oura-pwa-dashboard",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --test",
+    "check:nav": "node scripts/check-nav-manifest.mjs",
+    "build": "vite build",
+    "check:mpa": "node scripts/check-nav-manifest.mjs && node scripts/check-no-jsx-imports.mjs"
+  },
+  "devDependencies": {
+    "vite": "^5.4.0"
+  }
+}
