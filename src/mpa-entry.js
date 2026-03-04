@@ -45,29 +45,19 @@ try {
 
   const settings = defaults;
   const dates = getAvailableDates();
-  const preferredDate = new URLSearchParams(location.search).get('date') || loadSelectedDate() || null;
-  const selectedDate = resolveInitialSelectedDate(dates, preferredDate);
+  const preferred = new URLSearchParams(location.search).get('date') || loadSelectedDate() || dates.at(-1);
+  const selectedDate = resolveInitialSelectedDate(dates, preferred);
   if (selectedDate) persistSelectedDate(selectedDate);
   const day = selectedDate ? getDay(selectedDate, settings) : null;
   const app = document.getElementById('app');
 
   const importController = createImportController({
     importZip: (file, onProgress) => importZip(file, settings, onProgress),
-    onImported: (result) => {
-      if (result?.mostRecentDate) persistSelectedDate(result.mostRecentDate);
-      location.reload();
-    },
-    onStateChange: null
+    onImported: () => location.reload(),
+    onStateChange: () => {}
   });
 
-  // Top-right Import (label -> file input in TopNav). When a file is picked, run import.
-  const globalImportInput = document.getElementById('globalImportInput');
-  globalImportInput?.addEventListener('change', async (event) => {
-    const file = event.target.files?.[0];
-    event.target.value = ''; // allow picking same file again
-    if (!file) return;
-    await importController.openWithFile(file);
-  });
+  document.getElementById('globalImportBtn')?.addEventListener('click', () => importController.open());
 
   if (page === 'index') {
     app.innerHTML = `<section class="card"><h2>By Date</h2>${renderDateStrip(selectedDate)}<div class="grid vitals-grid">
@@ -154,3 +144,4 @@ try {
   setImportError(error, { page });
   document.getElementById('app').innerHTML = `<section class="fatal-card"><h2>App failed to load</h2><pre class="status">${String(error?.stack || error)}</pre></section>`;
 }
+
