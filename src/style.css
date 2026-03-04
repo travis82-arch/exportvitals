@@ -1,4 +1,4 @@
-:root { --bg:#0b0f14; --card:#121821; --text:#e5e7eb; --muted:#9ca3af; --border:#263241; --accent:#60a5fa; --good:#22c55e; --warn:#f59e0b; --info:#38bdf8; }
+:root { --bg:#0b0f14; --card:#121821; --text:#e5e7eb; --muted:#9ca3af; --border:#263241; --accent:#60a5fa; --good:#22c55e; --warn:#f59e0b; --info:#38bdf8; color-scheme:dark; }
 *{box-sizing:border-box} body{margin:0;font-family:system-ui;background:var(--bg);color:var(--text)}
 .topbar{padding:14px 18px;border-bottom:1px solid var(--border);position:sticky;top:0;background:var(--bg);z-index:5}
 .title{font-weight:700;margin-bottom:10px}
@@ -28,19 +28,30 @@
 .sparkline{width:100%;height:110px}
 .placeholder{color:var(--muted);font-style:italic}
 
-#topNav{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap}
+#topNav{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;position:sticky;top:0;z-index:10;pointer-events:auto}
+#app{position:relative;z-index:1}
 .icon-btn{border:1px solid var(--border);background:#151b25;color:var(--text);border-radius:10px;padding:8px 10px;cursor:pointer}
 .import-banner{max-width:1100px;margin:12px auto 0;padding:10px 14px;border:1px solid var(--border);border-radius:12px;background:#17202d;display:flex;justify-content:space-between;align-items:center;gap:10px}
-.toast{position:fixed;right:20px;bottom:20px;background:#0f2b1d;color:#dcfce7;border:1px solid #22c55e;padding:10px 14px;border-radius:10px;z-index:40}
+.toast{position:fixed;right:20px;bottom:64px;background:#0f2b1d;color:#dcfce7;border:1px solid #22c55e;padding:10px 14px;border-radius:10px;z-index:44}
+.toast.error{background:#311717;color:#fee2e2;border-color:#ef4444}
 
 .boot-shell{display:block}
 .boot-topbar{padding:14px 18px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:flex-start;gap:10px}
 .boot-tabs{display:flex;gap:8px;flex-wrap:wrap}
 .boot-title{font-size:1.05rem;margin:0}
-html[data-js="1"] #bootShell{display:none}
+html[data-js="1"] #bootShell{display:none;pointer-events:none}
 
 .fatal-card{max-width:720px;margin:24px auto;padding:14px;border:1px solid #7f1d1d;background:#2a1212;border-radius:12px;display:grid;gap:8px}
 .fatal-actions{display:flex;gap:8px;flex-wrap:wrap}
+.modal{position:fixed;inset:0;display:none;align-items:center;justify-content:center;padding:18px;background:rgba(0,0,0,.65);z-index:30;pointer-events:none}
+.modal.open{display:flex;pointer-events:auto}
+.modal-card{width:min(680px,100%);max-height:calc(100vh - 36px);overflow:auto}
+.split-row{justify-content:space-between}
+.top-gap{margin-top:10px}
+.diag-button{position:fixed;right:20px;bottom:20px;z-index:45;border:1px solid var(--border);background:#151b25;color:var(--text);border-radius:999px;padding:8px 12px;cursor:pointer}
+.diag-panel{position:fixed;right:20px;bottom:64px;z-index:46;width:min(460px,calc(100vw - 20px));max-height:70vh;overflow:auto;background:#121821;border:1px solid var(--border);border-radius:12px;padding:12px;display:grid;gap:8px}
+.diag-header{display:flex;justify-content:space-between;align-items:center;gap:8px}
+.diag-pre{max-height:180px;overflow:auto}
 .contributor-row{display:grid;gap:6px;margin-bottom:8px}
 .metric-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
 .chart{width:100%;height:100px}

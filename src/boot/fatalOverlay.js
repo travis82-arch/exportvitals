@@ -47,13 +47,14 @@ export function showFatalOverlay(error, context = {}) {
   const staleCache = isChunkLoadFailure(summary);
   const panel = document.createElement('div');
   panel.id = OVERLAY_ID;
-  panel.style.cssText = 'position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,.85);color:#fff;padding:24px;font-family:system-ui,sans-serif;overflow:auto;';
+  panel.style.cssText = 'position:fixed;inset:0;z-index:9999;background:#05070b;color:#fff;padding:24px;font-family:system-ui,sans-serif;overflow:auto;';
   panel.innerHTML = `
     <div style="max-width:760px;margin:0 auto;background:#111;border:1px solid #444;border-radius:12px;padding:20px;">
       <h1 style="margin:0 0 8px;font-size:24px;">App failed to load</h1>
       <p style="margin:0 0 12px;color:#ddd;">${staleCache ? 'Stale cache after deploy detected. Try a cache-busted reload first.' : 'A runtime error interrupted app startup.'}</p>
       <pre style="white-space:pre-wrap;background:#1b1b1b;padding:10px;border-radius:8px;border:1px solid #333;">${summary}</pre>
       <div style="display:flex;flex-wrap:wrap;gap:10px;margin-top:14px;">
+        <button data-action="close" style="padding:10px 14px;border-radius:8px;border:1px solid #666;background:transparent;color:#fff;cursor:pointer;">Close</button>
         <button data-action="reload" style="padding:10px 14px;border-radius:8px;border:0;background:#2f7cf6;color:#fff;cursor:pointer;">Reload (cache-bust)</button>
         <button data-action="reset" style="padding:10px 14px;border-radius:8px;border:0;background:#d97706;color:#fff;cursor:pointer;">Reset local data + reload</button>
         <button data-action="copy" style="padding:10px 14px;border-radius:8px;border:1px solid #666;background:transparent;color:#fff;cursor:pointer;">Copy diagnostics</button>
@@ -62,6 +63,7 @@ export function showFatalOverlay(error, context = {}) {
 
   panel.addEventListener('click', async (event) => {
     const action = event.target?.dataset?.action;
+    if (action === 'close') panel.remove();
     if (action === 'reload') cacheBustReload();
     if (action === 'reset') {
       resetLocalData();

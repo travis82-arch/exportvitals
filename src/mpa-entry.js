@@ -20,6 +20,7 @@ import { vitalsUiMapping } from './mappings/vitalsUiMapping.js';
 import { trendsUiMapping } from './mappings/trendsUiMapping.js';
 import { contributorsToBars } from './domain/sleepTransforms.js';
 import { toCsv } from './vitals-core.mjs';
+import { installRuntimeDiagnostics } from './state/runtimeDiagnostics.js';
 
 const defaults = { baselineWindow: 14, nightWindowMode: 'auto', fallbackStart: '21:00', fallbackEnd: '09:00' };
 const fmt = (n, u = '') => (n == null ? '<span class="placeholder">Not available in this export</span>' : `${Number(n).toFixed(1)}${u}`);
@@ -28,6 +29,16 @@ const page = (document.body.dataset.page || 'index');
 
 const renderDateStrip = (selectedDate) => `<div class="date-strip">${getLastAvailableDays(getAvailableDates(), 7).map((d) => `<a class="btn ${d === selectedDate ? 'active' : ''}" href="${location.pathname}?date=${d}">${d}</a>`).join('')}</div>`;
 const avg = (rows, key) => rows.length ? rows.reduce((s, r) => s + (r[key] ?? 0), 0) / rows.length : null;
+function showToast(message, kind = 'success') {
+  const toast = document.createElement('div');
+  toast.className = `toast ${kind === 'error' ? 'error' : ''}`;
+  toast.textContent = message;
+  document.body.appendChild(toast);
+  setTimeout(() => {
+    toast.remove();
+  }, 2600);
+}
+
 function lineChart(rows, key, label, suffix = '') {
   const points = rows.map((r, i) => ({ x: i, y: r[key] })).filter((r) => r.y != null);
   if (!points.length) return `<div class="kpi"><div class="kpi-label">${label}</div><div class="placeholder">No data in selected range</div></div>`;
@@ -36,6 +47,8 @@ function lineChart(rows, key, label, suffix = '') {
   const poly = points.map((p) => `${(p.x / Math.max(points.length - 1, 1)) * 320},${100 - ((p.y - min) / Math.max(max - min, 1)) * 80}`).join(' ');
   return `<div class="kpi"><div class="kpi-label">${label}</div><svg class="chart" viewBox="0 0 320 100"><polyline fill="none" stroke="#60a5fa" stroke-width="2" points="${poly}"/></svg><div class="small muted">Latest ${fmt(points.at(-1).y, suffix)}</div></div>`;
 }
+
+installRuntimeDiagnostics();
 
 try {
   console.log('mpa-entry boot', location.pathname);
@@ -117,8 +130,45 @@ try {
     </div></section>`;
   } else if (page === 'data-tools-import') {
     const snapshot = getStoreSnapshot();
-    app.innerHTML = `<section class="card"><h2>Import</h2><button class="btn" id="openImport">Import ZIP</button><pre class="status">${JSON.stringify(snapshot.ingestReport || {}, null, 2)}</pre></section>`;
+    app.innerHTML = `<section class="card"><h2>Import</h2>
+      <div class="row">
+        <button class="btn" id="openImport">Import ZIP</button>
+        <label for="fallbackImportInput" class="small muted">Fallback input:</label>
+        <input id="fallbackImportInput" type="file" accept=".zip,application/zip" />
+      </div>
+      <div class="status" id="fallbackImportStatus">Idle</div>
+      <div id="importSuccessBanner" class="import-banner" hidden></div>
+      <pre class="status" id="importReport">${JSON.stringify(snapshot.ingestReport || {}, null, 2)}</pre>
+    </section>`;
     document.getElementById('openImport')?.addEventListener('click', () => importController.open());
+    document.getElementById('fallbackImportInput')?.addEventListener('change', async (event) => {
+      const file = event.target.files?.[0];
+      event.target.value = '';
+      if (!file) return;
+      const status = document.getElementById('fallbackImportStatus');
+      const report = document.getElementById('importReport');
+      const banner = document.getElementById('importSuccessBanner');
+      status.textContent = `Reading ${file.name}...`;
+      try {
+        const result = await importZip(file, settings, (progress) => {
+          status.textContent = `${progress.phase} (${progress.percent}%)`;
+        });
+        const range = result?.dateRange || {};
+        const summary = `Data loaded: ${range.start || 'n/a'} -> ${range.end || 'n/a'} (${range.days || 0} days)`;
+        status.textContent = `Import done. ${summary}`;
+        if (report) report.textContent = JSON.stringify(result || {}, null, 2);
+        if (banner) {
+          banner.hidden = false;
+          banner.textContent = summary;
+        }
+        showToast('Import complete. Reloading...');
+        setTimeout(() => window.location.reload(), 900);
+      } catch (error) {
+        const message = error?.message || String(error);
+        status.textContent = `Import failed: ${message}`;
+        showToast(`Import failed: ${message}`, 'error');
+      }
+    });
   } else if (page === 'data-tools-export') {
     const snapshot = getStoreSnapshot();
     setUiSnapshot({ generatedAt: new Date().toISOString(), selectedDate, data: snapshot.datasets, derivedNightlyVitals: snapshot.derivedNightlyVitals, ingestReport: snapshot.ingestReport });

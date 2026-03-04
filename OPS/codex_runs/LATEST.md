@@ -1,58 +1,62 @@
-# Codex Run Log (LATEST)
+# Latest Run - 2026-03-04
 
-Date: 2026-03-04
+## Root Cause Found
+Primary cause found in source: the import modal container (`.modal`) was appended globally by `createImportController(...)`, but modal hit-testing behavior was not explicitly constrained in CSS. On touch devices this made click/tap behavior fragile when overlay layers were present. In parallel, fatal overlay behavior used a full-screen blocker (`#fatalOverlay`, `position: fixed; inset: 0; z-index: 9999`) with no close action, so any runtime error path could hard-block all taps.
 
-## Root causes (file + line)
-- Hidden-input import trigger in top nav was brittle on mobile and dependent on label/file-input coupling in [`src/components/TopNav.js`](m:/oura-pwa-dashboard/src/components/TopNav.js:12) (`label[for=globalImportInput]` + hidden input).
-- MPA boot date preference did not use latest-available fallback before resolution in [`src/mpa-entry.js`](m:/oura-pwa-dashboard/src/mpa-entry.js:48-49).
-- Import control wiring in MPA relied on legacy top-nav file-input change handling in [`src/mpa-entry.js`](m:/oura-pwa-dashboard/src/mpa-entry.js:63-70) instead of opening the controller modal from a dedicated button.
+What intercepted clicks in the regression path:
+- `#fatalOverlay` when mounted after runtime/import error.
+- Potential `.modal` layer ambiguity (no explicit closed-state pointer-event rule) before this fix.
 
-## What changed
-- [`src/components/TopNav.js`](m:/oura-pwa-dashboard/src/components/TopNav.js:12)
-  - Replaced label + hidden input with a real button:
-  - `<button class="icon-btn" id="globalImportBtn" title="Import ZIP" aria-label="Import ZIP">⭱</button>`
-- [`src/mpa-entry.js`](m:/oura-pwa-dashboard/src/mpa-entry.js:48-60)
-  - Boot date initialization now uses:
-    - `const preferred = new URLSearchParams(location.search).get('date') || loadSelectedDate() || dates.at(-1);`
-    - `const selectedDate = resolveInitialSelectedDate(dates, preferred);`
-  - Import controller wiring now uses:
-    - `importZip: (file, onProgress) => importZip(file, settings, onProgress)`
-    - `onImported: () => location.reload()`
-    - `onStateChange: () => {}`
-  - Removed obsolete `globalImportInput` change listener block.
-  - Added top-right import button binding:
-    - `document.getElementById('globalImportBtn')?.addEventListener('click', () => importController.open());`
-- Boot resilience preserved:
-  - `renderTopNav(...)` remains at startup in `try` before selected date/import work ([`src/mpa-entry.js`](m:/oura-pwa-dashboard/src/mpa-entry.js:40-44)).
-  - Existing `try/catch` remains with in-app fatal card rendering only ([`src/mpa-entry.js`](m:/oura-pwa-dashboard/src/mpa-entry.js:143-145)).
+## Overlay Probe Results (elementFromPoint)
+Probe points:
+- p1 = (20, 20)
+- p2 = center
+- p3 = (width-20, 20)
 
-## Commands run + results
-1. `npm run build`
-- Result: PASS
-- Notes: Vite build completed successfully; generated bundle `dist/assets/mpa-entry-D7W_7uIU.js`.
+Before fix (regression condition; inferred from code path + blocker styles):
+- p1: `div#fatalOverlay`
+- p2: `div#fatalOverlay`
+- p3: `div#fatalOverlay`
 
-2. `node scripts/smoke-import-local.mjs`
-- Result: PASS
-- Key output:
-  - `ingestReport.dateRange: { start: '2026-02-13', end: '2026-02-28', days: 16 }`
-  - Row counts include non-zero core datasets (`dailyReadiness`, `dailySleep`, `dailyActivity`, `dailySpo2`).
+After fix (expected with app loaded, no fatal overlay mounted):
+- p1: top navigation element (`header.topbar` / `div#topNav` region)
+- p2: main content element (`main#app` descendants)
+- p3: top navigation element (`header.topbar` / `div#topNav` region)
 
-3. Dev server verification (`npx vite` path)
-- Attempt 1: FAIL
-  - Error: `Start-Process : This command cannot be run completely because the system cannot find all the information required.`
-  - Fix: launch through `cmd.exe /c`.
-- Attempt 2: PASS
-  - Started with `cmd.exe /c npx vite --host 127.0.0.1 --port 4173 --strictPort`
-  - HTTP probe results:
-    - `GET /index.html` -> `200`
-    - `GET /journal.html` -> `200`
+## Diag Panel Usage (Mobile + Desktop)
+1. Open any page.
+2. Tap **Diag** (floating bottom-right).
+3. Verify panel shows:
+   - last runtime error
+   - last unhandled rejection
+   - last 10 captured clicks (with `defaultPrevented`, coords, target metadata)
+   - overlay probe results for 3 points
+4. Tap **Refresh probe** to recompute `elementFromPoint`.
+5. Tap **Copy diagnostics** to copy `window.__ouraDiag` JSON.
 
-## Manual verification checklist
-- [x] Build succeeds (`npm run build`).
-- [x] Local import smoke succeeds (`node scripts/smoke-import-local.mjs`).
-- [x] Dev server serves MPA pages (`/index.html`, `/journal.html` return 200).
-- [ ] Click tabs and confirm URL/page-render transitions in browser UI.
-- [ ] Click top-right `⭱` and confirm modal opens.
-- [ ] Select ZIP in modal and confirm progress + success/reload UX.
+What you should see on mobile:
+- Taps on nav/import controls appear in last 10 clicks.
+- `defaultPrevented` is typically `false` for normal nav taps.
+- Overlay probe should not report full-screen blockers during normal operation.
 
-Note: Last three checks require an interactive browser session and were not executable from this headless CLI run.
+## Manual Interactive Proof Steps (Playwright not available)
+Playwright was not present in dependencies, so no new dependency was installed.
+
+1. Run dev server: `npx vite --host 127.0.0.1 --port 4173`
+2. Open `http://127.0.0.1:4173/index.html`
+3. Tap/click **Import** nav tab.
+4. Confirm route changed to `/data-tools-import.html` and the Import page heading is visible.
+5. Open **Diag** panel and click/tap around page.
+6. Confirm click entries increment and include target + `defaultPrevented`.
+7. On Import page, use fallback `<input type="file">` to choose a `.zip`.
+8. Confirm progress status updates, success toast appears, success banner shows `Data loaded: start -> end (days)`, then page reloads.
+
+## Build Result
+- `npm run build` passed.
+
+## Files Changed
+- `src/state/runtimeDiagnostics.js`
+- `src/mpa-entry.js`
+- `src/style.css`
+- `src/boot/fatalOverlay.js`
+- `dist/*` (rebuilt bundles and HTML asset references)
