@@ -43,10 +43,10 @@ html[data-js="1"] #bootShell{display:none;pointer-events:none}
 
 .fatal-card{max-width:720px;margin:24px auto;padding:14px;border:1px solid #7f1d1d;background:#2a1212;border-radius:12px;display:grid;gap:8px}
 .fatal-actions{display:flex;gap:8px;flex-wrap:wrap}
-.modal{position:fixed;inset:0;display:none;align-items:center;justify-content:center;padding:18px;background:rgba(0,0,0,.65);z-index:30;pointer-events:none}
-.modal.open{display:flex;pointer-events:auto}
-.modal-card{width:min(680px,100%);max-height:calc(100vh - 36px);overflow:auto}
-.split-row{justify-content:space-between}
+.modal{display:none}
+.modal.open{display:flex;position:fixed;inset:0;z-index:60;background:rgba(0,0,0,.75);align-items:center;justify-content:center;padding:18px}
+.modal-card{width:min(760px,100%);max-height:calc(100vh - 36px);overflow:auto}
+.split-row{justify-content:space-between;align-items:center}
 .top-gap{margin-top:10px}
 .diag-button{position:fixed;right:20px;bottom:20px;z-index:45;border:1px solid var(--border);background:#151b25;color:var(--text);border-radius:999px;padding:8px 12px;cursor:pointer}
 .diag-panel{position:fixed;right:20px;bottom:64px;z-index:46;width:min(460px,calc(100vw - 20px));max-height:70vh;overflow:auto;background:#121821;border:1px solid var(--border);border-radius:12px;padding:12px;display:grid;gap:8px}

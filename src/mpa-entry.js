@@ -52,13 +52,12 @@ installRuntimeDiagnostics();
 
 try {
   console.log('mpa-entry boot', location.pathname);
-  document.documentElement.dataset.js = '1';
   renderTopNav(document.getElementById('topNav'), location.pathname);
   loadFromLocalCache();
 
   const settings = defaults;
   const dates = getAvailableDates();
-  const preferred = new URLSearchParams(location.search).get('date') || loadSelectedDate() || dates.at(-1);
+  const preferred = new URLSearchParams(location.search).get('date') || loadSelectedDate() || null;
   const selectedDate = resolveInitialSelectedDate(dates, preferred);
   if (selectedDate) persistSelectedDate(selectedDate);
   const day = selectedDate ? getDay(selectedDate, settings) : null;
@@ -70,7 +69,13 @@ try {
     onStateChange: () => {}
   });
 
-  document.getElementById('globalImportBtn')?.addEventListener('click', () => importController.open());
+  const globalInput = document.getElementById('globalImportInput');
+  globalInput?.addEventListener('change', async (e) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    await importController.openWithFile(file);
+  });
 
   if (page === 'index') {
     app.innerHTML = `<section class="card"><h2>By Date</h2>${renderDateStrip(selectedDate)}<div class="grid vitals-grid">
@@ -189,6 +194,7 @@ try {
     app.innerHTML = `<section class="card"><h2>${titleCase(page)}</h2><p class="muted">Content available in dashboard tabs.</p></section>`;
   }
 
+  document.documentElement.dataset.js = '1';
   window.addEventListener('unhandledrejection', (event) => setImportError(event.reason || new Error('Unhandled rejection')));
 } catch (error) {
   setImportError(error, { page });
