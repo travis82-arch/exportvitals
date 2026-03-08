@@ -9,5 +9,5 @@ export function renderTopNav(target, currentPath) {
     })
     .join('');
 
-  mount.innerHTML = `<div class="title">Oura Dashboard</div><div class="tabs">${tabs}</div><div class="row"><input id="globalImportInput" type="file" accept=".zip,application/zip" hidden /><label class="icon-btn" for="globalImportInput" title="Import ZIP" aria-label="Import ZIP">&#x2B71;</label></div>`;
+  mount.innerHTML = `<div class="title">Oura Dashboard</div><div class="tabs">${tabs}</div><div class="row"><input id="globalImportInput" type="file" accept=".zip,application/zip" style="position:fixed;left:-9999px;top:0;width:1px;height:1px;opacity:0;" /><label class="icon-btn" for="globalImportInput" title="Import ZIP" aria-label="Import ZIP">&#x2B71;</label><a class="btn" href="/data-tools-import.html">Import</a></div>`;
 }

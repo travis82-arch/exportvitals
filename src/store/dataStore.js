@@ -166,6 +166,9 @@ export function loadFromLocalCache(storage = (typeof localStorage !== 'undefined
       uiSnapshot: parsed.uiSnapshot || {},
       importState: { ...store.importState, ...(parsed.importState || {}) }
     });
+    if (!parsed.availabilityMatrix || !Object.keys(parsed.availabilityMatrix).length) {
+      computeAvailabilityMatrix();
+    }
   } catch {
     // noop
   }
@@ -275,8 +278,11 @@ export function getDay(date, options = {}) {
     .map((row) => ({ t: new Date(row.timestamp).getTime(), bpm: row.bpm }))
     .filter((row) => Number.isFinite(row.t) && row.bpm != null)
     .sort((a, b) => a.t - b.t);
-  const step = Math.max(1, Math.ceil(sortedHr.length / 48));
-  const hrSeries = sortedHr.filter((_, index) => index % step === 0).map((row) => ({ t: row.t, bpm: row.bpm }));
+  const maxPoints = 240;
+  const step = Math.max(1, Math.ceil(sortedHr.length / maxPoints));
+  const heartRateSeries = sortedHr
+    .filter((_, index) => index % step === 0)
+    .map((row) => ({ t: row.t, bpm: row.bpm }));
   const hrMin = sortedHr.length ? Math.min(...sortedHr.map((row) => row.bpm)) : null;
   const hrAvg = sortedHr.length ? sortedHr.reduce((sum, row) => sum + row.bpm, 0) / sortedHr.length : null;
 
@@ -293,7 +299,8 @@ export function getDay(date, options = {}) {
       avg: hrAvg,
       modeUsed: window.modeUsed
     },
-    hrSeries,
+    heartRateSeries,
+    hrSeries: heartRateSeries,
     hrMin,
     hrAvg
   };
@@ -317,18 +324,19 @@ export function getBaseline(metric, windowDays = 14, endDate) {
   const start = allDates[Math.max(0, allDates.indexOf(end) - (windowDays - 1))] || end;
   const range = getRange(start, end);
 
-  const lookup = {
-    sleepScore: range.dailySleep,
-    readinessScore: range.dailyReadiness,
-    activityScore: range.dailyActivity,
-    rhr_night_bpm: range.derivedNightlyVitals,
-    hrv_rmssd_proxy_ms: range.derivedNightlyVitals,
-    spo2Average: range.dailySpo2,
-    temperatureDeviation: range.dailyReadiness
+  const metricMap = {
+    sleepScore: { rows: range.dailySleep, field: 'score' },
+    readinessScore: { rows: range.dailyReadiness, field: 'score' },
+    activityScore: { rows: range.dailyActivity, field: 'score' },
+    rhr_night_bpm: { rows: range.derivedNightlyVitals, field: 'rhr_night_bpm' },
+    hrv_rmssd_proxy_ms: { rows: range.derivedNightlyVitals, field: 'hrv_rmssd_proxy_ms' },
+    spo2Average: { rows: range.dailySpo2, field: 'spo2Average' },
+    temperatureDeviation: { rows: range.dailyReadiness, field: 'temperatureDeviation' }
   };
 
-  const rows = lookup[metric] || [];
-  return median(rows.map((r) => r[metric]).filter((v) => v != null));
+  const mapped = metricMap[metric];
+  if (!mapped) return null;
+  return median((mapped.rows || []).map((row) => row[mapped.field]).filter((v) => v != null));
 }
 
 export function setUiSnapshot(snapshot) {
