@@ -122,7 +122,8 @@ function createDiagnosticsPanel(diag) {
   document.body.appendChild(panel);
 }
 
-export function installRuntimeDiagnostics() {
+export function installRuntimeDiagnostics(options = {}) {
+  const showPanel = Boolean(options.showPanel);
   const diag = getDiagStore();
   runOverlayProbe(diag);
 
@@ -166,5 +167,5 @@ export function installRuntimeDiagnostics() {
     true
   );
 
-  createDiagnosticsPanel(diag);
+  if (showPanel) createDiagnosticsPanel(diag);
 }
