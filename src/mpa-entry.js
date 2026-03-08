@@ -1,4 +1,4 @@
-import { renderTopNav } from './components/TopNav.js';
+﻿import { renderTopNav } from './components/TopNav.js';
 import { createImportController } from './components/ImportController.js';
 import {
   loadFromLocalCache,
@@ -12,56 +12,139 @@ import {
   setImportError
 } from './store/dataStore.js';
 import { getLastAvailableDays, loadSelectedDate, persistSelectedDate, resolveInitialSelectedDate } from './state/selectedDate.js';
+import { loadSettings, saveSettings } from './state/settings.js';
 import { byDateUiMapping } from './mappings/byDateUiMapping.js';
 import { sleepUiMapping } from './mappings/sleepUiMapping.js';
 import { readinessUiMapping } from './mappings/readinessUiMapping.js';
 import { activityUiMapping } from './mappings/activityUiMapping.js';
 import { vitalsUiMapping } from './mappings/vitalsUiMapping.js';
 import { trendsUiMapping } from './mappings/trendsUiMapping.js';
+import { journalUiMapping } from './mappings/journalUiMapping.js';
+import { importUiMapping } from './mappings/importUiMapping.js';
+import { exportUiMapping } from './mappings/exportUiMapping.js';
+import { settingsUiMapping } from './mappings/settingsUiMapping.js';
+import { debugUiMapping } from './mappings/debugUiMapping.js';
 import { contributorsToBars } from './domain/sleepTransforms.js';
 import { toCsv } from './vitals-core.mjs';
 import { installRuntimeDiagnostics } from './state/runtimeDiagnostics.js';
+import { resetLocalData } from './storage/resetLocalData.js';
+import { hasPurgedReloadFlag, purgeStaleServiceWorkersAndCaches, setPurgedReloadFlag } from './boot/swPurge.js';
 
-const defaults = { baselineWindow: 14, nightWindowMode: 'auto', fallbackStart: '21:00', fallbackEnd: '09:00' };
-const fmt = (n, u = '') => (n == null ? '<span class="placeholder">Not available in this export</span>' : `${Number(n).toFixed(1)}${u}`);
-const titleCase = (v) => v.replaceAll('_', ' ').replace(/\b\w/g, (c) => c.toUpperCase());
-const page = (document.body.dataset.page || 'index');
+const JOURNAL_KEY = 'ouraJournalEntriesV1';
+const page = document.body.dataset.page || 'index';
+const notAvailable = '<span class="placeholder">Not available in this export</span>';
 
-const renderDateStrip = (selectedDate) => `<div class="date-strip">${getLastAvailableDays(getAvailableDates(), 7).map((d) => `<a class="btn ${d === selectedDate ? 'active' : ''}" href="${location.pathname}?date=${d}">${d}</a>`).join('')}</div>`;
-const avg = (rows, key) => rows.length ? rows.reduce((s, r) => s + (r[key] ?? 0), 0) / rows.length : null;
+const fmt = (value, unit = '', digits = 1) => {
+  if (value == null || Number.isNaN(Number(value))) return notAvailable;
+  const n = Number(value);
+  const precision = Number.isInteger(n) && digits > 0 ? 0 : digits;
+  return `${n.toFixed(precision)}${unit}`;
+};
+
+const titleCase = (value) => value.replaceAll('_', ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+
+const renderDateStrip = (selectedDate) => {
+  const days = getLastAvailableDays(getAvailableDates(), 7);
+  if (!days.length) return '<div class="small muted">No dates available yet. Import a ZIP first.</div>';
+  return `<div class="date-strip">${days.map((d) => `<a class="btn ${d === selectedDate ? 'active' : ''}" href="${location.pathname}?date=${d}">${d}</a>`).join('')}</div>`;
+};
+
+const avg = (rows, key) => (rows.length ? rows.reduce((sum, row) => sum + (row[key] ?? 0), 0) / rows.length : null);
+
 function showToast(message, kind = 'success') {
   const toast = document.createElement('div');
   toast.className = `toast ${kind === 'error' ? 'error' : ''}`;
   toast.textContent = message;
   document.body.appendChild(toast);
-  setTimeout(() => {
-    toast.remove();
-  }, 2600);
+  setTimeout(() => toast.remove(), 2600);
+}
+
+function cacheBustReload() {
+  const url = new URL(window.location.href);
+  url.searchParams.set('v', Date.now().toString());
+  window.location.replace(`${url.pathname}${url.search}${url.hash}`);
 }
 
 function lineChart(rows, key, label, suffix = '') {
-  const points = rows.map((r, i) => ({ x: i, y: r[key] })).filter((r) => r.y != null);
+  const points = rows
+    .map((row, index) => ({ x: index, y: row[key] }))
+    .filter((point) => point.y != null && Number.isFinite(Number(point.y)));
   if (!points.length) return `<div class="kpi"><div class="kpi-label">${label}</div><div class="placeholder">No data in selected range</div></div>`;
   const min = Math.min(...points.map((p) => p.y));
   const max = Math.max(...points.map((p) => p.y));
-  const poly = points.map((p) => `${(p.x / Math.max(points.length - 1, 1)) * 320},${100 - ((p.y - min) / Math.max(max - min, 1)) * 80}`).join(' ');
+  const poly = points
+    .map((p) => `${(p.x / Math.max(points.length - 1, 1)) * 320},${100 - ((p.y - min) / Math.max(max - min, 1)) * 80}`)
+    .join(' ');
   return `<div class="kpi"><div class="kpi-label">${label}</div><svg class="chart" viewBox="0 0 320 100"><polyline fill="none" stroke="#60a5fa" stroke-width="2" points="${poly}"/></svg><div class="small muted">Latest ${fmt(points.at(-1).y, suffix)}</div></div>`;
+}
+
+function lineChartSeries(series, label, suffix = '') {
+  const points = (series || [])
+    .map((point, index) => ({ x: index, y: point?.bpm }))
+    .filter((point) => point.y != null && Number.isFinite(Number(point.y)));
+  if (!points.length) return `<div class="kpi"><div class="kpi-label">${label}</div><div class="placeholder">No overnight heart-rate points in selected window</div></div>`;
+  const min = Math.min(...points.map((p) => p.y));
+  const max = Math.max(...points.map((p) => p.y));
+  const poly = points
+    .map((p) => `${(p.x / Math.max(points.length - 1, 1)) * 320},${100 - ((p.y - min) / Math.max(max - min, 1)) * 80}`)
+    .join(' ');
+  return `<div class="kpi"><div class="kpi-label">${label}</div><svg class="chart" viewBox="0 0 320 100"><polyline fill="none" stroke="#60a5fa" stroke-width="2" points="${poly}"/></svg><div class="small muted">Points ${points.length} · Range ${fmt(min, suffix)} to ${fmt(max, suffix)}</div></div>`;
+}
+
+function loadJournalEntries(storage = (typeof localStorage !== 'undefined' ? localStorage : null)) {
+  if (!storage?.getItem) return [];
+  try {
+    const parsed = JSON.parse(storage.getItem(JOURNAL_KEY) || '[]');
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+function saveJournalEntries(entries, storage = (typeof localStorage !== 'undefined' ? localStorage : null)) {
+  if (!storage?.setItem) return;
+  storage.setItem(JOURNAL_KEY, JSON.stringify(entries));
+}
+
+function renderJournalList(entries) {
+  if (!entries.length) return '<div class="placeholder">No journal entries yet.</div>';
+  return `<div class="journal-list">${entries
+    .map(
+      (entry) => `<article class="card"><div class="row split-row"><strong>${entry.date || 'n/a'}</strong><span class="small muted">${entry.createdAt || ''}</span></div><div class="small"><strong>Tag:</strong> ${entry.tag || 'none'}</div><div class="small"><strong>Note:</strong> ${entry.note || 'none'}</div></article>`
+    )
+    .join('')}</div>`;
+}
+
+function rangeSummary(ingestReport) {
+  const range = ingestReport?.dateRange || {};
+  return `Data loaded: ${range.start || 'n/a'} -> ${range.end || 'n/a'} (${range.days || 0} days)`;
 }
 
 installRuntimeDiagnostics();
 
-try {
-  console.log('mpa-entry boot', location.pathname);
+async function bootstrap() {
+  try {
+    const purgeSummary = await purgeStaleServiceWorkersAndCaches();
+    const purgedAnything = (purgeSummary.unregisteredCount || 0) > 0 || (purgeSummary.deletedCaches || []).length > 0;
+
+    if (purgedAnything && !hasPurgedReloadFlag()) {
+      setPurgedReloadFlag();
+      showToast('Cleared old app cache. Reloading...');
+      setTimeout(() => cacheBustReload(), 350);
+      throw new Error('Reloading after stale cache purge');
+    }
+
   renderTopNav(document.getElementById('topNav'), location.pathname);
   loadFromLocalCache();
 
-  const settings = defaults;
+  const settings = loadSettings();
   const dates = getAvailableDates();
   const preferred = new URLSearchParams(location.search).get('date') || loadSelectedDate() || null;
   const selectedDate = resolveInitialSelectedDate(dates, preferred);
   if (selectedDate) persistSelectedDate(selectedDate);
   const day = selectedDate ? getDay(selectedDate, settings) : null;
   const app = document.getElementById('app');
+  if (!app) throw new Error('Missing #app mount node');
 
   const importController = createImportController({
     importZip: (file, onProgress) => importZip(file, settings, onProgress),
@@ -70,60 +153,99 @@ try {
   });
 
   const globalInput = document.getElementById('globalImportInput');
-  globalInput?.addEventListener('change', async (e) => {
-    const file = e.target.files?.[0];
-    e.target.value = '';
+  globalInput?.addEventListener('change', async (event) => {
+    const file = event.target.files?.[0];
+    event.target.value = '';
     if (!file) return;
     await importController.openWithFile(file);
   });
 
   if (page === 'index') {
     app.innerHTML = `<section class="card"><h2>By Date</h2>${renderDateStrip(selectedDate)}<div class="grid vitals-grid">
-      <div class="kpi"><div class="kpi-label">Readiness score</div><div class="kpi-value">${fmt(day?.dailyReadiness?.score)}</div></div>
-      <div class="kpi"><div class="kpi-label">Sleep score</div><div class="kpi-value">${fmt(day?.dailySleep?.score)}</div></div>
-      <div class="kpi"><div class="kpi-label">Activity score</div><div class="kpi-value">${fmt(day?.dailyActivity?.score)}</div></div>
+      <div class="kpi"><div class="kpi-label">Readiness score</div><div class="kpi-value">${fmt(day?.dailyReadiness?.score, '', 0)}</div></div>
+      <div class="kpi"><div class="kpi-label">Sleep score</div><div class="kpi-value">${fmt(day?.dailySleep?.score, '', 0)}</div></div>
+      <div class="kpi"><div class="kpi-label">Activity score</div><div class="kpi-value">${fmt(day?.dailyActivity?.score, '', 0)}</div></div>
       <div class="kpi"><div class="kpi-label">RHR Night</div><div class="kpi-value">${fmt(day?.derivedNightlyVitals?.rhr_night_bpm, ' bpm')}</div></div>
-      <div class="kpi"><div class="kpi-label">Estimated HRV</div><div class="kpi-value">${fmt(day?.derivedNightlyVitals?.hrv_rmssd_proxy_ms, ' ms')}</div></div>
+      <div class="kpi"><div class="kpi-label">Estimated HRV (RMSSD proxy)</div><div class="kpi-value">${fmt(day?.derivedNightlyVitals?.hrv_rmssd_proxy_ms, ' ms')}</div></div>
       <div class="kpi"><div class="kpi-label">SpO2 Night Avg</div><div class="kpi-value">${fmt(day?.dailySpo2?.spo2Average, '%')}</div></div>
-      <div class="kpi"><div class="kpi-label">Temp deviation</div><div class="kpi-value">${fmt(day?.dailyReadiness?.temperatureDeviation, '°C')}</div></div>
+      <div class="kpi"><div class="kpi-label">Temp deviation</div><div class="kpi-value">${fmt(day?.dailyReadiness?.temperatureDeviation, ' C')}</div></div>
       <div class="kpi"><div class="kpi-label">Quick insight</div><div class="small muted">Window ${day?.heartRateWindowSummary?.modeUsed || 'n/a'} · HR points ${day?.heartRateWindowSummary?.points ?? 0}</div></div>
     </div></section>`;
+  } else if (page === 'sleep') {
+    const bars = contributorsToBars(day?.dailySleep?.contributors);
+    const typicalSleep = getBaseline('sleepScore', settings.baselineWindow, selectedDate);
+    app.innerHTML = `<section class="card"><h2>Sleep</h2>${renderDateStrip(selectedDate)}
+      <div class="grid vitals-grid">
+        <div class="kpi"><div class="kpi-label">Sleep score</div><div class="kpi-value">${fmt(day?.dailySleep?.score, '', 0)}</div></div>
+        <div class="kpi"><div class="kpi-label">Typical Sleep Score</div><div class="kpi-value">${fmt(typicalSleep, '', 0)}</div><div class="small muted">Median over ${settings.baselineWindow} days</div></div>
+      </div>
+      <h3>Contributors</h3>
+      ${bars
+        .map(
+          (bar) => `<div class="contributor-row"><div class="small">${titleCase(bar.key)}: ${fmt(bar.value, '', 0)}</div><div class="progress"><span style="width:${Math.max(0, Math.min(100, bar.value || 0))}%"></span></div></div>`
+        )
+        .join('')}
+      <h3>Breathing</h3>
+      <div class="grid vitals-grid">
+        <div class="kpi"><div class="kpi-label">Blood oxygen avg</div><div class="kpi-value">${fmt(day?.dailySpo2?.spo2Average, '%')}</div></div>
+        <div class="kpi"><div class="kpi-label">Breathing disturbance index (BDI)</div><div class="kpi-value">${fmt(day?.dailySpo2?.breathingDisturbanceIndex)}</div></div>
+      </div>
+      <h3>Night heart rate</h3>
+      <div class="grid vitals-grid">
+        <div class="kpi"><div class="kpi-label">Lowest HR</div><div class="kpi-value">${fmt(day?.hrMin, ' bpm')}</div></div>
+        <div class="kpi"><div class="kpi-label">Avg HR</div><div class="kpi-value">${fmt(day?.hrAvg, ' bpm')}</div></div>
+      </div>
+      ${lineChartSeries(day?.heartRateSeries || [], 'Night window heart rate', ' bpm')}
+      <h3>HRV</h3>
+      <div class="kpi"><div class="kpi-label">Estimated HRV (RMSSD proxy)</div><div class="kpi-value">${fmt(day?.derivedNightlyVitals?.hrv_rmssd_proxy_ms, ' ms')}</div></div>
+      <h3>Details</h3>
+      <div class="grid vitals-grid">
+        <div class="kpi"><div class="kpi-label">Sleep stages timeline</div><div>${notAvailable}</div></div>
+        <div class="kpi"><div class="kpi-label">Sleep details</div><div>${notAvailable}</div></div>
+      </div>
+    </section>`;
   } else if (page === 'readiness') {
-    const bars = contributorsToBars(day?.dailyReadiness?.contributors);
+    const bars = Object.entries(day?.dailyReadiness?.contributors || {}).map(([key, value]) => ({ key, value }));
     const baseline = getBaseline('temperatureDeviation', settings.baselineWindow, selectedDate);
+    const temp = day?.dailyReadiness?.temperatureDeviation;
+    const tempDelta = temp != null && baseline != null ? temp - baseline : null;
     app.innerHTML = `<section class="card"><h2>Readiness</h2>${renderDateStrip(selectedDate)}
-      <div class="kpi"><div class="kpi-label">Score</div><div class="kpi-value">${fmt(day?.dailyReadiness?.score)}</div></div>
-      <div class="kpi"><div class="kpi-label">Temperature deviation</div><div class="kpi-value">${fmt(day?.dailyReadiness?.temperatureDeviation, '°C')}</div><div class="small muted">Baseline ${fmt(baseline, '°C')} · Δ ${fmt((day?.dailyReadiness?.temperatureDeviation ?? null) - (baseline ?? 0), '°C')}</div></div>
-      <h3>Contributors</h3>${bars.map((b) => `<div class="contributor-row"><div class="small">${titleCase(b.key)}: ${fmt(b.value)}</div><div class="progress"><span style="width:${Math.max(0, Math.min(100, b.value || 0))}%"></span></div></div>`).join('')}
+      <div class="kpi"><div class="kpi-label">Score</div><div class="kpi-value">${fmt(day?.dailyReadiness?.score, '', 0)}</div></div>
+      <div class="kpi"><div class="kpi-label">Temperature deviation</div><div class="kpi-value">${fmt(temp, ' C')}</div><div class="small muted">Baseline ${fmt(baseline, ' C')} · Delta ${fmt(tempDelta, ' C')}</div></div>
+      <h3>Contributors</h3>${bars.map((b) => `<div class="contributor-row"><div class="small">${titleCase(b.key)}: ${fmt(b.value, '', 0)}</div><div class="progress"><span style="width:${Math.max(0, Math.min(100, b.value || 0))}%"></span></div></div>`).join('')}
     </section>`;
   } else if (page === 'activity') {
-    const idx = dates.indexOf(selectedDate);
-    const start = dates[Math.max(0, idx - 13)] || selectedDate;
+    const index = dates.indexOf(selectedDate);
+    const start = dates[Math.max(0, index - 13)] || selectedDate;
     const range = getRange(start, selectedDate).dailyActivity;
     app.innerHTML = `<section class="card"><h2>Activity</h2>${renderDateStrip(selectedDate)}<div class="grid vitals-grid">
-      <div class="kpi"><div class="kpi-label">Score</div><div class="kpi-value">${fmt(day?.dailyActivity?.score)}</div></div>
-      <div class="kpi"><div class="kpi-label">Steps</div><div class="kpi-value">${fmt(day?.dailyActivity?.steps)}</div></div>
-      <div class="kpi"><div class="kpi-label">Active calories</div><div class="kpi-value">${fmt(day?.dailyActivity?.activeCalories, ' cal')}</div></div>
-      <div class="kpi"><div class="kpi-label">14-day averages</div><div class="small muted">Steps ${fmt(avg(range, 'steps'))} · Calories ${fmt(avg(range, 'activeCalories'))}</div></div>
+      <div class="kpi"><div class="kpi-label">Score</div><div class="kpi-value">${fmt(day?.dailyActivity?.score, '', 0)}</div></div>
+      <div class="kpi"><div class="kpi-label">Steps</div><div class="kpi-value">${fmt(day?.dailyActivity?.steps, '', 0)}</div></div>
+      <div class="kpi"><div class="kpi-label">Active calories</div><div class="kpi-value">${fmt(day?.dailyActivity?.activeCalories, ' cal', 0)}</div></div>
+      <div class="kpi"><div class="kpi-label">14-day averages</div><div class="small muted">Steps ${fmt(avg(range, 'steps'), '', 0)} · Calories ${fmt(avg(range, 'activeCalories'), ' cal', 0)}</div></div>
     </div></section>`;
   } else if (page === 'vitals') {
-    const b = {
+    const baseline = {
       rhr: getBaseline('rhr_night_bpm', settings.baselineWindow, selectedDate),
       hrv: getBaseline('hrv_rmssd_proxy_ms', settings.baselineWindow, selectedDate),
       spo2: getBaseline('spo2Average', settings.baselineWindow, selectedDate)
     };
+    const rhr = day?.derivedNightlyVitals?.rhr_night_bpm;
+    const hrv = day?.derivedNightlyVitals?.hrv_rmssd_proxy_ms;
+    const rhrDelta = rhr != null && baseline.rhr != null ? rhr - baseline.rhr : null;
+    const hrvDelta = hrv != null && baseline.hrv != null ? hrv - baseline.hrv : null;
     app.innerHTML = `<section class="card"><h2>Vitals</h2>${renderDateStrip(selectedDate)}<div class="grid vitals-grid">
-      <div class="kpi"><div class="kpi-label">RHR Night</div><div class="kpi-value">${fmt(day?.derivedNightlyVitals?.rhr_night_bpm, ' bpm')}</div><div class="small muted">Baseline ${fmt(b.rhr, ' bpm')} · Δ ${fmt((day?.derivedNightlyVitals?.rhr_night_bpm ?? 0) - (b.rhr ?? 0), ' bpm')}</div></div>
-      <div class="kpi"><div class="kpi-label">HRV proxy</div><div class="kpi-value">${fmt(day?.derivedNightlyVitals?.hrv_rmssd_proxy_ms, ' ms')}</div><div class="small muted">Baseline ${fmt(b.hrv, ' ms')} · Δ ${fmt((day?.derivedNightlyVitals?.hrv_rmssd_proxy_ms ?? 0) - (b.hrv ?? 0), ' ms')}</div></div>
-      <div class="kpi"><div class="kpi-label">SpO2</div><div class="kpi-value">${fmt(day?.dailySpo2?.spo2Average, '%')}</div><div class="small muted">Baseline ${fmt(b.spo2, '%')}</div></div>
-      <div class="kpi"><div class="kpi-label">Temp deviation</div><div class="kpi-value">${fmt(day?.dailyReadiness?.temperatureDeviation, '°C')}</div></div>
+      <div class="kpi"><div class="kpi-label">RHR Night</div><div class="kpi-value">${fmt(rhr, ' bpm')}</div><div class="small muted">Baseline ${fmt(baseline.rhr, ' bpm')} · Delta ${fmt(rhrDelta, ' bpm')}</div></div>
+      <div class="kpi"><div class="kpi-label">HRV proxy</div><div class="kpi-value">${fmt(hrv, ' ms')}</div><div class="small muted">Baseline ${fmt(baseline.hrv, ' ms')} · Delta ${fmt(hrvDelta, ' ms')}</div></div>
+      <div class="kpi"><div class="kpi-label">SpO2</div><div class="kpi-value">${fmt(day?.dailySpo2?.spo2Average, '%')}</div><div class="small muted">Baseline ${fmt(baseline.spo2, '%')}</div></div>
+      <div class="kpi"><div class="kpi-label">Temp deviation</div><div class="kpi-value">${fmt(day?.dailyReadiness?.temperatureDeviation, ' C')}</div></div>
     </div></section>`;
   } else if (page === 'trends') {
-    const window = Number(new URLSearchParams(location.search).get('window') || '14');
-    const idx = dates.indexOf(selectedDate);
-    const start = dates[Math.max(0, idx - (window - 1))] || selectedDate;
+    const windowDays = Number(new URLSearchParams(location.search).get('window') || '14');
+    const index = dates.indexOf(selectedDate);
+    const start = dates[Math.max(0, index - (windowDays - 1))] || selectedDate;
     const range = getRange(start, selectedDate);
-    const makeBtn = (n) => `<a class="btn ${window === n ? 'active' : ''}" href="${location.pathname}?window=${n}&date=${selectedDate}">${n}d</a>`;
+    const makeBtn = (n) => `<a class="btn ${windowDays === n ? 'active' : ''}" href="${location.pathname}?window=${n}&date=${selectedDate}">${n}d</a>`;
     app.innerHTML = `<section class="card"><h2>Trends</h2><div class="row">${[7, 14, 30, 90].map(makeBtn).join('')}</div><div class="grid vitals-grid">
       ${lineChart(range.dailyReadiness, 'score', 'Readiness score')}
       ${lineChart(range.dailySleep, 'score', 'Sleep score')}
@@ -131,8 +253,36 @@ try {
       ${lineChart(range.derivedNightlyVitals, 'rhr_night_bpm', 'RHR', ' bpm')}
       ${lineChart(range.derivedNightlyVitals, 'hrv_rmssd_proxy_ms', 'HRV', ' ms')}
       ${lineChart(range.dailySpo2, 'spo2Average', 'SpO2', '%')}
-      ${lineChart(range.dailyReadiness, 'temperatureDeviation', 'Temp deviation', '°C')}
+      ${lineChart(range.dailyReadiness, 'temperatureDeviation', 'Temp deviation', ' C')}
     </div></section>`;
+  } else if (page === 'journal') {
+    const entries = loadJournalEntries()
+      .slice()
+      .sort((a, b) => `${b.date || ''}${b.createdAt || ''}`.localeCompare(`${a.date || ''}${a.createdAt || ''}`));
+    app.innerHTML = `<section class="card"><h2>Journal</h2>
+      <form id="journalForm" class="grid">
+        <label class="field"><span>Date</span><input type="date" name="date" value="${selectedDate || new Date().toISOString().slice(0, 10)}" required /></label>
+        <label class="field"><span>Tag</span><input type="text" name="tag" placeholder="e.g. caffeine, late meal" /></label>
+        <label class="field"><span>Note</span><textarea name="note" rows="3" placeholder="What happened today?"></textarea></label>
+        <div class="row"><button class="btn" type="submit">Save entry</button></div>
+      </form>
+    </section>
+    <section class="card"><h3>Entries</h3>${renderJournalList(entries)}</section>`;
+
+    document.getElementById('journalForm')?.addEventListener('submit', (event) => {
+      event.preventDefault();
+      const formData = new FormData(event.currentTarget);
+      const nextEntries = loadJournalEntries();
+      nextEntries.push({
+        id: crypto.randomUUID(),
+        date: String(formData.get('date') || ''),
+        tag: String(formData.get('tag') || '').trim(),
+        note: String(formData.get('note') || '').trim(),
+        createdAt: new Date().toISOString()
+      });
+      saveJournalEntries(nextEntries);
+      location.reload();
+    });
   } else if (page === 'data-tools-import') {
     const snapshot = getStoreSnapshot();
     app.innerHTML = `<section class="card"><h2>Import</h2>
@@ -145,21 +295,23 @@ try {
       <div id="importSuccessBanner" class="import-banner" hidden></div>
       <pre class="status" id="importReport">${JSON.stringify(snapshot.ingestReport || {}, null, 2)}</pre>
     </section>`;
+
     document.getElementById('openImport')?.addEventListener('click', () => importController.open());
     document.getElementById('fallbackImportInput')?.addEventListener('change', async (event) => {
       const file = event.target.files?.[0];
       event.target.value = '';
       if (!file) return;
+
       const status = document.getElementById('fallbackImportStatus');
       const report = document.getElementById('importReport');
       const banner = document.getElementById('importSuccessBanner');
       status.textContent = `Reading ${file.name}...`;
+
       try {
         const result = await importZip(file, settings, (progress) => {
           status.textContent = `${progress.phase} (${progress.percent}%)`;
         });
-        const range = result?.dateRange || {};
-        const summary = `Data loaded: ${range.start || 'n/a'} -> ${range.end || 'n/a'} (${range.days || 0} days)`;
+        const summary = rangeSummary(result);
         status.textContent = `Import done. ${summary}`;
         if (report) report.textContent = JSON.stringify(result || {}, null, 2);
         if (banner) {
@@ -171,33 +323,136 @@ try {
       } catch (error) {
         const message = error?.message || String(error);
         status.textContent = `Import failed: ${message}`;
+        if (report) report.textContent = JSON.stringify({ error: message, stack: error?.stack || null }, null, 2);
         showToast(`Import failed: ${message}`, 'error');
       }
     });
   } else if (page === 'data-tools-export') {
     const snapshot = getStoreSnapshot();
-    setUiSnapshot({ generatedAt: new Date().toISOString(), selectedDate, data: snapshot.datasets, derivedNightlyVitals: snapshot.derivedNightlyVitals, ingestReport: snapshot.ingestReport });
+    setUiSnapshot({
+      generatedAt: new Date().toISOString(),
+      selectedDate,
+      data: snapshot.datasets,
+      derivedNightlyVitals: snapshot.derivedNightlyVitals,
+      ingestReport: snapshot.ingestReport
+    });
     app.innerHTML = `<section class="card"><h2>Export</h2><div class="row"><button class="btn" id="csvExport">derived_nightly_vitals.csv</button><button class="btn" id="jsonExport">normalized_all.json</button></div></section>`;
+
     document.getElementById('csvExport')?.addEventListener('click', () => {
       const blob = new Blob([toCsv(snapshot.derivedNightlyVitals || [])], { type: 'text/csv' });
-      const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'derived_nightly_vitals.csv'; a.click(); URL.revokeObjectURL(a.href);
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = 'derived_nightly_vitals.csv';
+      a.click();
+      URL.revokeObjectURL(a.href);
     });
+
     document.getElementById('jsonExport')?.addEventListener('click', () => {
-      const data = { metadata: { generatedAt: new Date().toISOString(), selectedDate }, uiSnapshot: snapshot.uiSnapshot, ingestReport: snapshot.ingestReport, datasets: snapshot.datasets, derivedNightlyVitals: snapshot.derivedNightlyVitals };
+      const data = {
+        metadata: { generatedAt: new Date().toISOString(), selectedDate },
+        uiSnapshot: snapshot.uiSnapshot,
+        ingestReport: snapshot.ingestReport,
+        datasets: snapshot.datasets,
+        derivedNightlyVitals: snapshot.derivedNightlyVitals
+      };
       const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
-      const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'normalized_all.json'; a.click(); URL.revokeObjectURL(a.href);
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = 'normalized_all.json';
+      a.click();
+      URL.revokeObjectURL(a.href);
     });
   } else if (page === 'glossary') {
-    const rows = [...byDateUiMapping, ...sleepUiMapping, ...readinessUiMapping, ...activityUiMapping, ...vitalsUiMapping, ...trendsUiMapping];
-    app.innerHTML = `<section class="card"><h2>Glossary</h2><table class="simple-table"><thead><tr><th>Page</th><th>UI element</th><th>Source paths</th><th>Transform</th><th>Fallback</th></tr></thead><tbody>${rows.map((r) => `<tr><td>${r.page} / ${r.section}</td><td>${r.element}</td><td>${(r.sourcePaths || []).join('<br/>')}</td><td>${r.transform}</td><td>${r.fallback}</td></tr>`).join('')}</tbody></table></section>`;
+    const rows = [
+      ...byDateUiMapping,
+      ...sleepUiMapping,
+      ...readinessUiMapping,
+      ...activityUiMapping,
+      ...vitalsUiMapping,
+      ...trendsUiMapping,
+      ...journalUiMapping,
+      ...importUiMapping,
+      ...exportUiMapping,
+      ...settingsUiMapping,
+      ...debugUiMapping
+    ];
+    app.innerHTML = `<section class="card"><h2>Glossary</h2><table class="simple-table"><thead><tr><th>Page</th><th>UI element</th><th>Source paths</th><th>Transform</th><th>Fallback</th></tr></thead><tbody>${rows.map((row) => `<tr><td>${row.page} / ${row.section}</td><td>${row.element}</td><td>${(row.sourcePaths || []).join('<br/>')}</td><td>${row.transform || ''}</td><td>${row.fallback || ''}</td></tr>`).join('')}</tbody></table></section>`;
+  } else if (page === 'settings') {
+    const snapshot = getStoreSnapshot();
+    app.innerHTML = `<section class="card"><h2>Settings</h2>
+      <form id="settingsForm" class="grid">
+        <label class="field"><span>Baseline window (days)</span><input type="number" min="3" max="90" name="baselineWindow" value="${settings.baselineWindow}" /></label>
+        <label class="field"><span>Night window mode</span><select name="nightWindowMode"><option value="auto" ${settings.nightWindowMode === 'auto' ? 'selected' : ''}>auto</option><option value="sleep-time" ${settings.nightWindowMode === 'sleep-time' ? 'selected' : ''}>sleep-time</option><option value="settings" ${settings.nightWindowMode === 'settings' ? 'selected' : ''}>settings</option></select></label>
+        <label class="field"><span>Fallback start</span><input type="time" name="fallbackStart" value="${settings.fallbackStart}" /></label>
+        <label class="field"><span>Fallback end</span><input type="time" name="fallbackEnd" value="${settings.fallbackEnd}" /></label>
+        <label class="field checkbox-row"><span>Developer mode</span><input type="checkbox" name="developerMode" ${settings.developerMode ? 'checked' : ''} /></label>
+      </form>
+      <div id="settingsStatus" class="small muted">Saved settings are applied instantly.</div>
+      <div class="row"><button class="btn" id="clearAppCacheBtn" type="button">Clear app cache</button></div>
+    </section>
+    <section class="card"><h3>Availability matrix</h3><pre class="status">${JSON.stringify(snapshot.availabilityMatrix || {}, null, 2)}</pre></section>`;
+
+    const form = document.getElementById('settingsForm');
+    const status = document.getElementById('settingsStatus');
+    const persist = () => {
+      const data = new FormData(form);
+      const baselineWindowRaw = Number(data.get('baselineWindow'));
+      const baselineWindow = Number.isFinite(baselineWindowRaw) ? baselineWindowRaw : settings.baselineWindow;
+      const next = {
+        baselineWindow: Math.max(3, Math.min(90, baselineWindow)),
+        nightWindowMode: String(data.get('nightWindowMode') || settings.nightWindowMode),
+        fallbackStart: String(data.get('fallbackStart') || settings.fallbackStart),
+        fallbackEnd: String(data.get('fallbackEnd') || settings.fallbackEnd),
+        developerMode: form.elements.namedItem('developerMode')?.checked || false
+      };
+      Object.assign(settings, saveSettings(next));
+      status.textContent = `Saved at ${new Date().toLocaleTimeString()}`;
+    };
+    form?.addEventListener('input', persist);
+    form?.addEventListener('change', persist);
+
+    document.getElementById('clearAppCacheBtn')?.addEventListener('click', async () => {
+      await purgeStaleServiceWorkersAndCaches();
+      resetLocalData();
+      cacheBustReload();
+    });
+  } else if (page === 'debug') {
+    const snapshot = getStoreSnapshot();
+    const datasetCounts = Object.fromEntries(Object.entries(snapshot.datasets || {}).map(([name, rows]) => [name, rows.length]));
+    const diagnostics = window.__ouraDiag || {};
+    app.innerHTML = `<section class="card"><h2>Debug</h2>
+      <h3>Dataset row counts</h3><pre class="status">${JSON.stringify({ ...datasetCounts, derivedNightlyVitals: (snapshot.derivedNightlyVitals || []).length }, null, 2)}</pre>
+      <h3>ingestReport</h3><pre class="status">${JSON.stringify(snapshot.ingestReport || {}, null, 2)}</pre>
+      <h3>Availability matrix</h3><pre class="status">${JSON.stringify(snapshot.availabilityMatrix || {}, null, 2)}</pre>
+      <h3>Runtime diagnostics</h3>
+      <pre class="status">${JSON.stringify(
+        {
+          overlayProbe: diagnostics.overlayProbe || null,
+          lastErrors: (diagnostics.errors || []).slice(-5),
+          lastRejections: (diagnostics.rejections || []).slice(-5),
+          lastClicks: (diagnostics.clicks || []).slice(-10)
+        },
+        null,
+        2
+      )}</pre>
+    </section>`;
   } else {
     app.innerHTML = `<section class="card"><h2>${titleCase(page)}</h2><p class="muted">Content available in dashboard tabs.</p></section>`;
   }
 
-  document.documentElement.dataset.js = '1';
-  window.addEventListener('unhandledrejection', (event) => setImportError(event.reason || new Error('Unhandled rejection')));
-} catch (error) {
-  setImportError(error, { page });
-  document.getElementById('app').innerHTML = `<section class="fatal-card"><h2>App failed to load</h2><pre class="status">${String(error?.stack || error)}</pre></section>`;
+    document.documentElement.dataset.js = '1';
+    window.addEventListener('unhandledrejection', (event) => setImportError(event.reason || new Error('Unhandled rejection')));
+  } catch (error) {
+    if (String(error?.message || '') === 'Reloading after stale cache purge') {
+      // intentional early exit
+    } else {
+      setImportError(error, { page });
+      const app = document.getElementById('app');
+      if (app) {
+        app.innerHTML = `<section class="fatal-card"><h2>App failed to load</h2><pre class="status">${String(error?.stack || error)}</pre></section>`;
+      }
+    }
+  }
 }
 
+bootstrap();
