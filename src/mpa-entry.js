@@ -91,6 +91,82 @@ function lineChartSeries(series, label, suffix = '') {
   return `<div class="kpi"><div class="kpi-label">${label}</div><svg class="chart" viewBox="0 0 320 100"><polyline fill="none" stroke="#60a5fa" stroke-width="2" points="${poly}"/></svg><div class="small muted">Points ${points.length} · Range ${fmt(min, suffix)} to ${fmt(max, suffix)}</div></div>`;
 }
 
+function scoreBand(score) {
+  if (score == null) return 'Not available';
+  if (score >= 85) return 'Optimal';
+  if (score >= 70) return 'Good';
+  if (score >= 55) return 'Fair';
+  return 'Pay attention';
+}
+
+function formatTemperature(value) {
+  if (value == null || Number.isNaN(Number(value))) return notAvailable;
+  const n = Number(value);
+  const sign = n > 0 ? '+' : '';
+  return `${sign}${n.toFixed(1)} C`;
+}
+
+function formatTime(ts) {
+  const date = new Date(ts);
+  if (Number.isNaN(date.getTime())) return '';
+  return date.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+}
+
+function toHrvProxySeries(heartRateSeries) {
+  const series = (heartRateSeries || []).map((point) => ({
+    t: point.t,
+    rr: point.bpm ? 60000 / point.bpm : null
+  })).filter((point) => point.rr != null);
+
+  const output = [];
+  for (let i = 2; i < series.length; i += 1) {
+    const d1 = series[i].rr - series[i - 1].rr;
+    const d2 = series[i - 1].rr - series[i - 2].rr;
+    const rmssd = Math.sqrt((d1 ** 2 + d2 ** 2) / 2);
+    output.push({ t: series[i].t, v: rmssd });
+  }
+  return output;
+}
+
+function renderReadinessChart({ title, primary, secondary, series, unit = '', yMin = null, yMax = null }) {
+  const values = (series || []).map((point) => point.v).filter((value) => value != null && Number.isFinite(Number(value)));
+  const hasSeries = values.length > 1;
+  const min = yMin ?? (hasSeries ? Math.min(...values) : 0);
+  const max = yMax ?? (hasSeries ? Math.max(...values) : 100);
+  const span = Math.max(max - min, 1);
+  const points = hasSeries
+    ? series
+        .map((point, index) => {
+          const x = (index / Math.max((series.length || 1) - 1, 1)) * 100;
+          const y = 100 - ((point.v - min) / span) * 80 - 10;
+          return `${x},${Math.max(8, Math.min(94, y))}`;
+        })
+        .join(' ')
+    : '';
+
+  const firstTime = hasSeries ? formatTime(series[0].t) : '';
+  const lastTime = hasSeries ? formatTime(series.at(-1).t) : '';
+
+  return `<section class="readiness-detail-card">
+    <div class="readiness-detail-header">
+      <div class="readiness-detail-title">${title}</div>
+      <button type="button" class="readiness-pill">Why the gaps?</button>
+    </div>
+    <div class="readiness-detail-value">${primary}</div>
+    <div class="readiness-detail-sub">${secondary || ''}</div>
+    ${hasSeries ? `<svg class="readiness-chart" viewBox="0 0 100 100" preserveAspectRatio="none">
+      <line x1="0" y1="25" x2="100" y2="25"></line>
+      <line x1="0" y1="50" x2="100" y2="50"></line>
+      <line x1="0" y1="75" x2="100" y2="75"></line>
+      <polyline points="${points}"></polyline>
+    </svg>` : `<div class="placeholder readiness-chart-empty">Not enough overnight points for chart.</div>`}
+    <div class="readiness-chart-labels">
+      <span>${firstTime}</span>
+      <span>${lastTime}</span>
+    </div>
+  </section>`;
+}
+
 function loadJournalEntries(storage = (typeof localStorage !== 'undefined' ? localStorage : null)) {
   if (!storage?.getItem) return [];
   try {
@@ -120,7 +196,7 @@ function rangeSummary(ingestReport) {
   return `Data loaded: ${range.start || 'n/a'} -> ${range.end || 'n/a'} (${range.days || 0} days)`;
 }
 
-installRuntimeDiagnostics();
+installRuntimeDiagnostics({ showPanel: false });
 
 async function bootstrap() {
   try {
@@ -205,14 +281,103 @@ async function bootstrap() {
       </div>
     </section>`;
   } else if (page === 'readiness') {
-    const bars = Object.entries(day?.dailyReadiness?.contributors || {}).map(([key, value]) => ({ key, value }));
+    const contributors = day?.dailyReadiness?.contributors || {};
+    const readinessScore = day?.dailyReadiness?.score ?? null;
     const baseline = getBaseline('temperatureDeviation', settings.baselineWindow, selectedDate);
     const temp = day?.dailyReadiness?.temperatureDeviation;
     const tempDelta = temp != null && baseline != null ? temp - baseline : null;
-    app.innerHTML = `<section class="card"><h2>Readiness</h2>${renderDateStrip(selectedDate)}
-      <div class="kpi"><div class="kpi-label">Score</div><div class="kpi-value">${fmt(day?.dailyReadiness?.score, '', 0)}</div></div>
-      <div class="kpi"><div class="kpi-label">Temperature deviation</div><div class="kpi-value">${fmt(temp, ' C')}</div><div class="small muted">Baseline ${fmt(baseline, ' C')} · Delta ${fmt(tempDelta, ' C')}</div></div>
-      <h3>Contributors</h3>${bars.map((b) => `<div class="contributor-row"><div class="small">${titleCase(b.key)}: ${fmt(b.value, '', 0)}</div><div class="progress"><span style="width:${Math.max(0, Math.min(100, b.value || 0))}%"></span></div></div>`).join('')}
+    const yesterday = dates.indexOf(selectedDate) > 0 ? dates[dates.indexOf(selectedDate) - 1] : null;
+    const contributorOrder = [
+      { key: 'resting_heart_rate', label: 'Resting heart rate', value: day?.derivedNightlyVitals?.rhr_night_bpm != null ? `${Math.round(day.derivedNightlyVitals.rhr_night_bpm)} bpm` : notAvailable },
+      { key: 'hrv_balance', label: 'HRV balance' },
+      { key: 'body_temperature', label: 'Body temperature' },
+      { key: 'recovery_index', label: 'Recovery index' },
+      { key: 'previous_night', label: 'Sleep' },
+      { key: 'sleep_balance', label: 'Sleep balance' },
+      { key: 'sleep_regularity', label: 'Sleep regularity' },
+      { key: 'previous_day_activity', label: 'Previous day activity' },
+      { key: 'activity_balance', label: 'Activity balance' }
+    ];
+
+    const contributorRows = contributorOrder.map((item) => {
+      const score = contributors[item.key];
+      const display = item.value || scoreBand(score);
+      return `<div class="readiness-contributor-row">
+        <div class="readiness-contributor-head">
+          <span>${item.label}</span>
+          <span>${display} <span class="muted">›</span></span>
+        </div>
+        <div class="readiness-rail"><span style="width:${Math.max(0, Math.min(100, score || 0))}%"></span></div>
+      </div>`;
+    }).join('');
+
+    const hrvSeries = toHrvProxySeries(day?.heartRateSeries || []);
+    const rhrPrimary = day?.derivedNightlyVitals?.rhr_night_bpm != null ? `${Math.round(day.derivedNightlyVitals.rhr_night_bpm)} bpm` : notAvailable;
+    const rhrSecondary = day?.hrAvg != null ? `Average ${Math.round(day.hrAvg)} bpm` : '';
+    const hrvPrimary = day?.derivedNightlyVitals?.hrv_rmssd_proxy_ms != null ? `${Math.round(day.derivedNightlyVitals.hrv_rmssd_proxy_ms)} ms` : notAvailable;
+    const hrvMax = hrvSeries.length ? Math.max(...hrvSeries.map((point) => point.v)) : null;
+    const hrvSecondary = hrvMax != null ? `Max ${Math.round(hrvMax)} ms` : '';
+    const metricCards = [
+      { label: 'Resting heart rate', value: rhrPrimary },
+      { label: 'Heart rate variability', value: hrvPrimary },
+      { label: 'Body temperature', value: formatTemperature(temp) },
+      { label: 'Respiratory rate', value: notAvailable }
+    ];
+
+    const insightTitle = scoreBand(contributors.hrv_balance) === 'Optimal' ? 'HRV Balance' : 'Readiness insight';
+    const insightText = `Your readiness contributors suggest how your recovery trend is shaping up. Baseline body temperature is ${fmt(baseline, ' C')} and today's delta is ${fmt(tempDelta, ' C')}.`;
+
+    app.innerHTML = `<section class="readiness-page">
+      <section class="readiness-hero">
+        <div class="readiness-day-toggle">
+          <a class="readiness-day ${yesterday ? '' : 'disabled'}" href="${yesterday ? `${location.pathname}?date=${yesterday}` : '#'}">Yesterday</a>
+          <div class="readiness-day active">Today</div>
+        </div>
+        <div class="readiness-score-row">
+          <div class="readiness-score">${fmt(readinessScore, '', 0)}</div>
+          <div class="readiness-band">${scoreBand(readinessScore).toUpperCase()}</div>
+        </div>
+        <h2 class="readiness-insight-title">${insightTitle}</h2>
+        <p class="readiness-insight-copy">${insightText}</p>
+        <details class="readiness-show-more">
+          <summary>Show more</summary>
+          <p class="muted">Contributor scores are shown below. Values are pulled from daily readiness contributors and derived nightly vitals for the selected date.</p>
+        </details>
+      </section>
+
+      <section class="readiness-section">
+        <h3>Contributors</h3>
+        ${contributorRows}
+      </section>
+
+      <section class="readiness-section">
+        <h3>Key metrics</h3>
+        <div class="readiness-metric-grid">
+          ${metricCards.map((card) => `<article class="readiness-metric-card"><div class="readiness-metric-label">${card.label}</div><div class="readiness-metric-value">${card.value}</div></article>`).join('')}
+        </div>
+      </section>
+
+      <section class="readiness-section">
+        <h3>Details</h3>
+        ${renderReadinessChart({
+          title: 'Lowest heart rate',
+          primary: rhrPrimary,
+          secondary: rhrSecondary,
+          series: (day?.heartRateSeries || []).map((point) => ({ t: point.t, v: point.bpm })),
+          unit: 'bpm',
+          yMin: 40,
+          yMax: 85
+        })}
+        ${renderReadinessChart({
+          title: 'Average HRV',
+          primary: hrvPrimary,
+          secondary: hrvSecondary,
+          series: hrvSeries,
+          unit: 'ms',
+          yMin: 0,
+          yMax: 85
+        })}
+      </section>
     </section>`;
   } else if (page === 'activity') {
     const index = dates.indexOf(selectedDate);
