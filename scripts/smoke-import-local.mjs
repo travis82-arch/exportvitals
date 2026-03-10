@@ -7,7 +7,10 @@ import { importZipArrayBuffer } from '../src/store/dataStore.js';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const repoRoot = path.resolve(__dirname, '..');
-const zipPath = path.join(repoRoot, 'OPS', '_local', 'data.zip');
+const candidateZips = [
+  path.join(repoRoot, 'OPS', '_local', 'data.zip'),
+  path.join(repoRoot, 'OPS', '_local', 'data3.zip')
+];
 
 const options = {
   baselineWindow: 14,
@@ -17,11 +20,24 @@ const options = {
 };
 
 async function main() {
+  const zipPath = await candidateZips.reduce(async (accP, next) => {
+    const acc = await accP;
+    if (acc) return acc;
+    try {
+      await fs.access(next);
+      return next;
+    } catch {
+      return null;
+    }
+  }, Promise.resolve(null));
+
+  if (!zipPath) throw new Error(`Missing local ZIP. Tried: ${candidateZips.join(', ')}`);
+
   const bytes = await fs.readFile(zipPath);
   const arrayBuffer = bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength);
 
   const ingestReport = await importZipArrayBuffer({
-    fileName: 'data.zip',
+    fileName: path.basename(zipPath),
     arrayBuffer,
     options
   });

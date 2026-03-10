@@ -25,6 +25,9 @@ import { exportUiMapping } from './mappings/exportUiMapping.js';
 import { settingsUiMapping } from './mappings/settingsUiMapping.js';
 import { debugUiMapping } from './mappings/debugUiMapping.js';
 import { contributorsToBars } from './domain/sleepTransforms.js';
+import { renderAxisLineChart } from './components/AxisLineChart.js';
+import { renderSleepStageChart } from './components/SleepStageChart.js';
+import { renderSleepMovementChart } from './components/SleepMovementChart.js';
 import { toCsv } from './vitals-core.mjs';
 import { installRuntimeDiagnostics } from './state/runtimeDiagnostics.js';
 import { resetLocalData } from './storage/resetLocalData.js';
@@ -42,6 +45,21 @@ const fmt = (value, unit = '', digits = 1) => {
 };
 
 const titleCase = (value) => value.replaceAll('_', ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+
+const fmtDuration = (seconds) => {
+  if (seconds == null || !Number.isFinite(Number(seconds))) return notAvailable;
+  const total = Math.max(0, Math.round(Number(seconds)));
+  const h = Math.floor(total / 3600);
+  const m = Math.floor((total % 3600) / 60);
+  return `${h} h ${m} m`;
+};
+
+const fmtMinutes = (seconds) => {
+  if (seconds == null || !Number.isFinite(Number(seconds))) return notAvailable;
+  return `${Math.round(Number(seconds) / 60)} min`;
+};
+
+const percentOf = (part, total) => (part != null && total ? `${Math.round((Number(part) / Number(total)) * 100)}%` : '—');
 
 const renderDateStrip = (selectedDate) => {
   const days = getLastAvailableDays(getAvailableDates(), 7);
@@ -248,135 +266,119 @@ async function bootstrap() {
       <div class="kpi"><div class="kpi-label">Quick insight</div><div class="small muted">Window ${day?.heartRateWindowSummary?.modeUsed || 'n/a'} · HR points ${day?.heartRateWindowSummary?.points ?? 0}</div></div>
     </div></section>`;
   } else if (page === 'sleep') {
+    const sm = day?.sleepModel;
     const bars = contributorsToBars(day?.dailySleep?.contributors);
-    const typicalSleep = getBaseline('sleepScore', settings.baselineWindow, selectedDate);
+    const timingScore = day?.dailySleep?.contributors?.timing;
+    const restfulnessScore = day?.dailySleep?.contributors?.restfulness;
+    const timingLabel = scoreBand(timingScore);
+    const restfulnessLabel = scoreBand(restfulnessScore);
+    const contributorRows = [
+      ['Total sleep', fmtDuration(sm?.totalSleepSec)],
+      ['Efficiency', sm?.efficiencyPct != null ? `${Math.round(sm.efficiencyPct)}%` : notAvailable],
+      ['Restfulness', restfulnessScore != null ? `${restfulnessLabel} (${Math.round(restfulnessScore)})` : 'Not available yet'],
+      ['REM sleep', sm?.remSec != null ? `${fmtDuration(sm.remSec)} (${percentOf(sm.remSec, sm?.totalSleepSec)})` : notAvailable],
+      ['Deep sleep', sm?.deepSec != null ? `${fmtDuration(sm.deepSec)} (${percentOf(sm.deepSec, sm?.totalSleepSec)})` : notAvailable],
+      ['Latency', fmtMinutes(sm?.latencySec)],
+      ['Timing', timingScore != null ? `${timingLabel} (${Math.round(timingScore)})` : 'Not available yet']
+    ];
+    const range14 = selectedDate ? getRange(dates[Math.max(0, dates.indexOf(selectedDate) - 13)] || selectedDate, selectedDate) : { sleepModel: [] };
+    const sleepRows14 = (range14.sleepModel || []).filter((r) => r?.totalSleepSec != null);
+    const debtSec = Math.max(0, 8 * 3600 * 14 - sleepRows14.reduce((sum, row) => sum + Number(row.totalSleepSec || 0), 0));
+    const debtPct = Math.min(100, Math.round((debtSec / (8 * 3600 * 14)) * 100));
+    const bdi = day?.dailySpo2?.breathingDisturbanceIndex;
+    const bdiLabel = bdi == null ? 'Not available yet' : (bdi <= 5 ? 'Regular breathing' : bdi <= 15 ? 'Some disturbances' : 'Frequent disturbances');
+    const hrSeries = day?.sleepHrSeries || [];
+    const hrHasNulls = hrSeries.some((p) => p?.v == null);
+    const hrStart = hrSeries.find((p) => p?.tMs != null)?.tMs;
+    const hrEnd = [...hrSeries].reverse().find((p) => p?.tMs != null)?.tMs;
+
     app.innerHTML = `<section class="card"><h2>Sleep</h2>${renderDateStrip(selectedDate)}
       <div class="grid vitals-grid">
         <div class="kpi"><div class="kpi-label">Sleep score</div><div class="kpi-value">${fmt(day?.dailySleep?.score, '', 0)}</div></div>
-        <div class="kpi"><div class="kpi-label">Typical Sleep Score</div><div class="kpi-value">${fmt(typicalSleep, '', 0)}</div><div class="small muted">Median over ${settings.baselineWindow} days</div></div>
+        <div class="kpi"><div class="kpi-label">Timing</div><div class="kpi-value">${timingScore != null ? Math.round(timingScore) : notAvailable}</div><div class="small muted">${timingLabel}</div><div class="small muted">Show more</div></div>
       </div>
-      <h3>Contributors</h3>
-      ${bars
-        .map(
-          (bar) => `<div class="contributor-row"><div class="small">${titleCase(bar.key)}: ${fmt(bar.value, '', 0)}</div><div class="progress"><span style="width:${Math.max(0, Math.min(100, bar.value || 0))}%"></span></div></div>`
-        )
-        .join('')}
-      <h3>Breathing</h3>
+      <h3>Sleep contributors</h3>
+      ${contributorRows.map(([label, value]) => `<div class="contributor-row"><div class="small">${label}: ${value}</div></div>`).join('')}
+      <h3>Key metrics</h3>
       <div class="grid vitals-grid">
-        <div class="kpi"><div class="kpi-label">Blood oxygen avg</div><div class="kpi-value">${fmt(day?.dailySpo2?.spo2Average, '%')}</div></div>
-        <div class="kpi"><div class="kpi-label">Breathing disturbance index (BDI)</div><div class="kpi-value">${fmt(day?.dailySpo2?.breathingDisturbanceIndex)}</div></div>
+        <div class="kpi"><div class="kpi-label">TOTAL SLEEP TIME</div><div class="kpi-value">${fmtDuration(sm?.totalSleepSec)}</div></div>
+        <div class="kpi"><div class="kpi-label">TIME IN BED</div><div class="kpi-value">${fmtDuration(sm?.timeInBedSec)}</div></div>
+        <div class="kpi"><div class="kpi-label">SLEEP EFFICIENCY</div><div class="kpi-value">${sm?.efficiencyPct != null ? `${Math.round(sm.efficiencyPct)}%` : notAvailable}</div></div>
+        <div class="kpi"><div class="kpi-label">RESTING HEART RATE</div><div class="kpi-value">${sm?.lowestHeartRate != null ? `${Math.round(sm.lowestHeartRate)} bpm` : notAvailable}</div></div>
       </div>
-      <h3>Night heart rate</h3>
-      <div class="grid vitals-grid">
-        <div class="kpi"><div class="kpi-label">Lowest HR</div><div class="kpi-value">${fmt(day?.hrMin, ' bpm')}</div></div>
-        <div class="kpi"><div class="kpi-label">Avg HR</div><div class="kpi-value">${fmt(day?.hrAvg, ' bpm')}</div></div>
-      </div>
-      ${lineChartSeries(day?.heartRateSeries || [], 'Night window heart rate', ' bpm')}
-      <h3>HRV</h3>
-      <div class="kpi"><div class="kpi-label">Estimated HRV (RMSSD proxy)</div><div class="kpi-value">${fmt(day?.derivedNightlyVitals?.hrv_rmssd_proxy_ms, ' ms')}</div></div>
+      <h3>Estimated sleep debt</h3>
+      <div class="kpi"><div class="small muted">None</div><div class="progress"><span style="width:${debtPct}%"></span></div><div class="small muted">High · ${fmtDuration(debtSec)}</div></div>
       <h3>Details</h3>
       <div class="grid vitals-grid">
-        <div class="kpi"><div class="kpi-label">Sleep stages timeline</div><div>${notAvailable}</div></div>
-        <div class="kpi"><div class="kpi-label">Sleep details</div><div>${notAvailable}</div></div>
+        <div class="kpi"><div class="kpi-label">TIME ASLEEP</div><div class="kpi-value">${fmtDuration(sm?.totalSleepSec)}</div></div>
+        <div class="kpi"><div class="kpi-label">Total duration</div><div class="kpi-value">${fmtDuration(sm?.timeInBedSec)}</div></div>
       </div>
+      ${renderSleepStageChart(day?.sleepStages || [])}
+      ${renderSleepMovementChart(day?.sleepMovement || [])}
+      <div class="grid vitals-grid">
+        <div class="kpi"><div class="kpi-label">Awake</div><div class="kpi-value">${fmtDuration(sm?.awakeSec)}</div><div class="small muted">${percentOf(sm?.awakeSec, sm?.timeInBedSec)}</div></div>
+        <div class="kpi"><div class="kpi-label">REM</div><div class="kpi-value">${fmtDuration(sm?.remSec)}</div><div class="small muted">${percentOf(sm?.remSec, sm?.totalSleepSec)}</div></div>
+        <div class="kpi"><div class="kpi-label">Light</div><div class="kpi-value">${fmtDuration(sm?.lightSec)}</div><div class="small muted">${percentOf(sm?.lightSec, sm?.totalSleepSec)}</div></div>
+        <div class="kpi"><div class="kpi-label">Deep</div><div class="kpi-value">${fmtDuration(sm?.deepSec)}</div><div class="small muted">${percentOf(sm?.deepSec, sm?.totalSleepSec)}</div></div>
+      </div>
+      <h3>Breathing</h3>
+      <div class="grid vitals-grid">
+        <div class="kpi"><div class="kpi-label">Average blood oxygen</div><div class="kpi-value">${fmt(day?.dailySpo2?.spo2Average, '%')}</div></div>
+        <div class="kpi"><div class="kpi-label">Breathing regularity</div><div class="kpi-value">${bdiLabel}</div><div class="small muted">BDI ${fmt(bdi)}</div></div>
+      </div>
+      <h3>Lowest heart rate</h3>
+      <div class="grid vitals-grid">
+        <div class="kpi"><div class="kpi-label">Lowest</div><div class="kpi-value">${sm?.lowestHeartRate != null ? `${Math.round(sm.lowestHeartRate)} bpm` : notAvailable}</div></div>
+        <div class="kpi"><div class="kpi-label">Average</div><div class="kpi-value">${sm?.avgHeartRate != null ? `${Math.round(sm.avgHeartRate)} bpm` : notAvailable}</div></div>
+      </div>
+      ${renderAxisLineChart({ title: 'Heart rate', series: hrSeries, xStartMs: hrStart, xEndMs: hrEnd, yLabel: 'bpm', formatY: (v) => `${Math.round(v)} bpm`, height: 220 })}
+      ${hrHasNulls ? '<div class="small muted">Why the gaps? Missing values are preserved from source series.</div>' : ''}
     </section>`;
   } else if (page === 'readiness') {
     const contributors = day?.dailyReadiness?.contributors || {};
     const readinessScore = day?.dailyReadiness?.score ?? null;
-    const baseline = getBaseline('temperatureDeviation', settings.baselineWindow, selectedDate);
     const temp = day?.dailyReadiness?.temperatureDeviation;
-    const tempDelta = temp != null && baseline != null ? temp - baseline : null;
-    const yesterday = dates.indexOf(selectedDate) > 0 ? dates[dates.indexOf(selectedDate) - 1] : null;
     const contributorOrder = [
-      { key: 'resting_heart_rate', label: 'Resting heart rate', value: day?.derivedNightlyVitals?.rhr_night_bpm != null ? `${Math.round(day.derivedNightlyVitals.rhr_night_bpm)} bpm` : notAvailable },
+      { key: 'resting_heart_rate', label: 'Resting heart rate' },
       { key: 'hrv_balance', label: 'HRV balance' },
       { key: 'body_temperature', label: 'Body temperature' },
       { key: 'recovery_index', label: 'Recovery index' },
-      { key: 'previous_night', label: 'Sleep' },
+      { key: 'previous_night', label: 'Previous night' },
       { key: 'sleep_balance', label: 'Sleep balance' },
       { key: 'sleep_regularity', label: 'Sleep regularity' },
       { key: 'previous_day_activity', label: 'Previous day activity' },
       { key: 'activity_balance', label: 'Activity balance' }
     ];
-
     const contributorRows = contributorOrder.map((item) => {
       const score = contributors[item.key];
-      const display = item.value || scoreBand(score);
+      const display = score == null ? 'Not available yet' : `${scoreBand(score)} (${Math.round(score)})`;
       return `<div class="readiness-contributor-row">
-        <div class="readiness-contributor-head">
-          <span>${item.label}</span>
-          <span>${display} <span class="muted">›</span></span>
-        </div>
+        <div class="readiness-contributor-head"><span>${item.label}</span><span>${display}</span></div>
         <div class="readiness-rail"><span style="width:${Math.max(0, Math.min(100, score || 0))}%"></span></div>
       </div>`;
     }).join('');
 
-    const hrvSeries = toHrvProxySeries(day?.heartRateSeries || []);
-    const rhrPrimary = day?.derivedNightlyVitals?.rhr_night_bpm != null ? `${Math.round(day.derivedNightlyVitals.rhr_night_bpm)} bpm` : notAvailable;
-    const rhrSecondary = day?.hrAvg != null ? `Average ${Math.round(day.hrAvg)} bpm` : '';
-    const hrvPrimary = day?.derivedNightlyVitals?.hrv_rmssd_proxy_ms != null ? `${Math.round(day.derivedNightlyVitals.hrv_rmssd_proxy_ms)} ms` : notAvailable;
-    const hrvMax = hrvSeries.length ? Math.max(...hrvSeries.map((point) => point.v)) : null;
-    const hrvSecondary = hrvMax != null ? `Max ${Math.round(hrvMax)} ms` : '';
-    const metricCards = [
-      { label: 'Resting heart rate', value: rhrPrimary },
-      { label: 'Heart rate variability', value: hrvPrimary },
-      { label: 'Body temperature', value: formatTemperature(temp) },
-      { label: 'Respiratory rate', value: notAvailable }
-    ];
-
-    const insightTitle = scoreBand(contributors.hrv_balance) === 'Optimal' ? 'HRV Balance' : 'Readiness insight';
-    const insightText = `Your readiness contributors suggest how your recovery trend is shaping up. Baseline body temperature is ${fmt(baseline, ' C')} and today's delta is ${fmt(tempDelta, ' C')}.`;
+    const hrSeries = day?.sleepHrSeries || [];
+    const hrvSeries = day?.sleepHrvSeries || [];
+    const hrStart = hrSeries.find((p) => p?.tMs != null)?.tMs;
+    const hrEnd = [...hrSeries].reverse().find((p) => p?.tMs != null)?.tMs;
+    const hrvStart = hrvSeries.find((p) => p?.tMs != null)?.tMs;
+    const hrvEnd = [...hrvSeries].reverse().find((p) => p?.tMs != null)?.tMs;
 
     app.innerHTML = `<section class="readiness-page">
       <section class="readiness-hero">
-        <div class="readiness-day-toggle">
-          <a class="readiness-day ${yesterday ? '' : 'disabled'}" href="${yesterday ? `${location.pathname}?date=${yesterday}` : '#'}">Yesterday</a>
-          <div class="readiness-day active">Today</div>
-        </div>
-        <div class="readiness-score-row">
-          <div class="readiness-score">${fmt(readinessScore, '', 0)}</div>
-          <div class="readiness-band">${scoreBand(readinessScore).toUpperCase()}</div>
-        </div>
-        <h2 class="readiness-insight-title">${insightTitle}</h2>
-        <p class="readiness-insight-copy">${insightText}</p>
-        <details class="readiness-show-more">
-          <summary>Show more</summary>
-          <p class="muted">Contributor scores are shown below. Values are pulled from daily readiness contributors and derived nightly vitals for the selected date.</p>
-        </details>
+        <div class="readiness-score-row"><div class="readiness-score">${fmt(readinessScore, '', 0)}</div><div class="readiness-band">${scoreBand(readinessScore).toUpperCase()}</div></div>
       </section>
-
-      <section class="readiness-section">
-        <h3>Contributors</h3>
-        ${contributorRows}
-      </section>
-
-      <section class="readiness-section">
-        <h3>Key metrics</h3>
-        <div class="readiness-metric-grid">
-          ${metricCards.map((card) => `<article class="readiness-metric-card"><div class="readiness-metric-label">${card.label}</div><div class="readiness-metric-value">${card.value}</div></article>`).join('')}
-        </div>
-      </section>
-
-      <section class="readiness-section">
-        <h3>Details</h3>
-        ${renderReadinessChart({
-          title: 'Lowest heart rate',
-          primary: rhrPrimary,
-          secondary: rhrSecondary,
-          series: (day?.heartRateSeries || []).map((point) => ({ t: point.t, v: point.bpm })),
-          unit: 'bpm',
-          yMin: 40,
-          yMax: 85
-        })}
-        ${renderReadinessChart({
-          title: 'Average HRV',
-          primary: hrvPrimary,
-          secondary: hrvSecondary,
-          series: hrvSeries,
-          unit: 'ms',
-          yMin: 0,
-          yMax: 85
-        })}
+      <section class="readiness-section"><h3>Contributors</h3>${contributorRows}</section>
+      <section class="readiness-section"><h3>Key metrics</h3><div class="readiness-metric-grid">
+        <article class="readiness-metric-card"><div class="readiness-metric-label">RESTING HEART RATE</div><div class="readiness-metric-value">${day?.sleepModel?.lowestHeartRate != null ? `${Math.round(day.sleepModel.lowestHeartRate)} bpm` : notAvailable}</div></article>
+        <article class="readiness-metric-card"><div class="readiness-metric-label">HRV</div><div class="readiness-metric-value">${day?.sleepModel?.avgHrv != null ? `${Math.round(day.sleepModel.avgHrv)} ms` : notAvailable}</div></article>
+        <article class="readiness-metric-card"><div class="readiness-metric-label">BODY TEMPERATURE</div><div class="readiness-metric-value">${formatTemperature(temp)}</div></article>
+        <article class="readiness-metric-card"><div class="readiness-metric-label">RESPIRATORY RATE</div><div class="readiness-metric-value">${day?.sleepModel?.avgBreath != null ? `${Number(day.sleepModel.avgBreath).toFixed(1)} /min` : notAvailable}</div></article>
+      </div></section>
+      <section class="readiness-section"><h3>Details</h3>
+        ${renderAxisLineChart({ title: 'Lowest heart rate', series: hrSeries, xStartMs: hrStart, xEndMs: hrEnd, yLabel: 'bpm', formatY: (v) => `${Math.round(v)} bpm`, height: 220 })}
+        ${renderAxisLineChart({ title: 'Average HRV', series: hrvSeries, xStartMs: hrvStart, xEndMs: hrvEnd, yLabel: 'ms', formatY: (v) => `${Math.round(v)} ms`, height: 220 })}
       </section>
     </section>`;
   } else if (page === 'activity') {

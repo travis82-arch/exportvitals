@@ -10,11 +10,12 @@ const DATASET_ALIASES = {
   dailyActivity: ['dailyactivity.csv'],
   dailySpo2: ['dailyspo2.csv'],
   sleepTime: ['sleeptime.csv'],
-  heartRate: ['heartrate.csv']
+  heartRate: ['heartrate.csv'],
+  sleepModel: ['sleepmodel.csv']
 };
 
 const store = {
-  datasets: { dailyReadiness: [], dailySleep: [], dailyActivity: [], dailySpo2: [], sleepTime: [], heartRate: [] },
+  datasets: { dailyReadiness: [], dailySleep: [], dailyActivity: [], dailySpo2: [], sleepTime: [], heartRate: [], sleepModel: [] },
   derivedNightlyVitals: [],
   ingestReport: {},
   availabilityMatrix: {},
@@ -80,7 +81,57 @@ function normalizeRows(dataset, rows) {
       .map((r) => ({ timestamp: r.timestamp, bpm: toNumber(r.bpm) }))
       .filter((r) => r.timestamp && r.bpm != null);
 
+  if (dataset === 'sleepModel')
+    return rows
+      .map((r) => ({
+        date: r.day,
+        bedtimeStart: r.bedtime_start,
+        bedtimeEnd: r.bedtime_end,
+        totalSleepSec: toNumber(r.total_sleep_duration),
+        timeInBedSec: toNumber(r.time_in_bed),
+        efficiencyPct: toNumber(r.efficiency),
+        latencySec: toNumber(r.latency),
+        awakeSec: toNumber(r.awake_time),
+        deepSec: toNumber(r.deep_sleep_duration),
+        lightSec: toNumber(r.light_sleep_duration),
+        remSec: toNumber(r.rem_sleep_duration),
+        lowestHeartRate: toNumber(r.lowest_heart_rate),
+        avgHeartRate: toNumber(r.average_heart_rate),
+        avgHrv: toNumber(r.average_hrv),
+        avgBreath: toNumber(r.average_breath),
+        stage30s: typeof r.sleep_phase_30_sec === 'string' ? r.sleep_phase_30_sec : '',
+        movement30s: typeof r.movement_30_sec === 'string' ? r.movement_30_sec : '',
+        hrJson: r.heart_rate,
+        hrvJson: r.hrv
+      }))
+      .filter((r) => r.date);
+
   return [];
+}
+
+export function parseSeriesJson(jsonString) {
+  if (!jsonString) return { startMs: null, intervalSec: null, items: [] };
+  try {
+    const parsed = typeof jsonString === 'string' ? JSON.parse(jsonString) : jsonString;
+    const start = parsed?.timestamp ?? parsed?.start_time ?? parsed?.start;
+    const startMs = Number.isFinite(new Date(start).getTime()) ? new Date(start).getTime() : toNumber(parsed?.start_ms);
+    return {
+      startMs: Number.isFinite(startMs) ? startMs : null,
+      intervalSec: toNumber(parsed?.interval ?? parsed?.interval_seconds ?? parsed?.interval_sec),
+      items: Array.isArray(parsed?.items) ? parsed.items : []
+    };
+  } catch {
+    return { startMs: null, intervalSec: null, items: [] };
+  }
+}
+
+export function seriesToPoints(startMs, intervalSec, items, maxPoints = 240) {
+  const safeItems = Array.isArray(items) ? items : [];
+  if (!Number.isFinite(startMs) || !Number.isFinite(intervalSec) || !safeItems.length) return [];
+  const full = safeItems.map((item, index) => ({ tMs: startMs + index * intervalSec * 1000, v: toNumber(item) }));
+  if (full.length <= maxPoints) return full;
+  const stride = Math.ceil(full.length / maxPoints);
+  return full.filter((_, idx) => idx % stride === 0 || idx === full.length - 1);
 }
 
 function selectNightWindow(date, options = {}) {
@@ -135,7 +186,8 @@ function computeAvailabilityMatrix() {
     dailyActivity: has('dailyActivity'),
     dailySpo2: has('dailySpo2'),
     heartRate: has('heartRate'),
-    sleepTime: has('sleepTime')
+    sleepTime: has('sleepTime'),
+    sleepModel: has('sleepModel')
   };
   return store.availabilityMatrix;
 }
@@ -263,6 +315,7 @@ export function getAvailableDates() {
     ...store.datasets.dailyActivity.map((r) => r.date),
     ...store.datasets.dailySpo2.map((r) => r.date),
     ...store.datasets.sleepTime.map((r) => r.date)
+    ,...store.datasets.sleepModel.map((r) => r.date)
   ].filter(Boolean);
   return [...new Set(dates)].sort();
 }
@@ -285,12 +338,51 @@ export function getDay(date, options = {}) {
     .map((row) => ({ t: row.t, bpm: row.bpm }));
   const hrMin = sortedHr.length ? Math.min(...sortedHr.map((row) => row.bpm)) : null;
   const hrAvg = sortedHr.length ? sortedHr.reduce((sum, row) => sum + row.bpm, 0) / sortedHr.length : null;
+  const sleepModel = pick(store.datasets.sleepModel);
+  const hrParsed = parseSeriesJson(sleepModel?.hrJson);
+  const hrvParsed = parseSeriesJson(sleepModel?.hrvJson);
+  const sleepHrSeries = seriesToPoints(hrParsed.startMs, hrParsed.intervalSec, hrParsed.items);
+  const sleepHrvSeries = seriesToPoints(hrvParsed.startMs, hrvParsed.intervalSec, hrvParsed.items);
+  const stageMap = { '4': 'Awake', '1': 'Deep', '2': 'Light', '3': 'REM' };
+  const stageOrigin = sleepModel?.bedtimeStart ? new Date(sleepModel.bedtimeStart).getTime() : null;
+  const sleepStages = [];
+  if (sleepModel?.stage30s && Number.isFinite(stageOrigin)) {
+    let segStart = 0;
+    let prev = sleepModel.stage30s[0];
+    for (let i = 1; i <= sleepModel.stage30s.length; i += 1) {
+      const code = sleepModel.stage30s[i];
+      if (i === sleepModel.stage30s.length || code !== prev) {
+        if (stageMap[prev]) {
+          sleepStages.push({
+            label: stageMap[prev],
+            code: prev,
+            startMs: stageOrigin + segStart * 30000,
+            endMs: stageOrigin + i * 30000
+          });
+        }
+        segStart = i;
+        prev = code;
+      }
+    }
+  }
+  const sleepMovement = [];
+  if (sleepModel?.movement30s && Number.isFinite(stageOrigin)) {
+    for (let i = 0; i < sleepModel.movement30s.length; i += 1) {
+      const v = toNumber(sleepModel.movement30s[i]);
+      sleepMovement.push({ tMs: stageOrigin + i * 30000, v });
+    }
+  }
 
   return {
     dailySleep: pick(store.datasets.dailySleep),
     dailyReadiness: pick(store.datasets.dailyReadiness),
     dailyActivity: pick(store.datasets.dailyActivity),
     dailySpo2: pick(store.datasets.dailySpo2),
+    sleepModel,
+    sleepHrSeries,
+    sleepHrvSeries,
+    sleepStages,
+    sleepMovement,
     derivedNightlyVitals: pick(store.derivedNightlyVitals),
     sleepTime: pick(store.datasets.sleepTime),
     heartRateWindowSummary: {
@@ -313,6 +405,7 @@ export function getRange(start, end) {
     dailyReadiness: store.datasets.dailyReadiness.filter(inRange),
     dailyActivity: store.datasets.dailyActivity.filter(inRange),
     dailySpo2: store.datasets.dailySpo2.filter(inRange),
+    sleepModel: store.datasets.sleepModel.filter(inRange),
     derivedNightlyVitals: store.derivedNightlyVitals.filter(inRange)
   };
 }
