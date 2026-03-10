@@ -27,3 +27,13 @@ h2{font-size:1.1rem;margin:0 0 8px} h3{font-size:0.95rem;margin:8px 0}
 .readiness-rail{height:7px;background:rgba(255,255,255,.15);border-radius:999px;overflow:hidden}.readiness-rail span{display:block;height:100%;background:#f3f4f6}
 .readiness-metric-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:8px}.readiness-metric-card{border-radius:10px;background:rgba(19,23,32,.7);padding:10px}
 .readiness-metric-label{text-transform:uppercase;letter-spacing:.08em;color:#b4b7bf;font-size:10px;font-weight:700}.readiness-metric-value{font-size:20px;line-height:1.1;margin-top:5px}
+
+
+.boot-shell{padding:12px}
+.boot-splash{max-width:1200px;margin:0 auto}
+.icon-btn{border:1px solid var(--border);padding:6px 10px;border-radius:10px;background:#151b25;color:var(--text);cursor:pointer}
+.modal{display:none;position:fixed;inset:0;align-items:center;justify-content:center;background:rgba(4,8,14,.65);padding:16px;z-index:30}
+.modal.open{display:flex}
+.modal-card{width:min(680px,100%);max-height:min(85vh,760px);overflow:auto}
+.import-modal h2{margin:0;font-size:18px}
+.import-modal p{margin:8px 0}

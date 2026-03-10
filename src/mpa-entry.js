@@ -478,17 +478,22 @@ async function bootstrap() {
   } else if (page === 'data-tools-import') {
     const snapshot = getStoreSnapshot();
     app.innerHTML = `<section class="card"><h2>Import</h2>
-      <div class="row">
-        <button class="btn" id="openImport">Import ZIP</button>
-        <label for="fallbackImportInput" class="small muted">Fallback input:</label>
-        <input id="fallbackImportInput" type="file" accept=".zip,application/zip" />
-      </div>
+      <div class="row"><button class="btn" id="chooseZip">Choose ZIP</button></div>
       <div class="status" id="fallbackImportStatus">Idle</div>
       <div id="importSuccessBanner" class="import-banner" hidden></div>
+      <details class="card">
+        <summary>Troubleshooting</summary>
+        <div class="row top-gap">
+          <label for="fallbackImportInput" class="small muted">Fallback input:</label>
+          <input id="fallbackImportInput" type="file" accept=".zip,application/zip" />
+        </div>
+      </details>
       <pre class="status" id="importReport">${JSON.stringify(snapshot.ingestReport || {}, null, 2)}</pre>
     </section>`;
 
-    document.getElementById('openImport')?.addEventListener('click', () => importController.open());
+    document.getElementById('chooseZip')?.addEventListener('click', () => {
+      document.getElementById('globalImportInput')?.click();
+    });
     document.getElementById('fallbackImportInput')?.addEventListener('change', async (event) => {
       const file = event.target.files?.[0];
       event.target.value = '';
