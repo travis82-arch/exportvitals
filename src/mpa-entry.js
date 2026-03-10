@@ -24,10 +24,9 @@ import { importUiMapping } from './mappings/importUiMapping.js';
 import { exportUiMapping } from './mappings/exportUiMapping.js';
 import { settingsUiMapping } from './mappings/settingsUiMapping.js';
 import { debugUiMapping } from './mappings/debugUiMapping.js';
-import { contributorsToBars } from './domain/sleepTransforms.js';
-import { renderAxisLineChart } from './components/AxisLineChart.js';
-import { renderSleepStageChart } from './components/SleepStageChart.js';
-import { renderSleepMovementChart } from './components/SleepMovementChart.js';
+import { renderAxisLineChart } from './charts/AxisLineChart.js';
+import { renderAxisBarChart } from './charts/AxisBarChart.js';
+import { renderSleepStageChart } from './charts/SleepStageChart.js';
 import { toCsv } from './vitals-core.mjs';
 import { installRuntimeDiagnostics } from './state/runtimeDiagnostics.js';
 import { resetLocalData } from './storage/resetLocalData.js';
@@ -255,7 +254,7 @@ async function bootstrap() {
   });
 
   if (page === 'index') {
-    app.innerHTML = `<section class="card"><h2>By Date</h2>${renderDateStrip(selectedDate)}<div class="grid vitals-grid">
+    app.innerHTML = `<section class="card"><h2>By Date</h2>${renderDateStrip(selectedDate)}<div class="grid compact">
       <div class="kpi"><div class="kpi-label">Readiness score</div><div class="kpi-value">${fmt(day?.dailyReadiness?.score, '', 0)}</div></div>
       <div class="kpi"><div class="kpi-label">Sleep score</div><div class="kpi-value">${fmt(day?.dailySleep?.score, '', 0)}</div></div>
       <div class="kpi"><div class="kpi-label">Activity score</div><div class="kpi-value">${fmt(day?.dailyActivity?.score, '', 0)}</div></div>
@@ -267,7 +266,6 @@ async function bootstrap() {
     </div></section>`;
   } else if (page === 'sleep') {
     const sm = day?.sleepModel;
-    const bars = contributorsToBars(day?.dailySleep?.contributors);
     const timingScore = day?.dailySleep?.contributors?.timing;
     const restfulnessScore = day?.dailySleep?.contributors?.restfulness;
     const timingLabel = scoreBand(timingScore);
@@ -289,18 +287,17 @@ async function bootstrap() {
     const bdiLabel = bdi == null ? 'Not available yet' : (bdi <= 5 ? 'Regular breathing' : bdi <= 15 ? 'Some disturbances' : 'Frequent disturbances');
     const hrSeries = day?.sleepHrSeries || [];
     const hrHasNulls = hrSeries.some((p) => p?.v == null);
-    const hrStart = hrSeries.find((p) => p?.tMs != null)?.tMs;
-    const hrEnd = [...hrSeries].reverse().find((p) => p?.tMs != null)?.tMs;
+    const hrvSeries = day?.sleepHrvSeries || [];
 
     app.innerHTML = `<section class="card"><h2>Sleep</h2>${renderDateStrip(selectedDate)}
-      <div class="grid vitals-grid">
+      <div class="grid compact">
         <div class="kpi"><div class="kpi-label">Sleep score</div><div class="kpi-value">${fmt(day?.dailySleep?.score, '', 0)}</div></div>
         <div class="kpi"><div class="kpi-label">Timing</div><div class="kpi-value">${timingScore != null ? Math.round(timingScore) : notAvailable}</div><div class="small muted">${timingLabel}</div><div class="small muted">Show more</div></div>
       </div>
       <h3>Sleep contributors</h3>
       ${contributorRows.map(([label, value]) => `<div class="contributor-row"><div class="small">${label}: ${value}</div></div>`).join('')}
       <h3>Key metrics</h3>
-      <div class="grid vitals-grid">
+      <div class="grid compact">
         <div class="kpi"><div class="kpi-label">TOTAL SLEEP TIME</div><div class="kpi-value">${fmtDuration(sm?.totalSleepSec)}</div></div>
         <div class="kpi"><div class="kpi-label">TIME IN BED</div><div class="kpi-value">${fmtDuration(sm?.timeInBedSec)}</div></div>
         <div class="kpi"><div class="kpi-label">SLEEP EFFICIENCY</div><div class="kpi-value">${sm?.efficiencyPct != null ? `${Math.round(sm.efficiencyPct)}%` : notAvailable}</div></div>
@@ -309,29 +306,32 @@ async function bootstrap() {
       <h3>Estimated sleep debt</h3>
       <div class="kpi"><div class="small muted">None</div><div class="progress"><span style="width:${debtPct}%"></span></div><div class="small muted">High · ${fmtDuration(debtSec)}</div></div>
       <h3>Details</h3>
-      <div class="grid vitals-grid">
+      <div class="grid compact">
         <div class="kpi"><div class="kpi-label">TIME ASLEEP</div><div class="kpi-value">${fmtDuration(sm?.totalSleepSec)}</div></div>
         <div class="kpi"><div class="kpi-label">Total duration</div><div class="kpi-value">${fmtDuration(sm?.timeInBedSec)}</div></div>
       </div>
-      ${renderSleepStageChart(day?.sleepStages || [])}
-      ${renderSleepMovementChart(day?.sleepMovement || [])}
-      <div class="grid vitals-grid">
+      ${renderSleepStageChart({ stages: day?.sleepStages || [] })}
+      ${renderAxisBarChart({ title: 'Movement', series: (day?.sleepMovement || []).map((p) => ({ tMs: p.tMs, v: p.v })), yTicks: [0,1,2,3,4], yLabelFormatter: (v) => String(v), height: 160 })}
+      <div class="grid compact">
         <div class="kpi"><div class="kpi-label">Awake</div><div class="kpi-value">${fmtDuration(sm?.awakeSec)}</div><div class="small muted">${percentOf(sm?.awakeSec, sm?.timeInBedSec)}</div></div>
         <div class="kpi"><div class="kpi-label">REM</div><div class="kpi-value">${fmtDuration(sm?.remSec)}</div><div class="small muted">${percentOf(sm?.remSec, sm?.totalSleepSec)}</div></div>
         <div class="kpi"><div class="kpi-label">Light</div><div class="kpi-value">${fmtDuration(sm?.lightSec)}</div><div class="small muted">${percentOf(sm?.lightSec, sm?.totalSleepSec)}</div></div>
         <div class="kpi"><div class="kpi-label">Deep</div><div class="kpi-value">${fmtDuration(sm?.deepSec)}</div><div class="small muted">${percentOf(sm?.deepSec, sm?.totalSleepSec)}</div></div>
       </div>
       <h3>Breathing</h3>
-      <div class="grid vitals-grid">
+      <div class="grid compact">
         <div class="kpi"><div class="kpi-label">Average blood oxygen</div><div class="kpi-value">${fmt(day?.dailySpo2?.spo2Average, '%')}</div></div>
         <div class="kpi"><div class="kpi-label">Breathing regularity</div><div class="kpi-value">${bdiLabel}</div><div class="small muted">BDI ${fmt(bdi)}</div></div>
       </div>
       <h3>Lowest heart rate</h3>
-      <div class="grid vitals-grid">
+      <div class="grid compact">
         <div class="kpi"><div class="kpi-label">Lowest</div><div class="kpi-value">${sm?.lowestHeartRate != null ? `${Math.round(sm.lowestHeartRate)} bpm` : notAvailable}</div></div>
         <div class="kpi"><div class="kpi-label">Average</div><div class="kpi-value">${sm?.avgHeartRate != null ? `${Math.round(sm.avgHeartRate)} bpm` : notAvailable}</div></div>
       </div>
-      ${renderAxisLineChart({ title: 'Heart rate', series: hrSeries, xStartMs: hrStart, xEndMs: hrEnd, yLabel: 'bpm', formatY: (v) => `${Math.round(v)} bpm`, height: 220 })}
+      ${renderAxisLineChart({ title: 'Heart rate', series: hrSeries, yUnit: 'bpm', yDomainConfig: { minRange: 12, padPct: 0.08 }, height: 170 })}
+      <h3>Average HRV</h3>
+      <div class="grid compact"><div class="kpi"><div class="kpi-label">Average</div><div class="kpi-value">${sm?.avgHrv != null ? `${Math.round(sm.avgHrv)} ms` : notAvailable}</div></div></div>
+      ${renderAxisLineChart({ title: 'HRV', series: hrvSeries, yUnit: 'ms', yDomainConfig: { minRange: 40, padPct: 0.12 }, height: 160 })}
       ${hrHasNulls ? '<div class="small muted">Why the gaps? Missing values are preserved from source series.</div>' : ''}
     </section>`;
   } else if (page === 'readiness') {
@@ -360,11 +360,6 @@ async function bootstrap() {
 
     const hrSeries = day?.sleepHrSeries || [];
     const hrvSeries = day?.sleepHrvSeries || [];
-    const hrStart = hrSeries.find((p) => p?.tMs != null)?.tMs;
-    const hrEnd = [...hrSeries].reverse().find((p) => p?.tMs != null)?.tMs;
-    const hrvStart = hrvSeries.find((p) => p?.tMs != null)?.tMs;
-    const hrvEnd = [...hrvSeries].reverse().find((p) => p?.tMs != null)?.tMs;
-
     app.innerHTML = `<section class="readiness-page">
       <section class="readiness-hero">
         <div class="readiness-score-row"><div class="readiness-score">${fmt(readinessScore, '', 0)}</div><div class="readiness-band">${scoreBand(readinessScore).toUpperCase()}</div></div>
@@ -377,20 +372,50 @@ async function bootstrap() {
         <article class="readiness-metric-card"><div class="readiness-metric-label">RESPIRATORY RATE</div><div class="readiness-metric-value">${day?.sleepModel?.avgBreath != null ? `${Number(day.sleepModel.avgBreath).toFixed(1)} /min` : notAvailable}</div></article>
       </div></section>
       <section class="readiness-section"><h3>Details</h3>
-        ${renderAxisLineChart({ title: 'Lowest heart rate', series: hrSeries, xStartMs: hrStart, xEndMs: hrEnd, yLabel: 'bpm', formatY: (v) => `${Math.round(v)} bpm`, height: 220 })}
-        ${renderAxisLineChart({ title: 'Average HRV', series: hrvSeries, xStartMs: hrvStart, xEndMs: hrvEnd, yLabel: 'ms', formatY: (v) => `${Math.round(v)} ms`, height: 220 })}
+        ${renderAxisLineChart({ title: 'Lowest heart rate', series: hrSeries, yUnit: 'bpm', yDomainConfig: { minRange: 12, padPct: 0.08 }, height: 150 })}
+        ${renderAxisLineChart({ title: 'Average HRV', series: hrvSeries, yUnit: 'ms', yDomainConfig: { minRange: 40, padPct: 0.12 }, height: 150 })}
       </section>
     </section>`;
   } else if (page === 'activity') {
+    const a = day?.dailyActivity || {};
+    const contributors = a?.contributors || {};
+    const label = (score) => score == null ? 'Not available yet' : scoreBand(score);
+    const movementSeries = (day?.activityClassSeries || []).map((p) => ({ tMs: p.tMs, v: p.level }));
     const index = dates.indexOf(selectedDate);
-    const start = dates[Math.max(0, index - 13)] || selectedDate;
-    const range = getRange(start, selectedDate).dailyActivity;
-    app.innerHTML = `<section class="card"><h2>Activity</h2>${renderDateStrip(selectedDate)}<div class="grid vitals-grid">
-      <div class="kpi"><div class="kpi-label">Score</div><div class="kpi-value">${fmt(day?.dailyActivity?.score, '', 0)}</div></div>
-      <div class="kpi"><div class="kpi-label">Steps</div><div class="kpi-value">${fmt(day?.dailyActivity?.steps, '', 0)}</div></div>
-      <div class="kpi"><div class="kpi-label">Active calories</div><div class="kpi-value">${fmt(day?.dailyActivity?.activeCalories, ' cal', 0)}</div></div>
-      <div class="kpi"><div class="kpi-label">14-day averages</div><div class="small muted">Steps ${fmt(avg(range, 'steps'), '', 0)} · Calories ${fmt(avg(range, 'activeCalories'), ' cal', 0)}</div></div>
-    </div></section>`;
+    const start = dates[Math.max(0, index - 6)] || selectedDate;
+    const weekRows = getRange(start, selectedDate).dailyActivity || [];
+    const weekBars = weekRows.map((r, i) => ({ tMs: new Date(`${r.date}T12:00:00`).getTime() + i, v: ((r.mediumActivityTime || 0) + (r.highActivityTime || 0)) / 60 }));
+    const zone = {
+      z0: (a.sedentaryTime || 0) / 60,
+      z1: (a.lowActivityTime || 0) / 60,
+      z2: (a.mediumActivityTime || 0) / 60,
+      z3: (a.highActivityTime || 0) / 60,
+      z4: 0,
+      z5: 0
+    };
+    app.innerHTML = `<section class="card"><h2>Activity</h2>${renderDateStrip(selectedDate)}
+      <div class="grid compact">
+        <div class="kpi"><div class="kpi-label">Activity score</div><div class="kpi-value">${fmt(a.score, '', 0)}</div></div>
+        <div class="kpi"><div class="kpi-label">Goal progress</div><div class="kpi-value">${a.totalCalories != null && a.targetCalories ? `${Math.round((a.totalCalories / a.targetCalories) * 100)}%` : notAvailable}</div><div class="small muted">${fmt(a.totalCalories, ' cal', 0)} / ${fmt(a.targetCalories, ' cal', 0)}</div></div>
+        <div class="kpi"><div class="kpi-label">Total burn</div><div class="kpi-value">${fmt(a.totalCalories, ' cal', 0)}</div></div>
+        <div class="kpi"><div class="kpi-label">Activity time</div><div class="kpi-value">${fmtDuration((a.mediumActivityTime || 0) + (a.highActivityTime || 0))}</div></div>
+        <div class="kpi"><div class="kpi-label">Steps</div><div class="kpi-value">${fmt(a.steps, '', 0)}</div></div>
+      </div>
+      <h3>Contributors</h3>
+      <div class="grid compact">
+        <div class="kpi"><div class="kpi-label">Stay active</div><div class="small muted">${fmtDuration(a.sedentaryTime)} inactivity</div><div class="small muted">${label(contributors.stay_active)}</div></div>
+        <div class="kpi"><div class="kpi-label">Move every hour</div><div class="small muted">${fmt(a.inactivityAlerts, '', 0)} alerts</div><div class="small muted">${label(contributors.move_every_hour)}</div></div>
+        <div class="kpi"><div class="kpi-label">Meet daily goals</div><div class="small muted">${a.metersToTarget != null ? `${Math.round(a.metersToTarget)} m to target` : 'Progress from calories'}</div><div class="small muted">${label(contributors.meet_daily_targets || contributors.meet_daily_goals)}</div></div>
+        <div class="kpi"><div class="kpi-label">Training frequency</div><div class="small muted">${label(contributors.training_frequency)}</div></div>
+        <div class="kpi"><div class="kpi-label">Training volume</div><div class="small muted">${label(contributors.training_volume)}</div></div>
+        <div class="kpi"><div class="kpi-label">Recovery time</div><div class="small muted">${label(contributors.recovery_time)}</div></div>
+      </div>
+      ${renderAxisBarChart({ title: 'Daily movement (5 min bins)', series: movementSeries, yTicks: [0, 1, 2, 3, 4], yLabelFormatter: (v) => ['None','Low','Medium','High',''].at(v) || String(v), height: 180 })}
+      ${renderAxisBarChart({ title: 'This week activity time (min)', series: weekBars, yDomainConfig: { minRange: 30, padPct: 0.1 }, height: 150 })}
+      <section class="kpi"><div class="kpi-label">Weekly zone minutes</div>
+        ${Object.entries(zone).map(([k,v]) => `<div class="row split-row"><span class="small">${k.toUpperCase()}</span><span class="small muted">${Math.round(v)} min</span></div><div class="progress"><span style="width:${Math.min(100, (v / Math.max(...Object.values(zone), 1)) * 100)}%"></span></div>`).join('')}
+      </section>
+    </section>`;
   } else if (page === 'vitals') {
     const baseline = {
       rhr: getBaseline('rhr_night_bpm', settings.baselineWindow, selectedDate),
@@ -401,7 +426,7 @@ async function bootstrap() {
     const hrv = day?.derivedNightlyVitals?.hrv_rmssd_proxy_ms;
     const rhrDelta = rhr != null && baseline.rhr != null ? rhr - baseline.rhr : null;
     const hrvDelta = hrv != null && baseline.hrv != null ? hrv - baseline.hrv : null;
-    app.innerHTML = `<section class="card"><h2>Vitals</h2>${renderDateStrip(selectedDate)}<div class="grid vitals-grid">
+    app.innerHTML = `<section class="card"><h2>Vitals</h2>${renderDateStrip(selectedDate)}<div class="grid compact">
       <div class="kpi"><div class="kpi-label">RHR Night</div><div class="kpi-value">${fmt(rhr, ' bpm')}</div><div class="small muted">Baseline ${fmt(baseline.rhr, ' bpm')} · Delta ${fmt(rhrDelta, ' bpm')}</div></div>
       <div class="kpi"><div class="kpi-label">HRV proxy</div><div class="kpi-value">${fmt(hrv, ' ms')}</div><div class="small muted">Baseline ${fmt(baseline.hrv, ' ms')} · Delta ${fmt(hrvDelta, ' ms')}</div></div>
       <div class="kpi"><div class="kpi-label">SpO2</div><div class="kpi-value">${fmt(day?.dailySpo2?.spo2Average, '%')}</div><div class="small muted">Baseline ${fmt(baseline.spo2, '%')}</div></div>
@@ -413,7 +438,7 @@ async function bootstrap() {
     const start = dates[Math.max(0, index - (windowDays - 1))] || selectedDate;
     const range = getRange(start, selectedDate);
     const makeBtn = (n) => `<a class="btn ${windowDays === n ? 'active' : ''}" href="${location.pathname}?window=${n}&date=${selectedDate}">${n}d</a>`;
-    app.innerHTML = `<section class="card"><h2>Trends</h2><div class="row">${[7, 14, 30, 90].map(makeBtn).join('')}</div><div class="grid vitals-grid">
+    app.innerHTML = `<section class="card"><h2>Trends</h2><div class="row">${[7, 14, 30, 90].map(makeBtn).join('')}</div><div class="grid compact">
       ${lineChart(range.dailyReadiness, 'score', 'Readiness score')}
       ${lineChart(range.dailySleep, 'score', 'Sleep score')}
       ${lineChart(range.dailyActivity, 'score', 'Activity score')}

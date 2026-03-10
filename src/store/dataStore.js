@@ -58,7 +58,17 @@ function normalizeRows(dataset, rows) {
         date: r.day ?? r.date,
         score: toNumber(r.score),
         steps: toNumber(r.steps),
-        activeCalories: toNumber(r.active_calories)
+        activeCalories: toNumber(r.active_calories),
+        totalCalories: toNumber(r.total_calories),
+        targetCalories: toNumber(r.target_calories),
+        mediumActivityTime: toNumber(r.medium_activity_time),
+        highActivityTime: toNumber(r.high_activity_time),
+        lowActivityTime: toNumber(r.low_activity_time),
+        sedentaryTime: toNumber(r.sedentary_time),
+        inactivityAlerts: toNumber(r.inactivity_alerts),
+        metersToTarget: toNumber(r.meters_to_target),
+        class5Min: typeof r.class_5_min === 'string' ? r.class_5_min : '',
+        contributors: parseContributors(r.contributors)
       }))
       .filter((r) => r.date);
 
@@ -110,28 +120,113 @@ function normalizeRows(dataset, rows) {
 }
 
 export function parseSeriesJson(jsonString) {
-  if (!jsonString) return { startMs: null, intervalSec: null, items: [] };
+  if (!jsonString) return null;
   try {
     const parsed = typeof jsonString === 'string' ? JSON.parse(jsonString) : jsonString;
     const start = parsed?.timestamp ?? parsed?.start_time ?? parsed?.start;
     const startMs = Number.isFinite(new Date(start).getTime()) ? new Date(start).getTime() : toNumber(parsed?.start_ms);
-    return {
-      startMs: Number.isFinite(startMs) ? startMs : null,
-      intervalSec: toNumber(parsed?.interval ?? parsed?.interval_seconds ?? parsed?.interval_sec),
-      items: Array.isArray(parsed?.items) ? parsed.items : []
-    };
+    const intervalSec = toNumber(parsed?.interval ?? parsed?.interval_seconds ?? parsed?.interval_sec);
+    const items = Array.isArray(parsed?.items) ? parsed.items : [];
+    if (!Number.isFinite(startMs) || !Number.isFinite(intervalSec) || !items.length) return null;
+    return { startMs, intervalSec, items };
   } catch {
-    return { startMs: null, intervalSec: null, items: [] };
+    return null;
   }
 }
 
-export function seriesToPoints(startMs, intervalSec, items, maxPoints = 240) {
+export function seriesToPoints(series, maxPoints = 360) {
+  const startMs = series?.startMs;
+  const intervalSec = series?.intervalSec;
+  const items = series?.items;
   const safeItems = Array.isArray(items) ? items : [];
   if (!Number.isFinite(startMs) || !Number.isFinite(intervalSec) || !safeItems.length) return [];
-  const full = safeItems.map((item, index) => ({ tMs: startMs + index * intervalSec * 1000, v: toNumber(item) }));
+  const full = safeItems.map((item, index) => {
+    const numeric = toNumber(item);
+    return { tMs: startMs + index * intervalSec * 1000, v: Number.isFinite(numeric) ? numeric : null };
+  });
   if (full.length <= maxPoints) return full;
   const stride = Math.ceil(full.length / maxPoints);
   return full.filter((_, idx) => idx % stride === 0 || idx === full.length - 1);
+}
+
+export function inferSleepStageDigitMap(row) {
+  const phase = typeof row?.stage30s === 'string' ? row.stage30s : '';
+  if (!phase) return null;
+  const durationTargets = {
+    Awake: Number(row?.awakeSec) || 0,
+    Deep: Number(row?.deepSec) || 0,
+    Light: Number(row?.lightSec) || 0,
+    REM: Number(row?.remSec) || 0
+  };
+  const digits = [...new Set(phase.split('').filter((d) => /\d/.test(d)))];
+  if (!digits.length) return null;
+  const counts = Object.fromEntries(digits.map((d) => [d, 0]));
+  for (const ch of phase) if (counts[ch] != null) counts[ch] += 1;
+  const stages = ['Awake', 'Deep', 'Light', 'REM'];
+  const candidates = [];
+  const assign = (idx, available, mapping) => {
+    if (idx >= digits.length) {
+      candidates.push({ ...mapping });
+      return;
+    }
+    const d = digits[idx];
+    for (let i = 0; i < available.length; i += 1) {
+      mapping[d] = available[i];
+      assign(idx + 1, [...available.slice(0, i), ...available.slice(i + 1)], mapping);
+      delete mapping[d];
+    }
+  };
+  assign(0, stages, {});
+
+  let best = null;
+  let bestErr = Number.POSITIVE_INFINITY;
+  for (const mapping of candidates) {
+    const predicted = { Awake: 0, Deep: 0, Light: 0, REM: 0 };
+    for (const d of digits) predicted[mapping[d]] += counts[d] * 30;
+    const err = stages.reduce((sum, st) => sum + Math.abs((predicted[st] || 0) - (durationTargets[st] || 0)), 0);
+    if (err < bestErr) {
+      bestErr = err;
+      best = mapping;
+    }
+  }
+  return best;
+}
+
+export function decodeStages(row) {
+  const origin = row?.bedtimeStart ? new Date(row.bedtimeStart).getTime() : null;
+  const phase = typeof row?.stage30s === 'string' ? row.stage30s : '';
+  const mapping = inferSleepStageDigitMap(row);
+  if (!Number.isFinite(origin) || !phase || !mapping) return [];
+  const segments = [];
+  let segStart = 0;
+  let prev = phase[0];
+  for (let i = 1; i <= phase.length; i += 1) {
+    const code = phase[i];
+    if (i === phase.length || code !== prev) {
+      const stage = mapping[prev];
+      if (stage) {
+        segments.push({ startMs: origin + segStart * 30000, endMs: origin + i * 30000, stage });
+      }
+      segStart = i;
+      prev = code;
+    }
+  }
+  return segments;
+}
+
+export function decodeClass5Min(class5Min, dayDate) {
+  if (typeof class5Min !== 'string' || !class5Min.length || !dayDate) return [];
+  const startMs = new Date(`${dayDate}T00:00:00`).getTime();
+  if (!Number.isFinite(startMs)) return [];
+  return class5Min.split('').map((ch, idx) => {
+    const d = Number(ch);
+    let level = 0;
+    if (d === 0) level = 0;
+    else if (d <= 1) level = 1;
+    else if (d <= 3) level = 2;
+    else if (d <= 5) level = 3;
+    return { tMs: startMs + idx * 5 * 60 * 1000, level };
+  });
 }
 
 function selectNightWindow(date, options = {}) {
@@ -341,37 +436,18 @@ export function getDay(date, options = {}) {
   const sleepModel = pick(store.datasets.sleepModel);
   const hrParsed = parseSeriesJson(sleepModel?.hrJson);
   const hrvParsed = parseSeriesJson(sleepModel?.hrvJson);
-  const sleepHrSeries = seriesToPoints(hrParsed.startMs, hrParsed.intervalSec, hrParsed.items);
-  const sleepHrvSeries = seriesToPoints(hrvParsed.startMs, hrvParsed.intervalSec, hrvParsed.items);
-  const stageMap = { '4': 'Awake', '1': 'Deep', '2': 'Light', '3': 'REM' };
+  const sleepHrSeries = seriesToPoints(hrParsed);
+  const sleepHrvSeries = seriesToPoints(hrvParsed);
+  const sleepStages = decodeStages(sleepModel);
   const stageOrigin = sleepModel?.bedtimeStart ? new Date(sleepModel.bedtimeStart).getTime() : null;
-  const sleepStages = [];
-  if (sleepModel?.stage30s && Number.isFinite(stageOrigin)) {
-    let segStart = 0;
-    let prev = sleepModel.stage30s[0];
-    for (let i = 1; i <= sleepModel.stage30s.length; i += 1) {
-      const code = sleepModel.stage30s[i];
-      if (i === sleepModel.stage30s.length || code !== prev) {
-        if (stageMap[prev]) {
-          sleepStages.push({
-            label: stageMap[prev],
-            code: prev,
-            startMs: stageOrigin + segStart * 30000,
-            endMs: stageOrigin + i * 30000
-          });
-        }
-        segStart = i;
-        prev = code;
-      }
-    }
-  }
   const sleepMovement = [];
   if (sleepModel?.movement30s && Number.isFinite(stageOrigin)) {
     for (let i = 0; i < sleepModel.movement30s.length; i += 1) {
       const v = toNumber(sleepModel.movement30s[i]);
-      sleepMovement.push({ tMs: stageOrigin + i * 30000, v });
+      sleepMovement.push({ tMs: stageOrigin + i * 30000, v: Number.isFinite(v) ? v : null });
     }
   }
+  const activityClassSeries = decodeClass5Min(pick(store.datasets.dailyActivity)?.class5Min, date);
 
   return {
     dailySleep: pick(store.datasets.dailySleep),
@@ -383,6 +459,7 @@ export function getDay(date, options = {}) {
     sleepHrvSeries,
     sleepStages,
     sleepMovement,
+    activityClassSeries,
     derivedNightlyVitals: pick(store.derivedNightlyVitals),
     sleepTime: pick(store.datasets.sleepTime),
     heartRateWindowSummary: {
