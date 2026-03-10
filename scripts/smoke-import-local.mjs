@@ -8,8 +8,8 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const repoRoot = path.resolve(__dirname, '..');
 const candidateZips = [
-  path.join(repoRoot, 'OPS', '_local', 'data.zip'),
-  path.join(repoRoot, 'OPS', '_local', 'data3.zip')
+  path.join(repoRoot, 'OPS', '_local', 'data3.zip'),
+  path.join(repoRoot, 'OPS', '_local', 'data.zip')
 ];
 
 const options = {
@@ -49,6 +49,7 @@ async function main() {
   console.log('ingestReport.dateRange:', ingestReport?.dateRange || null);
   console.log('ingestReport.rowCounts:', rowCounts);
   console.log('ingestReport.daysPerDataset:', daysPerDataset);
+  console.log('confirm.sleepModelRows>0:', Number(rowCounts.sleepModel || 0) > 0);
   console.log('ingestReport.parsedFiles:', {
     count: parsedFiles.length,
     first10: parsedFiles.slice(0, 10)
@@ -60,6 +61,10 @@ async function main() {
     console.error(
       `Smoke import failed: ${coreDatasets.join(', ')} are all missing. Possible dataset alias mismatch.`
     );
+    process.exit(1);
+  }
+  if (!Number(rowCounts.sleepModel || 0)) {
+    console.error('Smoke import failed: sleepModel rows are zero.');
     process.exit(1);
   }
 }
