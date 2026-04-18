@@ -2,18 +2,18 @@ import { renderTopNav } from './components/TopNav.js';
 import { renderDateRangeControl } from './components/DateRangeControl.js';
 import {
   loadFromLocalCache,
-  importZip,
   getAvailableDates,
   getDay,
   getRange,
   getStoreSnapshot,
-  setImportError,
+  subscribeToStore,
   parseSeriesJson,
   seriesToPoints,
   decodeStages
 } from './store/dataStore.js';
 import { loadSettings } from './state/settings.js';
 import { loadSelectedRange, persistSelectedRange, resolveSelectedRange, summarizeRange } from './state/selectedRange.js';
+import { runSettingsUploadImport } from './state/importFlow.js';
 import { installRuntimeDiagnostics } from './state/runtimeDiagnostics.js';
 import { shouldRenderDateRangeForPage } from './state/pageConfig.js';
 import { hasPurgedReloadFlag, purgeStaleServiceWorkersAndCaches, setPurgedReloadFlag } from './boot/swPurge.js';
@@ -700,6 +700,7 @@ function diagnosticsText(range, day, rangeRows) {
     `latestAvailableDate: ${latestAvailableDate || 'null'}`,
     `availableDateSpan: ${(availableDates[0] || 'null')} -> ${(latestAvailableDate || 'null')} (${availableDates.length} days)`,
     `lastImportStatus: ${snapshot.importState?.status || 'idle'}`,
+    `lastImportSuccessAt: ${snapshot.importState?.lastSuccessAt || 'null'}`,
     `lastImportError: ${snapshot.importState?.lastError?.message || 'none'}`
   ].join('\n');
 
@@ -719,6 +720,7 @@ function diagnosticsText(range, day, rangeRows) {
       selectedRange: range,
       pageWarnings,
       lastImportStatus: snapshot.importState?.status || 'idle',
+      lastImportSuccessAt: snapshot.importState?.lastSuccessAt || null,
       lastImportSuccess: snapshot.importState?.lastResult || null,
       lastImportError: snapshot.importState?.lastError || null
     },
@@ -769,20 +771,31 @@ function renderSettingsPage(range, day, rangeRows, rerender) {
     if (!file) return;
     status.textContent = 'Importing...';
     try {
-      await importZip(file, settings, (progress) => {
-        status.textContent = `${progress.phase} (${progress.percent}%)`;
+      const next = await runSettingsUploadImport({
+        file,
+        settings,
+        onProgress: (progress) => {
+          const importLabel = progress.status === 'loading' ? 'loading' : progress.status;
+          status.textContent = `${importLabel}: ${progress.phase} (${progress.percent}%)`;
+        }
       });
-      const next = resolveSelectedRange(getAvailableDates(), { preset: 'latest-day' });
-      persistSelectedRange({ preset: next.preset, start: next.start, end: next.end });
       status.textContent = `Imported ✓ Loaded ${next.start ? `${next.start} → ${next.end}` : 'no date range'}.`;
       rerender(next);
     } catch (error) {
-      setImportError(error, { source: 'settings-upload' });
       status.textContent = `Import failed: ${error?.message || String(error)}`;
       const debugText = content.querySelector('#debugText');
       if (debugText) debugText.value = diagnosticsText(range, day, rangeRows);
     }
   });
+
+  const snapshot = getStoreSnapshot();
+  if (snapshot.importState?.status === 'loading') {
+    status.textContent = `loading: ${snapshot.importState.phase || 'Reading ZIP'} (${snapshot.importState.percent || 0}%)`;
+  } else if (snapshot.importState?.status === 'error' && snapshot.importState?.lastError?.message) {
+    status.textContent = `Import failed: ${snapshot.importState.lastError.message}`;
+  } else if (snapshot.importState?.status === 'success' && snapshot.ingestReport?.dateRange?.end) {
+    status.textContent = `Imported ✓ Loaded ${snapshot.ingestReport.dateRange.start} → ${snapshot.ingestReport.dateRange.end}.`;
+  }
 
   content.querySelector('#copyDebugBtn')?.addEventListener('click', async () => {
     const debugText = content.querySelector('#debugText');
@@ -898,6 +911,10 @@ async function bootstrap() {
   };
 
   rerender(initialRange);
+  subscribeToStore(() => {
+    const persistedRange = loadSelectedRange();
+    rerender(persistedRange);
+  });
   hideBootShell();
 }
 
