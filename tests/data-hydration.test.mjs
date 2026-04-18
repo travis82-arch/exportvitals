@@ -224,16 +224,18 @@ test('activity and heart-rate range data exposes aggregated inputs and activity 
 
 test('stress datasets hydrate selected-day and range rows', async () => {
   const zip = await buildZip({
-    'daily_stress.csv': 'day,score,high_stress_duration,medium_stress_duration,low_stress_duration,restorative_time\n2026-07-01,61,90,120,80,45\n2026-07-02,74,130,110,60,32',
-    'daytime_stress.csv': 'timestamp,stress_score,stress_category\n2026-07-02T08:00:00Z,44,engaged\n2026-07-02T12:00:00Z,78,stress\n2026-07-02T19:30:00Z,35,restored'
+    'dailystress.csv': 'id,day,day_summary,recovery_high,stress_high\n1,2026-07-01,normal,1200,2400\n2,2026-07-02,stressed,1800,3600',
+    'daytimestress.csv': 'timestamp,recovery_value,stress_value\n2026-07-02T08:00:00Z,60,\n2026-07-02T12:00:00Z,,78\n2026-07-02T19:30:00Z,35,22'
   });
 
   await importZipArrayBuffer({ fileName: 'stress.zip', arrayBuffer: zip });
   const day = getDay('2026-07-02');
   const range = getRange('2026-07-01', '2026-07-02');
-  assert.equal(day.dailyStress?.score, 74);
-  assert.equal(day.dailyStress?.high, 130);
+  assert.equal(day.dailyStress?.high, 60);
+  assert.equal(day.dailyStress?.recovery, 30);
+  assert.equal(day.dailyStress?.daySummary, 'stressed');
   assert.equal(range.dailyStress.length, 2);
   assert.equal(range.daytimeStress.length, 3);
-  assert.equal(range.daytimeStress.some((row) => row.category === 'stress'), true);
+  assert.equal(range.daytimeStress.some((row) => Number.isFinite(row.score)), true);
+  assert.equal(range.daytimeStress.some((row) => Number.isFinite(row.recoveryValue)), true);
 });

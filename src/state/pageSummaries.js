@@ -72,11 +72,14 @@ export function stressSummary(range, day, rangeRows = {}) {
   const isSingleDay = Boolean(range?.isSingleDay);
 
   const daytimeForSelectedDay = (daytimeRows || []).filter((row) => row?.date === range?.end);
-  const daytimeValues = daytimeForSelectedDay
+  const stressDaytimeValues = daytimeForSelectedDay
     .map((row) => Number(row?.score))
     .filter((value) => Number.isFinite(value));
-  const daytimePeak = daytimeValues.length ? Math.max(...daytimeValues) : null;
-  const daytimeAvg = daytimeValues.length ? daytimeValues.reduce((sum, value) => sum + value, 0) / daytimeValues.length : null;
+  const recoveryDaytimeValues = daytimeForSelectedDay
+    .map((row) => Number(row?.recoveryValue))
+    .filter((value) => Number.isFinite(value));
+  const daytimePeak = stressDaytimeValues.length ? Math.max(...stressDaytimeValues) : null;
+  const daytimeAvg = stressDaytimeValues.length ? stressDaytimeValues.reduce((sum, value) => sum + value, 0) / stressDaytimeValues.length : null;
   const daytimePeakByDate = new Map();
   for (const row of daytimeRows || []) {
     const date = row?.date;
@@ -89,6 +92,15 @@ export function stressSummary(range, day, rangeRows = {}) {
   const stressScore = isSingleDay ? (day?.dailyStress?.score ?? daytimeAvg) : average(stressRows, 'score');
   const highStress = isSingleDay ? day?.dailyStress?.high : average(stressRows, 'high');
   const recoveryTime = isSingleDay ? day?.dailyStress?.recovery : average(stressRows, 'recovery');
+  const daySummaryCounts = new Map();
+  for (const row of stressRows) {
+    const key = String(row?.daySummary || '').trim().toLowerCase();
+    if (!key) continue;
+    daySummaryCounts.set(key, (daySummaryCounts.get(key) || 0) + 1);
+  }
+  const summaryDistribution = [...daySummaryCounts.entries()]
+    .sort((a, b) => b[1] - a[1])
+    .map(([summary, count]) => ({ summary, count }));
 
   return {
     stressScore,
@@ -96,10 +108,15 @@ export function stressSummary(range, day, rangeRows = {}) {
     recoveryTime,
     daytimePeak: isSingleDay ? daytimePeak : (daytimeDailyPeaks.length ? daytimeDailyPeaks.reduce((sum, value) => sum + value, 0) / daytimeDailyPeaks.length : null),
     daytimeAvg: isSingleDay ? daytimeAvg : average(daytimeRows, 'score'),
+    recoveryDaytimeAvg: isSingleDay
+      ? (recoveryDaytimeValues.length ? recoveryDaytimeValues.reduce((sum, value) => sum + value, 0) / recoveryDaytimeValues.length : null)
+      : average(daytimeRows, 'recoveryValue'),
     overnightProxy: isSingleDay ? day?.derivedNightlyVitals?.hrv_rmssd_proxy_ms : average(vitalsRows, 'hrv_rmssd_proxy_ms'),
     restingHr: isSingleDay ? day?.derivedNightlyVitals?.rhr_night_bpm : average(vitalsRows, 'rhr_night_bpm'),
-    daytimePoints: isSingleDay ? daytimeValues.length : (daytimeRows || []).length,
-    stressDays: stressRows.length
+    daytimePoints: isSingleDay ? Math.max(stressDaytimeValues.length, recoveryDaytimeValues.length) : (daytimeRows || []).length,
+    stressDays: stressRows.length,
+    daySummary: day?.dailyStress?.daySummary || null,
+    summaryDistribution
   };
 }
 
@@ -133,6 +150,7 @@ export function stressDayTimelineRows(range, rangeRows = {}) {
       return {
         tMs,
         score: Number(row?.score),
+        recoveryValue: Number(row?.recoveryValue),
         category: row?.category ? String(row.category) : null
       };
     })

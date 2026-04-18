@@ -79,14 +79,14 @@ test('heartRateSummary averages range rows in multi-day mode', () => {
 test('stressSummary uses real selected-day stress and daytime rows', () => {
   const range = { isSingleDay: true, end: '2026-08-21' };
   const day = {
-    dailyStress: { score: 71, high: 110, recovery: 48 },
+    dailyStress: { score: 71, high: 110, recovery: 48, daySummary: 'normal' },
     derivedNightlyVitals: { hrv_rmssd_proxy_ms: 24.4, rhr_night_bpm: 51 }
   };
   const rangeRows = {
-    dailyStress: [{ date: '2026-08-21', score: 71, high: 110, recovery: 48 }],
+    dailyStress: [{ date: '2026-08-21', score: 71, high: 110, recovery: 48, daySummary: 'normal' }],
     daytimeStress: [
-      { date: '2026-08-21', timestamp: '2026-08-21T09:00:00Z', score: 33 },
-      { date: '2026-08-21', timestamp: '2026-08-21T15:00:00Z', score: 89 }
+      { date: '2026-08-21', timestamp: '2026-08-21T09:00:00Z', score: 33, recoveryValue: 40 },
+      { date: '2026-08-21', timestamp: '2026-08-21T15:00:00Z', score: 89, recoveryValue: 35 }
     ],
     derivedNightlyVitals: [{ date: '2026-08-21', hrv_rmssd_proxy_ms: 24.4, rhr_night_bpm: 51 }]
   };
@@ -95,18 +95,20 @@ test('stressSummary uses real selected-day stress and daytime rows', () => {
   assert.equal(result.highStress, 110);
   assert.equal(result.recoveryTime, 48);
   assert.equal(result.daytimePeak, 89);
+  assert.equal(result.recoveryDaytimeAvg, 37.5);
   assert.equal(result.daytimePoints, 2);
   assert.equal(result.overnightProxy, 24.4);
+  assert.equal(result.daySummary, 'normal');
 });
 
 test('stressSummary averages multi-day stress rows in range mode', () => {
   const range = { isSingleDay: false };
   const result = stressSummary(range, {}, {
     dailyStress: [
-      { date: '2026-08-20', score: 65, high: 95, recovery: 60 },
-      { date: '2026-08-21', score: 75, high: 125, recovery: 42 }
+      { date: '2026-08-20', score: 65, high: 95, recovery: 60, daySummary: 'normal' },
+      { date: '2026-08-21', score: 75, high: 125, recovery: 42, daySummary: 'normal' }
     ],
-    daytimeStress: [{ date: '2026-08-20', score: 52 }, { date: '2026-08-21', score: 68 }],
+    daytimeStress: [{ date: '2026-08-20', score: 52, recoveryValue: 40 }, { date: '2026-08-21', score: 68, recoveryValue: 32 }],
     derivedNightlyVitals: [{ hrv_rmssd_proxy_ms: 20, rhr_night_bpm: 53 }, { hrv_rmssd_proxy_ms: 28, rhr_night_bpm: 49 }]
   });
   assert.equal(result.stressScore, 70);
@@ -114,6 +116,8 @@ test('stressSummary averages multi-day stress rows in range mode', () => {
   assert.equal(result.recoveryTime, 51);
   assert.equal(result.daytimePeak, 60);
   assert.equal(result.restingHr, 51);
+  assert.equal(result.recoveryDaytimeAvg, 36);
+  assert.deepEqual(result.summaryDistribution, [{ summary: 'normal', count: 2 }]);
 });
 
 test('stressSummary falls back to daytime average when single-day daily score is missing', () => {
@@ -149,12 +153,13 @@ test('stress timeline/category helpers support categorical daytime rows', () => 
   const range = { end: '2026-08-21' };
   const timeline = stressDayTimelineRows(range, {
     daytimeStress: [
-      { date: '2026-08-21', timestamp: '2026-08-21T08:00:00Z', category: 'Restored' },
-      { date: '2026-08-21', timestamp: '2026-08-21T10:00:00Z', category: 'Engaged' },
-      { date: '2026-08-21', timestamp: '2026-08-21T12:00:00Z', category: 'Stress' }
+      { date: '2026-08-21', timestamp: '2026-08-21T08:00:00Z', category: 'Restored', recoveryValue: 55 },
+      { date: '2026-08-21', timestamp: '2026-08-21T10:00:00Z', category: 'Engaged', score: 42 },
+      { date: '2026-08-21', timestamp: '2026-08-21T12:00:00Z', category: 'Stress', score: 81 }
     ]
   });
   assert.equal(timeline.length, 3);
+  assert.equal(timeline[0].recoveryValue, 55);
   const categorySeries = stressCategorySeries(timeline);
   assert.equal(categorySeries.series.length, 3);
   assert.deepEqual(categorySeries.categories, ['restored', 'engaged', 'stress']);
