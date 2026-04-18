@@ -1,7 +1,7 @@
 import { renderTopNav } from './components/TopNav.js';
 import { renderDateRangeControl } from './components/DateRangeControl.js';
 import {
-  loadFromLocalCache,
+  hydrateFromPersistence,
   getAvailableDates,
   getDay,
   getRange,
@@ -701,7 +701,11 @@ function diagnosticsText(range, day, rangeRows) {
     `availableDateSpan: ${(availableDates[0] || 'null')} -> ${(latestAvailableDate || 'null')} (${availableDates.length} days)`,
     `lastImportStatus: ${snapshot.importState?.status || 'idle'}`,
     `lastImportSuccessAt: ${snapshot.importState?.lastSuccessAt || 'null'}`,
-    `lastImportError: ${snapshot.importState?.lastError?.message || 'none'}`
+    `lastImportError: ${snapshot.importState?.lastError?.message || 'none'}`,
+    `storageBackend: ${snapshot.storageState?.backend || 'unknown'}`,
+    `largeStorePersisted: ${snapshot.storageState?.largeState?.ok ? 'true' : 'false'}`,
+    `largeStoreReadable: ${snapshot.storageState?.largeState?.readable ? 'true' : 'false'}`,
+    `selectedRangeValid: ${range?.disabled ? 'false' : 'true'}`
   ].join('\n');
 
   return JSON.stringify(
@@ -722,7 +726,8 @@ function diagnosticsText(range, day, rangeRows) {
       lastImportStatus: snapshot.importState?.status || 'idle',
       lastImportSuccessAt: snapshot.importState?.lastSuccessAt || null,
       lastImportSuccess: snapshot.importState?.lastResult || null,
-      lastImportError: snapshot.importState?.lastError || null
+      lastImportError: snapshot.importState?.lastError || null,
+      storage: snapshot.storageState || {}
     },
     null,
     2
@@ -881,7 +886,7 @@ async function bootstrap() {
     return;
   }
 
-  loadFromLocalCache();
+  await hydrateFromPersistence();
   const availableDates = getAvailableDates();
   const persisted = loadSelectedRange();
   const initialRange = resolveSelectedRange(availableDates, persisted);

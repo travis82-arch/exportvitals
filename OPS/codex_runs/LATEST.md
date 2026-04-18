@@ -1,23 +1,32 @@
 # Codex Run Latest
 
 ## Summary of what changed
-- Fixed the upload pipeline wiring on Settings to use a single active import flow (`runSettingsUploadImport`) that:
-  - receives the selected file,
-  - calls the real ZIP import path,
-  - persists latest-day range resolution after success,
-  - and surfaces failures to the shared import error state.
-- Updated app-level import lifecycle to explicit states `idle | loading | success | error`.
-  - Import now sets `loading` at start, `success` with timestamp on completion, and `error` with usable message/stack on failure.
-- Ensured imported payload hydrates the active shared store and notifies listeners.
-  - Added store subscriptions and change emission so pages rerender from live state after import progress/success/error.
-- Strengthened Settings Debug payload with import timestamp and live summary fields from current store snapshot.
-- Kept Settings model locked to only Upload, My Health, and Debug sections (no date-range controls).
-- Added regression coverage for upload wiring and hydration behavior.
+- Reworked persistence layering to separate lightweight state and large imported datasets:
+  - LocalStorage now stores only compact metadata (`importState` + storage summary) under `ouraDerivedMetricsMetaV1`.
+  - Large imported/derived payloads are persisted in IndexedDB (`ouraDerivedMetricsDbV1` / `largeState` store).
+- Added IndexedDB-backed hydration flow:
+  - New async `hydrateFromPersistence()` loads metadata and large dataset state at app bootstrap.
+  - Import success path now writes large payload to IndexedDB first, then writes compact metadata to localStorage.
+  - Legacy localStorage dataset fallback (`ouraDerivedMetricsV3`) remains readable for backward compatibility/migration.
+- Preserved and stabilized post-import active state behavior:
+  - Import state still transitions through loading/success/error.
+  - Selected range continues to resolve from available dates and latest-day after import.
+  - Store snapshot now includes storage backend diagnostics for Debug.
+- Expanded Debug diagnostics payload in Settings to include:
+  - storage backend,
+  - large-store persisted/readable flags,
+  - selected range validity,
+  - existing import/date/dataset summaries.
+- Added regression coverage for quota-safe persistence behavior:
+  - verifies success import with fake IndexedDB,
+  - verifies localStorage no longer writes the oversized `ouraDerivedMetricsV3` payload,
+  - verifies latest-day selection and persisted data rehydration behavior.
+- Updated local reset key list to include new local metadata key.
 
 ## Key files changed
 - `src/store/dataStore.js`
-- `src/state/importFlow.js`
 - `src/mpa-entry.js`
+- `src/storage/resetLocalData.js`
 - `tests/data-hydration.test.mjs`
 
 ## Tests / commands run
@@ -27,16 +36,15 @@
   - Attempt 2: failed (missing optional Rollup native package `@rollup/rollup-linux-x64-gnu`).
   - Fix 2: `npm i`
   - Attempt 3: failed with same Rollup optional native-binary issue.
-  - Fix 3 attempted: `npm i -D @rollup/rollup-linux-x64-gnu` failed with `403 Forbidden` (registry policy/access). Build remains blocked.
-- `npm run check:mpa` ✅ passed.
-- `npm test` ✅ passed (11 tests total, including updated hydration/upload coverage).
+  - Fix 3 attempted: `npm i @rollup/rollup-linux-x64-gnu --no-save` failed with `403 Forbidden` (registry policy/access). Build remains blocked.
+- `npm run check:mpa` not run due stop-after-3-cycles blocker policy on required command sequence.
+- `npm test` not run due stop-after-3-cycles blocker policy on required command sequence.
 - Manual sanity check:
-  - Browser/manual upload walk-through was not executed in this headless run.
-  - Source + test verification confirms settings upload handler calls real import path and rerender subscriptions are wired.
+  - Not executed in this headless run after build blocker.
 
 ## Smoke import local
-- `node scripts/smoke-import-local.mjs` was skipped because `OPS/_local/data3.zip` is absent.
+- `node scripts/smoke-import-local.mjs` skipped because `OPS/_local/data3.zip` is absent.
 
-## Known intentional follow-ups for PR6+
-- Activity/Heart Rate/Stress parity enhancements beyond this upload/hydration fix scope.
-- Optional end-to-end browser automation/manual verification once build environment can resolve Rollup optional native package.
+## Known intentional follow-ups for PR8+
+- Add browser/manual upload validation pass once Rollup optional native package can be resolved in environment.
+- Consider explicit UI warning path for environments where IndexedDB is unavailable and durable large-state persistence cannot be guaranteed.
