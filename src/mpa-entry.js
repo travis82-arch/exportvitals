@@ -15,6 +15,7 @@ import {
 import { loadSettings } from './state/settings.js';
 import { loadSelectedRange, persistSelectedRange, resolveSelectedRange, summarizeRange } from './state/selectedRange.js';
 import { installRuntimeDiagnostics } from './state/runtimeDiagnostics.js';
+import { shouldRenderDateRangeForPage } from './state/pageConfig.js';
 import { hasPurgedReloadFlag, purgeStaleServiceWorkersAndCaches, setPurgedReloadFlag } from './boot/swPurge.js';
 import { renderAxisLineChart } from './charts/AxisLineChart.js';
 import { renderAxisBarChart } from './charts/AxisBarChart.js';
@@ -77,6 +78,10 @@ function average(rows, key) {
 function fmt(value, digits = 0, suffix = '') {
   if (!Number.isFinite(Number(value))) return '<span class="placeholder">No data</span>';
   return `${Number(value).toFixed(digits)}${suffix}`;
+}
+
+function emptyRangeRows() {
+  return { dailySleep: [], dailyReadiness: [], dailyActivity: [], derivedNightlyVitals: [], sleepModel: [], dailySpo2: [] };
 }
 
 function fmtDurationSeconds(sec, compact = false) {
@@ -658,15 +663,63 @@ function renderStressPage(range, rangeRows) {
   `;
 }
 
-function diagnosticsText(range) {
+function buildPageWarnings(range, day, rangeRows) {
+  const warnings = [];
+  if (!range?.start || !range?.end) warnings.push('No valid selected range is active.');
+  if (page === 'index') {
+    if (!Number.isFinite(Number(range.isSingleDay ? day?.dailyReadiness?.score : average(rangeRows.dailyReadiness, 'score')))) {
+      warnings.push('Home readiness summary is unavailable for the selected range.');
+    }
+    if (!Number.isFinite(Number(range.isSingleDay ? day?.dailySleep?.score : average(rangeRows.dailySleep, 'score')))) {
+      warnings.push('Home sleep summary is unavailable for the selected range.');
+    }
+  }
+  if (page === 'readiness' && !Number.isFinite(Number(range.isSingleDay ? day?.dailyReadiness?.score : average(rangeRows.dailyReadiness, 'score')))) {
+    warnings.push('Readiness score unavailable for selected range.');
+  }
+  if (page === 'sleep' && !Number.isFinite(Number(range.isSingleDay ? day?.dailySleep?.score : average(rangeRows.dailySleep, 'score')))) {
+    warnings.push('Sleep score unavailable for selected range.');
+  }
+  return warnings;
+}
+
+function diagnosticsText(range, day, rangeRows) {
   const snapshot = getStoreSnapshot();
+  const availableDates = getAvailableDates();
+  const latestAvailableDate = availableDates.at(-1) || null;
+  const rowCounts = snapshot.ingestReport?.rowCounts || {};
+  const loadedDatasetKeys = Object.entries(rowCounts)
+    .filter(([_, count]) => Number(count) > 0)
+    .map(([key]) => key);
+  const pageWarnings = buildPageWarnings(range, day, rangeRows);
+
+  const summaryBlock = [
+    `selectedPreset: ${range?.preset || 'latest-day'}`,
+    `selectedStart: ${range?.start || 'null'}`,
+    `selectedEnd: ${range?.end || 'null'}`,
+    `latestAvailableDate: ${latestAvailableDate || 'null'}`,
+    `availableDateSpan: ${(availableDates[0] || 'null')} -> ${(latestAvailableDate || 'null')} (${availableDates.length} days)`,
+    `lastImportStatus: ${snapshot.importState?.status || 'idle'}`,
+    `lastImportError: ${snapshot.importState?.lastError?.message || 'none'}`
+  ].join('\n');
+
   return JSON.stringify(
     {
+      summaryBlock,
+      loadedDatasetKeys,
+      selectedPreset: range?.preset || 'latest-day',
+      selectedStart: range?.start || null,
+      selectedEnd: range?.end || null,
+      latestAvailableDate,
+      availableDateSpan: { start: availableDates[0] || null, end: latestAvailableDate, days: availableDates.length },
       parsedFiles: snapshot.ingestReport?.parsedFiles || [],
-      rowCounts: snapshot.ingestReport?.rowCounts || {},
+      rowCounts,
       ingestReport: snapshot.ingestReport || {},
       availabilityMatrix: snapshot.availabilityMatrix || {},
       selectedRange: range,
+      pageWarnings,
+      lastImportStatus: snapshot.importState?.status || 'idle',
+      lastImportSuccess: snapshot.importState?.lastResult || null,
       lastImportError: snapshot.importState?.lastError || null
     },
     null,
@@ -674,7 +727,7 @@ function diagnosticsText(range) {
   );
 }
 
-function renderSettingsPage(range, rangeRows) {
+function renderSettingsPage(range, day, rangeRows, rerender) {
   const content = document.getElementById('pageContent');
   if (!content) return;
 
@@ -704,7 +757,7 @@ function renderSettingsPage(range, rangeRows) {
 
     <section class="card section-card">
       <div class="row split-row"><h3>Debug</h3><button id="copyDebugBtn" class="btn secondary" type="button">Copy</button></div>
-      <textarea id="debugText" class="debug-text" readonly>${diagnosticsText(range)}</textarea>
+      <textarea id="debugText" class="debug-text" readonly>${diagnosticsText(range, day, rangeRows)}</textarea>
     </section>
   `;
 
@@ -719,12 +772,15 @@ function renderSettingsPage(range, rangeRows) {
       await importZip(file, settings, (progress) => {
         status.textContent = `${progress.phase} (${progress.percent}%)`;
       });
-      window.location.reload();
+      const next = resolveSelectedRange(getAvailableDates(), { preset: 'latest-day' });
+      persistSelectedRange({ preset: next.preset, start: next.start, end: next.end });
+      status.textContent = `Imported ✓ Loaded ${next.start ? `${next.start} → ${next.end}` : 'no date range'}.`;
+      rerender(next);
     } catch (error) {
       setImportError(error, { source: 'settings-upload' });
       status.textContent = `Import failed: ${error?.message || String(error)}`;
       const debugText = content.querySelector('#debugText');
-      if (debugText) debugText.value = diagnosticsText(range);
+      if (debugText) debugText.value = diagnosticsText(range, day, rangeRows);
     }
   });
 
@@ -763,7 +819,7 @@ function mountDateRangeControl(availableDates, range, rerender) {
   });
 }
 
-function renderPageContent(range, day, rangeRows) {
+function renderPageContent(range, day, rangeRows, rerender) {
   const content = document.getElementById('pageContent');
   if (!content) return;
 
@@ -773,7 +829,7 @@ function renderPageContent(range, day, rangeRows) {
   }
 
   if (page === 'settings') {
-    renderSettingsPage(range, rangeRows);
+    renderSettingsPage(range, day, rangeRows, rerender);
     return;
   }
 
@@ -825,12 +881,20 @@ async function bootstrap() {
   renderPageShell(app, meta.title, meta.subtitle);
 
   const rerender = (range) => {
-    const rangeRows = range.start && range.end
-      ? getRange(range.start, range.end)
-      : { dailySleep: [], dailyReadiness: [], dailyActivity: [], derivedNightlyVitals: [], sleepModel: [], dailySpo2: [] };
-    const day = range.end ? getDay(range.end, settings) : null;
-    mountDateRangeControl(availableDates, range, rerender);
-    renderPageContent(range, day, rangeRows);
+    const currentDates = getAvailableDates();
+    const resolved = resolveSelectedRange(currentDates, range);
+    persistSelectedRange({ preset: resolved.preset, start: resolved.start, end: resolved.end });
+    const rangeRows = resolved.start && resolved.end
+      ? getRange(resolved.start, resolved.end)
+      : emptyRangeRows();
+    const day = resolved.end ? getDay(resolved.end, settings) : null;
+    if (!shouldRenderDateRangeForPage(page)) {
+      const mount = document.getElementById('dateRangeMount');
+      if (mount) mount.innerHTML = '';
+    } else {
+      mountDateRangeControl(currentDates, resolved, rerender);
+    }
+    renderPageContent(resolved, day, rangeRows, rerender);
   };
 
   rerender(initialRange);

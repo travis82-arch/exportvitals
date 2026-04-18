@@ -107,7 +107,7 @@ export function createImportController({ importZip, onImported, onStateChange })
     setState({ status: 'selected', selectedFile: file, error: null, result: null, phase: 'Selected', percent: 0 });
     setState({ status: 'importing', phase: 'Reading ZIP', percent: 5, lastProgressPhase: 'Reading ZIP' });
     try {
-      const result = await importZip(file, (progress) => {
+      const result = await importZip(file, {}, (progress) => {
         setState({
           status: progress.status,
           phase: progress.phase,
