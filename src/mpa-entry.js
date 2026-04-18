@@ -245,6 +245,56 @@ function buildDailyLine(rows, field) {
     .filter((point) => Number.isFinite(point.tMs));
 }
 
+function renderDualStressDailyChart({ title, stressSeries = [], recoverySeries = [] }) {
+  const stressByTime = new Map((stressSeries || []).filter((p) => Number.isFinite(p?.tMs) && Number.isFinite(Number(p?.v))).map((p) => [p.tMs, Number(p.v)]));
+  const recoveryByTime = new Map((recoverySeries || []).filter((p) => Number.isFinite(p?.tMs) && Number.isFinite(Number(p?.v))).map((p) => [p.tMs, Number(p.v)]));
+  const allTimes = [...new Set([...stressByTime.keys(), ...recoveryByTime.keys()])].sort((a, b) => a - b);
+  if (!allTimes.length) return '<div class="placeholder">No daily stress trend is available for this range.</div>';
+  const allValues = [...stressByTime.values(), ...recoveryByTime.values()].filter((v) => Number.isFinite(v));
+  if (!allValues.length) return '<div class="placeholder">No daily stress trend is available for this range.</div>';
+
+  const m = { l: 34, r: 8, t: 12, b: 20 };
+  const w = 360;
+  const h = 120;
+  const plotW = w - m.l - m.r;
+  const plotH = h - m.t - m.b;
+  const xPos = (t) => m.l + ((t - allTimes[0]) / Math.max(allTimes.at(-1) - allTimes[0], 1)) * plotW;
+  const yMax = Math.max(...allValues);
+  const yPos = (v) => m.t + (1 - Number(v) / Math.max(yMax, 1)) * plotH;
+  const barW = Math.max(4, plotW / Math.max(allTimes.length, 1) * 0.42);
+  const dateLabel = (ms) => new Date(ms).toLocaleDateString([], { month: 'short', day: 'numeric' });
+
+  const stressLinePoints = allTimes
+    .filter((t) => stressByTime.has(t))
+    .map((t) => `${xPos(t)},${yPos(stressByTime.get(t))}`)
+    .join(' ');
+
+  return `<section class="chart-card"><div class="kpi-label">${title}</div>
+    <svg class="axis-chart" viewBox="0 0 ${w} ${h}" style="height:190px">
+      <line x1="${m.l}" y1="${h - m.b}" x2="${w - m.r}" y2="${h - m.b}" class="axis-line"></line>
+      <line x1="${m.l}" y1="${m.t}" x2="${m.l}" y2="${h - m.b}" class="axis-line"></line>
+      ${allTimes
+        .map((t) => {
+          const rv = recoveryByTime.get(t);
+          if (!Number.isFinite(rv)) return '';
+          const x = xPos(t) - barW / 2;
+          const y = yPos(rv);
+          return `<rect x="${x}" y="${y}" width="${barW}" height="${Math.max(1, h - m.b - y)}" fill="var(--chart-bar)"></rect>`;
+        })
+        .join('')}
+      ${stressLinePoints ? `<polyline fill="none" stroke="var(--accent-2)" stroke-width="1.8" points="${stressLinePoints}"></polyline>` : ''}
+      ${allTimes
+        .filter((t) => stressByTime.has(t))
+        .map((t) => `<circle cx="${xPos(t)}" cy="${yPos(stressByTime.get(t))}" r="1.8" fill="var(--accent-2)"></circle>`)
+        .join('')}
+      <text x="${m.l}" y="${h - 6}" class="tick">${dateLabel(allTimes[0])}</text>
+      <text x="${m.l + plotW / 2}" y="${h - 6}" text-anchor="middle" class="tick">${dateLabel(allTimes[Math.floor(allTimes.length / 2)])}</text>
+      <text x="${w - m.r}" y="${h - 6}" text-anchor="end" class="tick">${dateLabel(allTimes.at(-1))}</text>
+    </svg>
+    <div class="small muted">Line: high stress minutes · Bars: restored minutes.</div>
+  </section>`;
+}
+
 function buildDailyActivitySeconds(rows) {
   return (rows || [])
     .filter((row) => row?.date)
@@ -842,9 +892,9 @@ function renderHeartRatePage(range, day, rangeRows) {
 
 function renderStressPage(range, day, rangeRows) {
   const summary = stressSummary(range, day, rangeRows);
-  const stressTrend = buildDailyLine(rangeRows.dailyStress, 'score');
   const dayTimeline = stressDayTimelineRows(range, rangeRows);
   const dayScoreSeries = dayTimeline.filter((row) => Number.isFinite(row.score)).map((row) => ({ tMs: row.tMs, v: row.score }));
+  const dayRecoverySeries = dayTimeline.filter((row) => Number.isFinite(row.recoveryValue)).map((row) => ({ tMs: row.tMs, v: row.recoveryValue }));
   const dayCategory = stressCategorySeries(dayTimeline);
   const hasDailyBreakdown = (rangeRows.dailyStress || []).some((row) => Number.isFinite(Number(row?.high)) || Number.isFinite(Number(row?.recovery)));
   const dailyBreakdownRows = stressDailyBreakdownRows(rangeRows.dailyStress || []);
@@ -862,29 +912,32 @@ function renderStressPage(range, day, rangeRows) {
       v: row.restoredMinutes
     }))
     .filter((point) => Number.isFinite(point.tMs) && Number.isFinite(point.v));
-  const stressValue = summary.stressScore;
+  const stressValue = range.isSingleDay ? summary.highStress : summary.highStress;
   const heroCopy = range.isSingleDay
-    ? `High stress ${fmtMinutes(summary.highStress)} · restored ${fmtMinutes(summary.recoveryTime)}.`
+    ? `${summary.daySummary ? `${summary.daySummary} · ` : ''}high stress ${fmtMinutes(summary.highStress)} · restored ${fmtMinutes(summary.recoveryTime)}.`
     : `Avg high stress ${fmtMinutes(summary.highStress)} · restored ${fmtMinutes(summary.recoveryTime)}.`;
-  const hasStressData = Number.isFinite(summary.stressScore) || dayScoreSeries.length || dayCategory.series.length;
+  const hasStressData = Number.isFinite(summary.highStress) || dayScoreSeries.length || dayRecoverySeries.length || dayCategory.series.length;
+  const dominantSummary = summary.summaryDistribution?.[0];
 
   return `
     ${renderHeroCard({
       eyebrow: 'Stress',
-      title: range.isSingleDay ? 'Stress score' : 'Average stress score',
-      value: fmt(stressValue),
+      title: range.isSingleDay ? 'High stress' : 'Average high stress',
+      value: fmtMinutes(stressValue),
       status: '',
-      detail: heroCopy
+      detail: heroCopy,
+      extra: !range.isSingleDay ? renderDualStressDailyChart({ title: 'Selected range trend', stressSeries: highStressTrend, recoverySeries: restoredTrend }) : ''
     })}
 
     <section class="card section-card">
       <div class="section-head"><h3>Key metrics</h3></div>
       ${renderMetricGrid([
-        { label: 'Stress score', value: fmt(summary.stressScore) },
-        { label: 'High stress', value: fmtMinutes(summary.highStress) },
-        { label: 'Restorative time', value: fmtMinutes(summary.recoveryTime) },
-        { label: range.isSingleDay ? 'Daytime peak stress' : 'Avg daytime stress', value: fmt(summary.daytimePeak, 1) },
-        { label: 'Stress days', value: fmt(summary.stressDays, 0) },
+        { label: range.isSingleDay ? 'High stress' : 'Avg high stress', value: fmtMinutes(summary.highStress) },
+        { label: range.isSingleDay ? 'Restored' : 'Avg restored', value: fmtMinutes(summary.recoveryTime) },
+        { label: range.isSingleDay ? 'Day summary' : 'Top summary', value: range.isSingleDay ? (summary.daySummary || '<span class="placeholder">Unavailable</span>') : (dominantSummary ? `${dominantSummary.summary} (${dominantSummary.count})` : '<span class="placeholder">Unavailable</span>') },
+        { label: range.isSingleDay ? 'Peak stress value' : 'Avg daytime stress value', value: fmt(summary.daytimePeak, 1) },
+        { label: range.isSingleDay ? 'Recovery value avg' : 'Avg recovery value', value: fmt(summary.recoveryDaytimeAvg, 1) },
+        { label: 'Days with stress data', value: fmt(summary.stressDays, 0) },
         { label: 'Daytime points', value: fmt(summary.daytimePoints, 0) }
       ])}
     </section>
@@ -894,43 +947,33 @@ function renderStressPage(range, day, rangeRows) {
       ${!hasStressData
         ? '<div class="placeholder">Stress data is unavailable for this selection.</div>'
         : (range.isSingleDay
-        ? (dayScoreSeries.length
-          ? renderAxisLineChart({
-              title: 'Daytime stress score trace',
+        ? `${dayScoreSeries.length ? renderAxisLineChart({
+              title: 'Daytime stress values',
               series: dayScoreSeries,
               yUnit: '',
               yDomainConfig: { min: 0, max: 100, minPadding: 0, maxPadding: 0 }
-            })
-          : (dayCategory.series.length
-            ? renderAxisBarChart({
-                title: 'Daytime stress states',
-                series: dayCategory.series,
-                yTicks: dayCategory.categories.map((_, idx) => idx),
-                yLabelFormatter: (value) => dayCategory.categories[value] || '',
-                height: 180
-              })
-            : '<div class="placeholder">No daytime stress trace is available for this day.</div>'))
-        : renderAxisLineChart({ title: 'Daily stress score trend', series: stressTrend, yUnit: '', yDomainConfig: { min: 0, max: 100, minPadding: 0, maxPadding: 0 } }))}
-      ${!range.isSingleDay && hasDailyBreakdown
-        ? renderAxisLineChart({
-            title: 'Daily high stress minutes',
-            series: highStressTrend,
-            yUnit: 'min',
-            yDomainConfig: { minPadding: 8, maxPadding: 8 }
-          })
-        : ''}
-      ${!range.isSingleDay && hasDailyBreakdown
-        ? renderAxisLineChart({
-            title: 'Daily restored minutes',
-            series: restoredTrend,
-            yUnit: 'min',
-            yDomainConfig: { minPadding: 8, maxPadding: 8 }
-          })
-        : ''}
+            }) : ''}
+           ${dayRecoverySeries.length ? renderAxisLineChart({
+              title: 'Daytime recovery values',
+              series: dayRecoverySeries,
+              yUnit: '',
+              yDomainConfig: { min: 0, max: 100, minPadding: 0, maxPadding: 0 }
+            }) : ''}
+           ${!dayScoreSeries.length && !dayRecoverySeries.length && dayCategory.series.length
+              ? renderAxisBarChart({
+                  title: 'Daytime stress states',
+                  series: dayCategory.series,
+                  yTicks: dayCategory.categories.map((_, idx) => idx),
+                  yLabelFormatter: (value) => dayCategory.categories[value] || '',
+                  height: 180
+                })
+              : ''}
+           ${!dayScoreSeries.length && !dayRecoverySeries.length && !dayCategory.series.length ? '<div class="placeholder">No daytime stress trace is available for this day.</div>' : ''}`
+        : renderDualStressDailyChart({ title: 'Daily high stress + restored trend', stressSeries: highStressTrend, recoverySeries: restoredTrend }))}
     </section>
 
     <section class="card section-card">
-      <div class="section-head"><h3>${range.isSingleDay ? 'Recent context' : 'Range summary'}</h3><p class="muted">Data-driven stress balance across loaded days.</p></div>
+      <div class="section-head"><h3>${range.isSingleDay ? 'Recent context' : 'Range summary'}</h3></div>
       ${hasDailyBreakdown
         ? renderMetricGrid([
             { label: range.isSingleDay ? 'Recent high stress avg' : 'High stress avg', value: fmtMinutes(average((rangeRows.dailyStress || []).slice(-7), 'high')) },
