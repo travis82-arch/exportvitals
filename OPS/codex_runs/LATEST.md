@@ -1,39 +1,43 @@
 # Codex Run Latest
 
-## Root cause of double header
-The double header happened because BootShell visibility is controlled by `html[data-js="1"]` state, but that marker was not always being set after successful JS boot. Without `document.documentElement.dataset.js = "1"`, the BootShell header stayed visible and overlapped the runtime TopNav.
+## Summary of what changed
+- Replaced active top-level navigation with the locked PR1 information architecture: Home, Readiness, Sleep, Activity, Heart Rate, Stress, Settings.
+- Introduced shared persisted date-range state with presets and custom range support, plus clamped range resolution against available dates.
+- Added a shared date-range control component used at the top of each active page.
+- Rebuilt `mpa-entry` scaffold to render new page shells, range-aware summaries, and single-day vs multi-day semantics.
+- Simplified Settings page to include only Data upload, My Health section scaffold, and Debug diagnostics with copy support.
+- Removed header-level upload interaction from active shell (upload now only in Settings).
+- Updated import behavior to replace prior dataset contents on ZIP import (instead of merging leftovers from previous imports).
+- Added Heart Rate and Stress MPA routes/pages.
+- Updated MPA guard script to enforce the new locked active structure.
 
-## Templates updated
-### Repo root templates
+## Key files changed
+- `src/nav/navManifest.js`
+- `src/components/TopNav.js`
+- `src/state/selectedRange.js` (new)
+- `src/components/DateRangeControl.js` (new)
+- `src/mpa-entry.js`
+- `src/store/dataStore.js`
+- `src/style.css`
+- `scripts/check-nav-manifest.mjs`
+- `vite.config.js`
 - `index.html`
-- `sleep.html`
-- `readiness.html`
-- `activity.html`
-- `vitals.html`
-- `trends.html`
-- `journal.html`
-- `data-tools-import.html`
-- `data-tools-export.html`
-- `glossary.html`
-- `settings.html`
-- `debug.html`
-- `my-health.html`
+- `heart-rate.html` (new)
+- `stress.html` (new)
 
-### Dist templates
-- `dist/index.html`
-- `dist/sleep.html`
-- `dist/readiness.html`
-- `dist/activity.html`
-- `dist/vitals.html`
-- `dist/trends.html`
-- `dist/journal.html`
-- `dist/data-tools-import.html`
-- `dist/data-tools-export.html`
-- `dist/glossary.html`
-- `dist/settings.html`
-- `dist/debug.html`
-- `dist/my-health.html`
+## Tests / commands run
+- `npm run build` (failed, 3 attempts)
+  - Blocked by missing optional Rollup binary package `@rollup/rollup-linux-x64-gnu` in this environment.
+  - Attempted remediation: made vite launcher executable and attempted no-save install of missing package; install failed due 403 policy restriction.
+- `npm run check:mpa` (failed, 3 attempts)
+  - Fails because `dist/heart-rate.html` and `dist/stress.html` are not generated while build is blocked.
+- `npm test` (passed)
+- `node scripts/smoke-import-local.mjs` skipped because `OPS/_local/data3.zip` is absent.
 
-## Visible difference before vs after
-- **Before:** BootShell had a full fallback top bar (tabs + Import CTA), so users could see duplicate headers/nav when JS had partial boot issues. Some BootShell text also displayed mojibake (`â€”`, `â€¦`, `Â·`).
-- **After:** BootShell is a minimal loading card only (`Loading&hellip;`) with optional `noscript` message. The app now shows only one runtime TopNav after boot, and corrupted punctuation text is removed from updated HTML templates.
+## Smoke import local
+- Skipped: `OPS/_local/data3.zip` not found.
+
+## Known follow-up gaps intentionally left for PR2+
+- Final screenshot-polished visuals and deep per-tab parity.
+- Rich multi-day lower-chart sections beyond scaffold/placeholder level.
+- Additional refinement of stress-specific and heart-rate-specific detail mappings.

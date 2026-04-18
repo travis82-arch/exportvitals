@@ -356,7 +356,7 @@ export async function importZipArrayBuffer({ fileName, arrayBuffer, options = {}
   }
 
   updateImportState({ phase: 'Normalizing daily tables', percent: 75 }, onProgress);
-  store.datasets = { ...store.datasets, ...found };
+  store.datasets = Object.fromEntries(Object.keys(store.datasets).map((name) => [name, found[name] || []]));
 
   updateImportState({ phase: 'Deriving nightly vitals', percent: 90 }, onProgress);
   store.derivedNightlyVitals = deriveNightlyVitals(options);
