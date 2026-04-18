@@ -13,6 +13,8 @@ const DATASET_ALIASES = {
   dailyReadiness: ['dailyreadiness.csv'],
   dailySleep: ['dailysleep.csv'],
   dailyActivity: ['dailyactivity.csv'],
+  dailyStress: ['dailystress.csv'],
+  daytimeStress: ['daytimestress.csv'],
   dailySpo2: ['dailyspo2.csv'],
   sleepTime: ['sleeptime.csv'],
   heartRate: ['heartrate.csv'],
@@ -22,7 +24,19 @@ const DATASET_ALIASES = {
 };
 
 const store = {
-  datasets: { dailyReadiness: [], dailySleep: [], dailyActivity: [], dailySpo2: [], sleepTime: [], heartRate: [], sleepModel: [], workout: [], session: [] },
+  datasets: {
+    dailyReadiness: [],
+    dailySleep: [],
+    dailyActivity: [],
+    dailyStress: [],
+    daytimeStress: [],
+    dailySpo2: [],
+    sleepTime: [],
+    heartRate: [],
+    sleepModel: [],
+    workout: [],
+    session: []
+  },
   derivedNightlyVitals: [],
   ingestReport: {},
   availabilityMatrix: {},
@@ -83,6 +97,33 @@ function normalizeRows(dataset, rows) {
         contributors: parseContributors(r.contributors)
       }))
       .filter((r) => r.date);
+
+  if (dataset === 'dailyStress')
+    return rows
+      .map((r) => ({
+        date: r.day ?? r.date,
+        score: toNumber(r.score ?? r.stress_score),
+        high: toNumber(r.high ?? r.high_stress_duration),
+        medium: toNumber(r.medium ?? r.medium_stress_duration),
+        low: toNumber(r.low ?? r.low_stress_duration),
+        recovery: toNumber(r.recovery ?? r.restorative_time)
+      }))
+      .filter((r) => r.date);
+
+  if (dataset === 'daytimeStress')
+    return rows
+      .map((r) => {
+        const timestamp = r.timestamp ?? r.datetime ?? r.time ?? null;
+        const score = toNumber(r.stress_score ?? r.score ?? r.level);
+        const date = r.day ?? r.date ?? (timestamp ? new Date(timestamp).toISOString().slice(0, 10) : null);
+        return {
+          date,
+          timestamp,
+          score,
+          category: r.category ?? r.stress_category ?? r.state ?? null
+        };
+      })
+      .filter((r) => r.date && (r.timestamp || Number.isFinite(r.score)));
 
   if (dataset === 'dailySpo2')
     return rows
@@ -286,18 +327,73 @@ function selectNightWindow(date, options = {}) {
   const mode = options.nightWindowMode || 'auto';
 
   const sleepRow = store.datasets.sleepTime.find((row) => row.date === date);
+  const sleepModelRow = store.datasets.sleepModel.find((row) => row.date === date);
+
+  const fromSleepWindow = (startIso, endIso, modeUsed) => {
+    const start = new Date(startIso).getTime();
+    const end = new Date(endIso).getTime();
+    if (!Number.isFinite(start) || !Number.isFinite(end) || end <= start) return null;
+    return { start, end, modeUsed };
+  };
+
+  const fallbackLocalWindow = () => {
+    const start = new Date(`${date}T${fallbackStart}:00`).getTime();
+    const end = new Date(`${date}T${fallbackEnd}:00`).getTime();
+    if (!Number.isFinite(start) || !Number.isFinite(end)) return null;
+    return { start, end: end < start ? end + 24 * 60 * 60 * 1000 : end, modeUsed: 'settings' };
+  };
+
+  const fallbackUtcWindow = () => {
+    const [startHour = '21', startMinute = '00'] = String(fallbackStart).split(':');
+    const [endHour = '09', endMinute = '00'] = String(fallbackEnd).split(':');
+    const base = new Date(`${date}T00:00:00Z`);
+    const start = Date.UTC(base.getUTCFullYear(), base.getUTCMonth(), base.getUTCDate(), Number(startHour), Number(startMinute), 0);
+    const endRaw = Date.UTC(base.getUTCFullYear(), base.getUTCMonth(), base.getUTCDate(), Number(endHour), Number(endMinute), 0);
+    return { start, end: endRaw < start ? endRaw + 24 * 60 * 60 * 1000 : endRaw, modeUsed: 'settings-utc' };
+  };
+  const fullDayWindow = () => {
+    const start = new Date(`${date}T00:00:00`).getTime();
+    const end = new Date(`${date}T23:59:59`).getTime();
+    if (!Number.isFinite(start) || !Number.isFinite(end)) return null;
+    return { start, end, modeUsed: 'date-day' };
+  };
+
+  const windowPointCount = (window) => (store.datasets.heartRate || []).reduce((count, row) => {
+    const t = new Date(row.timestamp).getTime();
+    return Number.isFinite(t) && t >= window.start && t <= window.end ? count + 1 : count;
+  }, 0);
 
   if ((mode === 'auto' || mode === 'sleep-time') && sleepRow?.bedtimeStart && sleepRow?.bedtimeEnd) {
-    return {
-      start: new Date(sleepRow.bedtimeStart).getTime(),
-      end: new Date(sleepRow.bedtimeEnd).getTime(),
-      modeUsed: 'sleepTime'
-    };
+    const window = fromSleepWindow(sleepRow.bedtimeStart, sleepRow.bedtimeEnd, 'sleepTime');
+    if (window) return window;
   }
 
-  const start = new Date(`${date}T${fallbackStart}:00`).getTime();
-  const end = new Date(`${date}T${fallbackEnd}:00`).getTime();
-  return { start, end: end < start ? end + 24 * 60 * 60 * 1000 : end, modeUsed: 'settings' };
+  if ((mode === 'auto' || mode === 'sleep-model') && sleepModelRow?.bedtimeStart && sleepModelRow?.bedtimeEnd) {
+    const window = fromSleepWindow(sleepModelRow.bedtimeStart, sleepModelRow.bedtimeEnd, 'sleepModel');
+    if (window) return window;
+  }
+
+  const fallbackLocal = fallbackLocalWindow();
+  if (mode !== 'auto') return fallbackLocal || fallbackUtcWindow();
+
+  const candidates = [
+    fallbackLocal,
+    fallbackUtcWindow(),
+    fullDayWindow()
+  ].filter(Boolean);
+
+  if (!candidates.length) return { start: 0, end: 0, modeUsed: 'invalid' };
+  let best = candidates[0];
+  let bestCount = windowPointCount(best);
+  for (let i = 1; i < candidates.length; i += 1) {
+    const candidate = candidates[i];
+    const count = windowPointCount(candidate);
+    if (count > bestCount) {
+      best = candidate;
+      bestCount = count;
+    }
+  }
+  return best;
 }
 
 function deriveNightlyVitals(options = {}) {
@@ -330,6 +426,8 @@ function computeAvailabilityMatrix() {
     dailySleep: has('dailySleep'),
     dailyReadiness: has('dailyReadiness'),
     dailyActivity: has('dailyActivity'),
+    dailyStress: has('dailyStress'),
+    daytimeStress: has('daytimeStress'),
     dailySpo2: has('dailySpo2'),
     heartRate: has('heartRate'),
     sleepTime: has('sleepTime'),
@@ -674,6 +772,8 @@ export function getAvailableDates() {
     ...store.datasets.dailySleep.map((r) => r.date),
     ...store.datasets.dailyReadiness.map((r) => r.date),
     ...store.datasets.dailyActivity.map((r) => r.date),
+    ...store.datasets.dailyStress.map((r) => r.date),
+    ...store.datasets.daytimeStress.map((r) => r.date),
     ...store.datasets.dailySpo2.map((r) => r.date),
     ...store.datasets.sleepTime.map((r) => r.date)
     ,...store.datasets.sleepModel.map((r) => r.date),
@@ -728,6 +828,7 @@ export function getDay(date, options = {}) {
     dailySleep: pick(store.datasets.dailySleep),
     dailyReadiness: pick(store.datasets.dailyReadiness),
     dailyActivity: pick(store.datasets.dailyActivity),
+    dailyStress: pick(store.datasets.dailyStress),
     dailySpo2: pick(store.datasets.dailySpo2),
     sleepModel,
     sleepHrSeries,
@@ -792,6 +893,8 @@ export function getRange(start, end) {
     dailySleep: store.datasets.dailySleep.filter(inRange),
     dailyReadiness: store.datasets.dailyReadiness.filter(inRange),
     dailyActivity: store.datasets.dailyActivity.filter(inRange),
+    dailyStress: store.datasets.dailyStress.filter(inRange),
+    daytimeStress: store.datasets.daytimeStress.filter(inRange),
     dailySpo2: store.datasets.dailySpo2.filter(inRange),
     sleepModel: store.datasets.sleepModel.filter(inRange),
     workout: store.datasets.workout.filter(inRange),

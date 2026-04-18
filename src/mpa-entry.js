@@ -20,7 +20,7 @@ import { hasPurgedReloadFlag, purgeStaleServiceWorkersAndCaches, setPurgedReload
 import { renderAxisLineChart } from './charts/AxisLineChart.js';
 import { renderAxisBarChart } from './charts/AxisBarChart.js';
 import { renderSleepStageChart } from './charts/SleepStageChart.js';
-import { activitySummary, heartRateSummary } from './state/pageSummaries.js';
+import { activitySummary, heartRateSummary, stressSummary } from './state/pageSummaries.js';
 
 const page = document.body.dataset.page || 'index';
 const settings = loadSettings();
@@ -34,7 +34,7 @@ const PAGE_META = {
   sleep: { title: 'Sleep', subtitle: 'Sleep quality and overnight recovery signals.' },
   activity: { title: 'Activity', subtitle: 'Movement load and consistency across the selected period.' },
   'heart-rate': { title: 'Heart Rate', subtitle: 'Overnight heart rate and variability trends.' },
-  stress: { title: 'Stress', subtitle: 'Stress-related recovery proxy from available data.' },
+  stress: { title: 'Stress', subtitle: 'Daily stress and recovery balance across the selected period.' },
   settings: { title: 'Settings', subtitle: 'Upload, My Health overview, and debug tools.' }
 };
 
@@ -86,6 +86,8 @@ function emptyRangeRows() {
     dailySleep: [],
     dailyReadiness: [],
     dailyActivity: [],
+    dailyStress: [],
+    daytimeStress: [],
     derivedNightlyVitals: [],
     sleepModel: [],
     dailySpo2: [],
@@ -147,12 +149,12 @@ function metricDomainSummary(domain, range, day, rangeRows) {
   }
 
   if (domain === 'stress') {
-    const value = average(rangeRows.derivedNightlyVitals, 'hrv_rmssd_proxy_ms');
+    const summary = stressSummary(range, day, rangeRows);
     return {
       domain,
       title: 'Stress',
-      value: fmt(value, 1, ' ms'),
-      sub: 'Recovery proxy'
+      value: fmt(summary.stressScore),
+      sub: range.isSingleDay ? 'Daily stress score' : 'Average stress score'
     };
   }
 
@@ -812,18 +814,18 @@ function renderHeartRatePage(range, day, rangeRows) {
 
   return `
     ${renderHeroCard({
-      eyebrow: range.isSingleDay ? 'Heart Rate · selected day' : 'Heart Rate · range average',
+      eyebrow: range.isSingleDay ? 'Heart Rate · day' : 'Heart Rate · range',
       title: range.isSingleDay ? 'Overnight average HR' : 'Average Overnight HR',
       value: fmt(summary.overnightAvg, 1, ' bpm'),
-      status: range.isSingleDay ? 'Single day detail' : 'Range aggregation',
+      status: range.isSingleDay ? 'Day view' : 'Range view',
       detail: range.isSingleDay
-        ? `Selected day overnight heart-rate summary with ${fmt(summary.points, 0)} points.`
+        ? `Overnight heart-rate summary with ${fmt(summary.points, 0)} points.`
         : `Average heart-rate metrics across ${summarizeRange(range)}.`,
       extra: `<p class="muted">${range.isSingleDay ? 'Intraday chart uses selected-day heart-rate trace.' : 'Range mode switches to daily aggregated trends.'}</p>`
     })}
 
     <section class="card section-card">
-      <div class="section-head"><h3>Key metrics</h3><p class="muted">${range.isSingleDay ? 'Selected-day heart-rate metrics.' : 'Average heart-rate metrics for selected range.'}</p></div>
+      <div class="section-head"><h3>Key metrics</h3><p class="muted">${range.isSingleDay ? 'Overnight and daytime metrics.' : 'Average metrics across the selected range.'}</p></div>
       ${renderMetricGrid([
         { label: range.isSingleDay ? 'Overnight avg HR' : 'Average overnight HR', value: fmt(summary.overnightAvg, 1, ' bpm') },
         { label: range.isSingleDay ? 'Overnight lowest HR' : 'Average overnight lowest', value: fmt(summary.overnightMin, 1, ' bpm') },
@@ -832,12 +834,12 @@ function renderHeartRatePage(range, day, rangeRows) {
         { label: 'Sleeping range', value: sleepRange, note: 'Derived from sleep-model nightly range' },
         { label: 'Activity range', value: activityRange, note: 'Derived from daytime heart-rate points' },
         { label: 'Recovery proxy', value: fmt(summary.recoveryProxy, 1, ' ms'), note: 'RMSSD-like variability proxy' },
-        { label: 'Data coverage', value: fmt(summary.points, 0), note: range.isSingleDay ? 'Heart-rate points in selected night window' : 'Total points in selected date range' }
+        { label: 'Data coverage', value: fmt(summary.points, 0), note: range.isSingleDay ? 'Heart-rate points in the night window' : 'Total points across selected dates' }
       ])}
     </section>
 
     <section class="card section-card">
-      <div class="section-head"><h3>${range.isSingleDay ? 'Overnight trace' : 'Daily heart-rate trends'}</h3><p class="muted">${range.isSingleDay ? 'Heart-rate trace for selected night window.' : 'Daily aggregated trends (no fake continuous trace).'}</p></div>
+      <div class="section-head"><h3>${range.isSingleDay ? 'Overnight trace' : 'Daily heart-rate trends'}</h3><p class="muted">${range.isSingleDay ? 'Trace for the resolved night window.' : 'Daily aggregated trends (no synthetic continuous trace).'}</p></div>
       ${renderAxisLineChart({ title: range.isSingleDay ? 'Overnight heart rate trace' : 'Daily lowest HR trend', series: hrSeries, yUnit: 'bpm', yDomainConfig: { minPadding: 3, maxPadding: 3 } })}
       ${!range.isSingleDay ? renderAxisLineChart({ title: 'Daily overnight average HR trend', series: overnightAvgTrend, yUnit: 'bpm', yDomainConfig: { minPadding: 3, maxPadding: 3 } }) : ''}
       ${!range.isSingleDay ? renderAxisLineChart({ title: 'Daily daytime lowest HR trend', series: daytimeTrend, yUnit: 'bpm', yDomainConfig: { minPadding: 3, maxPadding: 3 } }) : ''}
@@ -855,27 +857,50 @@ function renderHeartRatePage(range, day, rangeRows) {
   `;
 }
 
-function renderStressPage(range, rangeRows) {
-  const stressProxy = average(rangeRows.derivedNightlyVitals, 'hrv_rmssd_proxy_ms');
-  const restingHr = average(rangeRows.derivedNightlyVitals, 'rhr_night_bpm');
+function renderStressPage(range, day, rangeRows) {
+  const summary = stressSummary(range, day, rangeRows);
+  const stressTrend = buildDailyLine(rangeRows.dailyStress, 'score');
+  const daytimeStressTrend = buildDailyLine(rangeRows.daytimeStress, 'score');
 
   return `
     ${renderHeroCard({
-      eyebrow: 'Stress hero',
-      title: 'Stress and recovery snapshot',
-      value: fmt(stressProxy, 1, ' ms'),
-      status: range.isSingleDay ? 'Single day' : 'Range average',
-      detail: 'Stress summary currently uses available derived proxies only (no fabricated values).'
+      eyebrow: range.isSingleDay ? 'Stress · day' : 'Stress · range',
+      title: range.isSingleDay ? 'Stress score' : 'Average stress score',
+      value: fmt(summary.stressScore),
+      status: range.isSingleDay ? 'Daily view' : 'Range average',
+      detail: range.isSingleDay
+        ? `Stress and recovery details for ${range.end || 'selected day'}.`
+        : `Averages across ${summarizeRange(range)} using imported stress tables.`
     })}
 
     <section class="card section-card">
-      <div class="section-head"><h3>Stress metrics</h3><p class="muted">Compact cards with consistent grid behavior.</p></div>
+      <div class="section-head"><h3>Key metrics</h3><p class="muted">${range.isSingleDay ? 'Daily stress and recovery values.' : 'Averages across the selected range.'}</p></div>
       ${renderMetricGrid([
-        { label: 'Stress proxy', value: fmt(stressProxy, 1, ' ms') },
-        { label: 'Resting HR', value: fmt(restingHr, 1, ' bpm') },
-        { label: 'Days in range', value: fmt((rangeRows.derivedNightlyVitals || []).length, 0) },
-        { label: 'Selected range', value: summarizeRange(range) }
+        { label: 'Stress score', value: fmt(summary.stressScore) },
+        { label: range.isSingleDay ? 'High stress' : 'Avg high stress', value: fmtMinutes(summary.highStress) },
+        { label: range.isSingleDay ? 'Restorative time' : 'Avg restorative time', value: fmtMinutes(summary.recoveryTime) },
+        { label: range.isSingleDay ? 'Daytime peak stress' : 'Avg daytime stress', value: fmt(summary.daytimePeak, 1) },
+        { label: 'Overnight variability proxy', value: fmt(summary.overnightProxy, 1, ' ms') },
+        { label: 'Resting heart rate', value: fmt(summary.restingHr, 1, ' bpm') },
+        { label: 'Stress days', value: fmt(summary.stressDays, 0) },
+        { label: 'Daytime points', value: fmt(summary.daytimePoints, 0) }
       ])}
+    </section>
+
+    <section class="card section-card">
+      <div class="section-head"><h3>${range.isSingleDay ? 'Daytime stress trace' : 'Stress trends'}</h3><p class="muted">${range.isSingleDay ? 'Chronological daytime stress points for the selected date.' : 'Daily stress score and daytime trend lines.'}</p></div>
+      ${renderAxisLineChart({
+        title: range.isSingleDay ? 'Daytime stress points' : 'Daily stress score trend',
+        series: range.isSingleDay
+          ? (rangeRows.daytimeStress || [])
+              .filter((row) => row.date === range.end)
+              .map((row) => ({ tMs: new Date(row.timestamp).getTime(), v: row.score }))
+              .filter((row) => Number.isFinite(row.tMs) && Number.isFinite(Number(row.v)))
+          : stressTrend,
+        yUnit: '',
+        yDomainConfig: { min: 0, max: 100, minPadding: 0, maxPadding: 0 }
+      })}
+      ${!range.isSingleDay ? renderAxisLineChart({ title: 'Daytime stress trend', series: daytimeStressTrend, yUnit: '', yDomainConfig: { min: 0, max: 100, minPadding: 0, maxPadding: 0 } }) : ''}
     </section>
   `;
 }
@@ -1074,7 +1099,7 @@ function renderPageContent(range, day, rangeRows, rerender) {
   }
 
   if (page === 'stress') {
-    content.innerHTML = renderStressPage(range, rangeRows);
+    content.innerHTML = renderStressPage(range, day, rangeRows);
     return;
   }
 
