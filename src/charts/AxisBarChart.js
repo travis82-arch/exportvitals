@@ -24,7 +24,7 @@ export function renderAxisBarChart({ title, series = [], yTicks = null, yDomainC
       <line x1="${m.l}" y1="${h - m.b}" x2="${w - m.r}" y2="${h - m.b}" class="axis-line"></line>
       ${clean.map((p) => {
         const v = Number(p?.v ?? p?.level);
-        return `<rect x="${xPos(p.tMs) - barW / 2}" y="${yPos(v)}" width="${barW}" height="${Math.max(1, h - m.b - yPos(v))}" fill="#7dd3fc"></rect>`;
+        return `<rect x="${xPos(p.tMs) - barW / 2}" y="${yPos(v)}" width="${barW}" height="${Math.max(1, h - m.b - yPos(v))}" fill="var(--chart-bar)"></rect>`;
       }).join('')}
       <text x="${m.l}" y="${h - 6}" class="tick">${fmtTime(xMin)}</text>
       <text x="${m.l + plotW / 2}" y="${h - 6}" text-anchor="middle" class="tick">${fmtTime((xMin + xMax) / 2)}</text>
