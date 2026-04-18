@@ -7,12 +7,18 @@ import {
   getDay,
   getRange,
   getStoreSnapshot,
-  setImportError
+  setImportError,
+  parseSeriesJson,
+  seriesToPoints,
+  decodeStages
 } from './store/dataStore.js';
 import { loadSettings } from './state/settings.js';
 import { loadSelectedRange, persistSelectedRange, resolveSelectedRange, summarizeRange } from './state/selectedRange.js';
 import { installRuntimeDiagnostics } from './state/runtimeDiagnostics.js';
 import { hasPurgedReloadFlag, purgeStaleServiceWorkersAndCaches, setPurgedReloadFlag } from './boot/swPurge.js';
+import { renderAxisLineChart } from './charts/AxisLineChart.js';
+import { renderAxisBarChart } from './charts/AxisBarChart.js';
+import { renderSleepStageChart } from './charts/SleepStageChart.js';
 
 const page = document.body.dataset.page || 'index';
 const settings = loadSettings();
@@ -40,32 +46,25 @@ const SCORE_FIELDS = {
 
 const CONTRIBUTOR_LABELS = {
   readiness: {
-    activity_balance: 'Activity balance',
-    body_temperature: 'Body temperature',
-    hrv_balance: 'HRV balance',
-    previous_day_activity: 'Previous day activity',
-    previous_night: 'Previous night',
-    recovery_index: 'Recovery index',
     resting_heart_rate: 'Resting heart rate',
+    hrv_balance: 'HRV balance',
+    body_temperature: 'Body temperature',
+    recovery_index: 'Recovery index',
+    sleep: 'Sleep',
+    previous_night: 'Sleep',
     sleep_balance: 'Sleep balance',
-    sleep_regularity: 'Sleep regularity'
+    sleep_regularity: 'Sleep regularity',
+    previous_day_activity: 'Previous day activity',
+    activity_balance: 'Activity balance'
   },
   sleep: {
-    deep_sleep: 'Deep sleep',
-    rem_sleep: 'REM sleep',
-    latency: 'Latency',
-    timing: 'Timing',
+    total_sleep: 'Total sleep',
     efficiency: 'Efficiency',
     restfulness: 'Restfulness',
-    total_sleep: 'Total sleep'
-  },
-  activity: {
-    meet_daily_targets: 'Meet targets',
-    move_every_hour: 'Move hourly',
-    recovery_time: 'Recovery time',
-    stay_active: 'Stay active',
-    training_frequency: 'Training frequency',
-    training_volume: 'Training volume'
+    rem_sleep: 'REM sleep',
+    deep_sleep: 'Deep sleep',
+    latency: 'Latency',
+    timing: 'Timing'
   }
 };
 
@@ -78,6 +77,35 @@ function average(rows, key) {
 function fmt(value, digits = 0, suffix = '') {
   if (!Number.isFinite(Number(value))) return '<span class="placeholder">No data</span>';
   return `${Number(value).toFixed(digits)}${suffix}`;
+}
+
+function fmtDurationSeconds(sec, compact = false) {
+  if (!Number.isFinite(Number(sec))) return '<span class="placeholder">Unavailable</span>';
+  const totalMin = Math.round(Number(sec) / 60);
+  const hours = Math.floor(totalMin / 60);
+  const minutes = totalMin % 60;
+  if (compact) return `${hours}h ${minutes}m`;
+  if (!hours) return `${minutes} min`;
+  return `${hours} h ${minutes} min`;
+}
+
+function fmtSigned(value, digits = 1, suffix = '') {
+  if (!Number.isFinite(Number(value))) return '<span class="placeholder">Unavailable</span>';
+  const num = Number(value);
+  const sign = num > 0 ? '+' : '';
+  return `${sign}${num.toFixed(digits)}${suffix}`;
+}
+
+function scoreStatus(score, domain = 'default') {
+  if (!Number.isFinite(Number(score))) return 'Unavailable';
+  const value = Number(score);
+  const thresholds = domain === 'sleep'
+    ? [85, 70, 60]
+    : [85, 70, 60];
+  if (value >= thresholds[0]) return 'Optimal';
+  if (value >= thresholds[1]) return 'Good';
+  if (value >= thresholds[2]) return 'Fair';
+  return 'Pay attention';
 }
 
 function hideBootShell() {
@@ -141,6 +169,22 @@ function renderMetricGrid(items) {
     .join('')}</div>`;
 }
 
+function renderContributorRows(rows) {
+  if (!rows.length) return '<div class="placeholder">No contributor data available for this range.</div>';
+  return `<div class="contributor-list">${rows
+    .map((row) => {
+      const raw = Number(row.score);
+      const pct = Number.isFinite(raw) ? Math.max(0, Math.min(100, raw)) : 0;
+      const valueText = row.valueText || (Number.isFinite(raw) ? `${Math.round(raw)}` : '<span class="placeholder">Unavailable</span>');
+      return `<div class="contributor-row">
+        <div class="row split-row"><span>${row.label}</span><strong>${valueText}</strong></div>
+        <div class="small muted">${row.note || ''}</div>
+        <div class="progress"><span style="width:${pct}%"></span></div>
+      </div>`;
+    })
+    .join('')}</div>`;
+}
+
 function summarizeContributors(rows, labels = {}) {
   const totals = new Map();
   const counts = new Map();
@@ -157,22 +201,285 @@ function summarizeContributors(rows, labels = {}) {
   }
 
   return [...totals.entries()]
-    .map(([key, total]) => ({
-      key,
-      label: labels[key] || key,
-      avg: total / (counts.get(key) || 1)
-    }))
-    .sort((a, b) => b.avg - a.avg)
-    .slice(0, 6);
+    .map(([key, total]) => {
+      const avg = total / (counts.get(key) || 1);
+      return {
+        key,
+        label: labels[key] || key,
+        score: avg,
+        valueText: `${Math.round(avg)}`,
+        note: scoreStatus(avg)
+      };
+    })
+    .sort((a, b) => b.score - a.score);
 }
 
-function renderContributorRows(rows) {
-  if (!rows.length) return '<div class="placeholder">No contributor data available for this range.</div>';
-  return `<div class="contributor-list">${rows
-    .map(
-      (row) => `<div class="contributor-row"><div class="row split-row"><span>${row.label}</span><strong>${Math.round(row.avg)}</strong></div><div class="progress"><span style="width:${Math.max(0, Math.min(100, row.avg))}%"></span></div></div>`
-    )
-    .join('')}</div>`;
+function buildDailyLine(rows, field) {
+  return (rows || [])
+    .filter((row) => row?.date && Number.isFinite(Number(row?.[field])))
+    .map((row) => ({ tMs: new Date(`${row.date}T12:00:00`).getTime(), v: Number(row[field]) }))
+    .filter((point) => Number.isFinite(point.tMs));
+}
+
+function contributorFromRange(rangeRows, singleRow, keys, { label, formatter = (value) => `${Math.round(value)}`, note = '' }) {
+  if (singleRow && rangeRows?.isSingleDay) {
+    for (const key of keys) {
+      const val = Number(singleRow?.contributors?.[key]);
+      if (Number.isFinite(val)) return { label, score: val, valueText: formatter(val), note: note || scoreStatus(val) };
+    }
+    return { label, score: null, valueText: '<span class="placeholder">Unavailable</span>', note: 'Not present in this export' };
+  }
+  let sum = 0;
+  let count = 0;
+  for (const row of rangeRows?.rows || []) {
+    for (const key of keys) {
+      const val = Number(row?.contributors?.[key]);
+      if (Number.isFinite(val)) {
+        sum += val;
+        count += 1;
+        break;
+      }
+    }
+  }
+  if (!count) return { label, score: null, valueText: '<span class="placeholder">Unavailable</span>', note: 'Not present in this export' };
+  const avg = sum / count;
+  return { label, score: avg, valueText: formatter(avg), note: note || `Average ${scoreStatus(avg)}` };
+}
+
+function renderReadinessPage(range, day, rangeRows) {
+  const dayReadiness = day?.dailyReadiness;
+  const score = range.isSingleDay ? dayReadiness?.score : average(rangeRows.dailyReadiness, 'score');
+  const avgLowestHr = range.isSingleDay ? day?.sleepModel?.lowestHeartRate : average(rangeRows.sleepModel, 'lowestHeartRate');
+  const avgHrv = range.isSingleDay ? day?.sleepModel?.avgHrv : average(rangeRows.sleepModel, 'avgHrv');
+  const avgBreath = range.isSingleDay ? day?.sleepModel?.avgBreath : average(rangeRows.sleepModel, 'avgBreath');
+  const avgTempDeviation = range.isSingleDay ? dayReadiness?.temperatureDeviation : average(rangeRows.dailyReadiness, 'temperatureDeviation');
+
+  const insightHeadline = range.isSingleDay
+    ? (Number.isFinite(score) ? `${scoreStatus(score)} readiness for ${range.end}` : `Readiness data unavailable for ${range.end}`)
+    : (Number.isFinite(score) ? `Average Readiness for ${summarizeRange(range)}` : `Readiness unavailable for ${summarizeRange(range)}`);
+
+  const insightBody = range.isSingleDay
+    ? `Lowest HR ${fmt(avgLowestHr, 1, ' bpm')}, average HRV ${fmt(avgHrv, 1, ' ms')}, respiratory rate ${fmt(avgBreath, 1, ' /min')}.`
+    : `Average resting HR ${fmt(avgLowestHr, 1, ' bpm')}, average HRV ${fmt(avgHrv, 1, ' ms')}, temperature deviation ${fmtSigned(avgTempDeviation, 2, '°C')}.`;
+
+  const contributorRows = range.isSingleDay
+    ? summarizeContributors([dayReadiness], CONTRIBUTOR_LABELS.readiness)
+    : summarizeContributors(rangeRows.dailyReadiness, CONTRIBUTOR_LABELS.readiness);
+
+  const mappedContributors = [
+    contributorFromRange({ isSingleDay: range.isSingleDay, rows: rangeRows.dailyReadiness }, dayReadiness, ['resting_heart_rate'], { label: 'Resting heart rate' }),
+    contributorFromRange({ isSingleDay: range.isSingleDay, rows: rangeRows.dailyReadiness }, dayReadiness, ['hrv_balance'], { label: 'HRV balance' }),
+    contributorFromRange({ isSingleDay: range.isSingleDay, rows: rangeRows.dailyReadiness }, dayReadiness, ['body_temperature'], { label: 'Body temperature' }),
+    contributorFromRange({ isSingleDay: range.isSingleDay, rows: rangeRows.dailyReadiness }, dayReadiness, ['recovery_index'], { label: 'Recovery index' }),
+    contributorFromRange({ isSingleDay: range.isSingleDay, rows: rangeRows.dailyReadiness }, dayReadiness, ['sleep', 'previous_night'], { label: 'Sleep' }),
+    contributorFromRange({ isSingleDay: range.isSingleDay, rows: rangeRows.dailyReadiness }, dayReadiness, ['sleep_balance'], { label: 'Sleep balance' }),
+    contributorFromRange({ isSingleDay: range.isSingleDay, rows: rangeRows.dailyReadiness }, dayReadiness, ['sleep_regularity'], { label: 'Sleep regularity' }),
+    contributorFromRange({ isSingleDay: range.isSingleDay, rows: rangeRows.dailyReadiness }, dayReadiness, ['previous_day_activity'], { label: 'Previous day activity' }),
+    contributorFromRange({ isSingleDay: range.isSingleDay, rows: rangeRows.dailyReadiness }, dayReadiness, ['activity_balance'], { label: 'Activity balance' })
+  ];
+
+  const hrSeries = range.isSingleDay
+    ? seriesToPoints(parseSeriesJson(day?.sleepModel?.hrJson))
+    : buildDailyLine(rangeRows.sleepModel, 'lowestHeartRate');
+  const hrvSeries = range.isSingleDay
+    ? seriesToPoints(parseSeriesJson(day?.sleepModel?.hrvJson))
+    : buildDailyLine(rangeRows.sleepModel, 'avgHrv');
+
+  const readinessBaseline = average((rangeRows.dailyReadiness || []).slice(-14), 'score');
+
+  return `
+    ${renderHeroCard({
+      eyebrow: range.isSingleDay ? 'Readiness · selected day' : 'Readiness · range average',
+      title: range.isSingleDay ? 'Readiness score' : 'Average Readiness',
+      value: fmt(score),
+      status: scoreStatus(score),
+      detail: insightHeadline,
+      extra: `<p class="muted">${insightBody}</p>`
+    })}
+
+    <section class="card section-card">
+      <div class="section-head">
+        <h3>Contributors</h3>
+        <p class="muted">${range.isSingleDay ? 'Selected day contributor states.' : 'Average contributor states across selected range.'}</p>
+      </div>
+      ${renderContributorRows(mappedContributors.filter((row) => row))}
+      ${contributorRows.length ? `<p class="small muted">Top observed contributor scores: ${contributorRows.slice(0, 3).map((item) => `${item.label} ${Math.round(item.score)}`).join(' · ')}</p>` : ''}
+    </section>
+
+    <section class="card section-card">
+      <div class="section-head"><h3>Key metrics</h3><p class="muted">${range.isSingleDay ? 'Per-night recovery metrics.' : 'Average metrics across selected range.'}</p></div>
+      ${renderMetricGrid([
+        { label: 'Resting heart rate', value: fmt(avgLowestHr, 1, ' bpm'), note: range.isSingleDay ? 'Lowest overnight heart rate' : 'Average nightly lowest heart rate' },
+        { label: 'Heart rate variability', value: fmt(avgHrv, 1, ' ms'), note: range.isSingleDay ? 'Average overnight HRV' : 'Average HRV across range' },
+        { label: 'Body temperature', value: fmtSigned(avgTempDeviation, 2, '°C'), note: 'Temperature deviation from baseline' },
+        { label: 'Respiratory rate', value: fmt(avgBreath, 1, ' /min'), note: 'Average breathing rate during sleep' }
+      ])}
+    </section>
+
+    <section class="card section-card">
+      <div class="section-head"><h3>Details</h3><p class="muted">${range.isSingleDay ? 'Overnight traces for the selected night.' : 'Daily aggregated trends across selected range.'}</p></div>
+      ${renderMetricGrid([
+        { label: range.isSingleDay ? 'Lowest heart rate' : 'Average lowest heart rate', value: fmt(avgLowestHr, 1, ' bpm'), note: range.isSingleDay ? 'Night minimum from sleep model' : 'Range average from nightly minima' },
+        { label: range.isSingleDay ? 'Average HRV' : 'Average daily HRV', value: fmt(avgHrv, 1, ' ms'), note: range.isSingleDay ? 'Night average' : 'Range average' }
+      ])}
+      ${renderAxisLineChart({ title: range.isSingleDay ? 'Lowest heart rate overnight' : 'Daily lowest heart rate trend', series: hrSeries, yUnit: 'bpm', yDomainConfig: { minPadding: 3, maxPadding: 3 } })}
+      ${renderAxisLineChart({ title: range.isSingleDay ? 'Average HRV overnight' : 'Daily average HRV trend', series: hrvSeries, yUnit: 'ms', yDomainConfig: { minPadding: 4, maxPadding: 4 } })}
+    </section>
+
+    <section class="card section-card">
+      <div class="section-head"><h3>Readiness context</h3><p class="muted">Baseline context from available range data.</p></div>
+      ${renderMetricGrid([
+        { label: 'Current window', value: summarizeRange(range), note: range.isSingleDay ? 'Single-day detail mode' : 'Range aggregation mode' },
+        { label: 'Average readiness (14d)', value: fmt(readinessBaseline), note: 'Calculated from available readiness rows in range' },
+        { label: 'Data points', value: fmt((rangeRows.dailyReadiness || []).length, 0), note: 'Readiness days in selected window' },
+        { label: 'Nightly vitals points', value: fmt((rangeRows.sleepModel || []).length, 0), note: 'Sleep model nights supporting detail metrics' }
+      ])}
+    </section>
+  `;
+}
+
+function sleepContributorRows(range, day, rangeRows) {
+  const rows = [];
+  const dayContrib = day?.dailySleep?.contributors || {};
+  const avgContrib = summarizeContributors(rangeRows.dailySleep, CONTRIBUTOR_LABELS.sleep);
+  const byKey = Object.fromEntries(avgContrib.map((item) => [item.key, item]));
+  const source = range.isSingleDay ? dayContrib : byKey;
+
+  const contributorSpec = [
+    { key: 'total_sleep', label: 'Total sleep' },
+    { key: 'efficiency', label: 'Efficiency' },
+    { key: 'restfulness', label: 'Restfulness' },
+    { key: 'rem_sleep', label: 'REM sleep' },
+    { key: 'deep_sleep', label: 'Deep sleep' },
+    { key: 'latency', label: 'Latency' },
+    { key: 'timing', label: 'Timing' }
+  ];
+
+  for (const item of contributorSpec) {
+    if (range.isSingleDay) {
+      const val = Number(source[item.key]);
+      rows.push(Number.isFinite(val)
+        ? { label: item.label, score: val, valueText: `${Math.round(val)}`, note: scoreStatus(val, 'sleep') }
+        : { label: item.label, score: null, valueText: '<span class="placeholder">Unavailable</span>', note: 'Not present in this export' });
+    } else {
+      const avg = source[item.key]?.score;
+      rows.push(Number.isFinite(avg)
+        ? { label: item.label, score: avg, valueText: `${Math.round(avg)}`, note: `Average ${scoreStatus(avg, 'sleep')}` }
+        : { label: item.label, score: null, valueText: '<span class="placeholder">Unavailable</span>', note: 'Not present in this export' });
+    }
+  }
+
+  const totalSleepValue = range.isSingleDay ? day?.sleepModel?.totalSleepSec : average(rangeRows.sleepModel, 'totalSleepSec');
+  rows[0] = {
+    ...rows[0],
+    valueText: fmtDurationSeconds(totalSleepValue, true),
+    note: range.isSingleDay ? 'Sleep model duration' : 'Average sleep model duration'
+  };
+  const efficiencyValue = range.isSingleDay ? day?.sleepModel?.efficiencyPct : average(rangeRows.sleepModel, 'efficiencyPct');
+  rows[1] = {
+    ...rows[1],
+    valueText: fmt(efficiencyValue, 0, '%'),
+    note: range.isSingleDay ? 'Night sleep efficiency' : 'Average sleep efficiency'
+  };
+  const latencyValue = range.isSingleDay ? day?.sleepModel?.latencySec : average(rangeRows.sleepModel, 'latencySec');
+  rows[5] = {
+    ...rows[5],
+    valueText: Number.isFinite(Number(latencyValue)) ? `${Math.round(Number(latencyValue) / 60)} min` : '<span class="placeholder">Unavailable</span>',
+    note: range.isSingleDay ? 'Time to fall asleep' : 'Average sleep latency'
+  };
+
+  return rows;
+}
+
+function renderSleepPage(range, day, rangeRows) {
+  const daySleep = day?.dailySleep;
+  const score = range.isSingleDay ? daySleep?.score : average(rangeRows.dailySleep, 'score');
+  const totalSleepSec = range.isSingleDay ? day?.sleepModel?.totalSleepSec : average(rangeRows.sleepModel, 'totalSleepSec');
+  const efficiency = range.isSingleDay ? day?.sleepModel?.efficiencyPct : average(rangeRows.sleepModel, 'efficiencyPct');
+  const timeInBed = range.isSingleDay ? day?.sleepModel?.timeInBedSec : average(rangeRows.sleepModel, 'timeInBedSec');
+  const restingHr = range.isSingleDay ? day?.sleepModel?.lowestHeartRate : average(rangeRows.sleepModel, 'lowestHeartRate');
+  const spo2 = range.isSingleDay ? day?.dailySpo2?.spo2Average : average(rangeRows.dailySpo2, 'spo2Average');
+  const bdi = range.isSingleDay ? day?.dailySpo2?.breathingDisturbanceIndex : average(rangeRows.dailySpo2, 'breathingDisturbanceIndex');
+
+  const heroDetail = range.isSingleDay
+    ? `Sleep score for ${range.end}. Total sleep ${fmtDurationSeconds(totalSleepSec, true)} with efficiency ${fmt(efficiency, 0, '%')}.`
+    : `Average Sleep Score across ${summarizeRange(range)}. Average total sleep ${fmtDurationSeconds(totalSleepSec, true)} and efficiency ${fmt(efficiency, 0, '%')}.`;
+
+  const sleepContributors = sleepContributorRows(range, day, rangeRows);
+
+  const stageSegments = range.isSingleDay ? decodeStages(day?.sleepModel) : [];
+  const movementSeries = range.isSingleDay ? (day?.sleepMovement || []) : [];
+  const hrSeries = range.isSingleDay
+    ? seriesToPoints(parseSeriesJson(day?.sleepModel?.hrJson))
+    : buildDailyLine(rangeRows.sleepModel, 'lowestHeartRate');
+  const spo2Series = buildDailyLine(rangeRows.dailySpo2, 'spo2Average');
+  const totalSleepTrend = buildDailyLine(rangeRows.sleepModel, 'totalSleepSec').map((point) => ({ ...point, v: Math.round(point.v / 60) }));
+  const efficiencyTrend = buildDailyLine(rangeRows.sleepModel, 'efficiencyPct');
+
+  const stageTotal = range.isSingleDay ? (day?.sleepModel?.totalSleepSec || 0) : average(rangeRows.sleepModel, 'totalSleepSec');
+  const deepSec = range.isSingleDay ? day?.sleepModel?.deepSec : average(rangeRows.sleepModel, 'deepSec');
+  const remSec = range.isSingleDay ? day?.sleepModel?.remSec : average(rangeRows.sleepModel, 'remSec');
+  const lightSec = range.isSingleDay ? day?.sleepModel?.lightSec : average(rangeRows.sleepModel, 'lightSec');
+
+  const bodyClockCard = `
+    <section class="card section-card">
+      <div class="section-head"><h3>Body clock & sleep debt</h3><p class="muted">Deferred until chronotype/sleep debt signals are supported in imported data.</p></div>
+      <div class="placeholder">Sleep debt and body clock insights are intentionally unavailable in PR3 when unsupported by export fields.</div>
+    </section>
+  `;
+
+  return `
+    ${renderHeroCard({
+      eyebrow: range.isSingleDay ? 'Sleep · selected night' : 'Sleep · range average',
+      title: range.isSingleDay ? 'Sleep score' : 'Average Sleep Score',
+      value: fmt(score),
+      status: scoreStatus(score, 'sleep'),
+      detail: heroDetail,
+      extra: `<p class="muted">${range.isSingleDay ? 'Single-night details below use only nightly records from the selected date.' : 'Range mode switches detailed overnight visuals to daily aggregated trends.'}</p>`
+    })}
+
+    <section class="card section-card">
+      <div class="section-head"><h3>Contributors</h3><p class="muted">${range.isSingleDay ? 'Nightly contributor states.' : 'Average contributor states across the selected range.'}</p></div>
+      ${renderContributorRows(sleepContributors)}
+    </section>
+
+    <section class="card section-card">
+      <div class="section-head"><h3>Key metrics</h3><p class="muted">${range.isSingleDay ? 'Nightly metrics from sleep model and SpO₂ datasets.' : 'Range averages across available nightly rows.'}</p></div>
+      ${renderMetricGrid([
+        { label: 'Total sleep time', value: fmtDurationSeconds(totalSleepSec, true), note: 'Sleep model duration' },
+        { label: 'Time in bed', value: fmtDurationSeconds(timeInBed, true), note: 'Bedtime interval from sleep model' },
+        { label: 'Sleep efficiency', value: fmt(efficiency, 0, '%'), note: range.isSingleDay ? 'Selected night' : 'Range average' },
+        { label: 'Resting heart rate', value: fmt(restingHr, 1, ' bpm'), note: range.isSingleDay ? 'Lowest overnight heart rate' : 'Average nightly lowest HR' }
+      ])}
+    </section>
+
+    ${bodyClockCard}
+
+    <section class="card section-card">
+      <div class="section-head"><h3>Sleep details</h3><p class="muted">${range.isSingleDay ? 'Overnight detail views for one night.' : 'Daily aggregated summaries for the selected range.'}</p></div>
+
+      ${range.isSingleDay
+        ? `${renderSleepStageChart({ title: 'Sleep stage timeline', stages: stageSegments })}
+           ${renderAxisBarChart({ title: 'Movement timeline', series: movementSeries, yTicks: [0, 1, 2, 3, 4], yLabelFormatter: (value) => `${value}` })}
+           ${renderAxisLineChart({ title: 'Overnight heart rate', series: hrSeries, yUnit: 'bpm', yDomainConfig: { minPadding: 3, maxPadding: 3 } })}`
+        : `${renderAxisLineChart({ title: 'Daily total sleep trend', series: totalSleepTrend, yUnit: 'min', yDomainConfig: { minPadding: 12, maxPadding: 12 } })}
+           ${renderAxisLineChart({ title: 'Daily sleep efficiency trend', series: efficiencyTrend, yUnit: '%', yDomainConfig: { minPadding: 2, maxPadding: 2 } })}
+           ${renderAxisLineChart({ title: 'Daily lowest heart rate trend', series: hrSeries, yUnit: 'bpm', yDomainConfig: { minPadding: 3, maxPadding: 3 } })}`}
+
+      ${renderMetricGrid([
+        { label: 'Stage breakdown · Deep', value: fmtDurationSeconds(deepSec, true), note: Number.isFinite(stageTotal) && Number.isFinite(deepSec) ? `${Math.round((deepSec / Math.max(stageTotal, 1)) * 100)}% of total sleep` : 'Unavailable' },
+        { label: 'Stage breakdown · REM', value: fmtDurationSeconds(remSec, true), note: Number.isFinite(stageTotal) && Number.isFinite(remSec) ? `${Math.round((remSec / Math.max(stageTotal, 1)) * 100)}% of total sleep` : 'Unavailable' },
+        { label: 'Stage breakdown · Light', value: fmtDurationSeconds(lightSec, true), note: Number.isFinite(stageTotal) && Number.isFinite(lightSec) ? `${Math.round((lightSec / Math.max(stageTotal, 1)) * 100)}% of total sleep` : 'Unavailable' },
+        { label: 'Average blood oxygen', value: fmt(spo2, 1, '%'), note: range.isSingleDay ? 'Night average SpO₂' : 'Range average SpO₂' },
+        { label: 'Breathing regularity', value: fmt(bdi, 1), note: 'Breathing disturbance index (lower is steadier)' },
+        { label: 'Lowest heart rate', value: fmt(restingHr, 1, ' bpm'), note: range.isSingleDay ? 'Selected night minimum' : 'Range average nightly minimum' },
+        { label: 'Average HRV', value: fmt(range.isSingleDay ? day?.sleepModel?.avgHrv : average(rangeRows.sleepModel, 'avgHrv'), 1, ' ms'), note: 'From sleep model where available' },
+        { label: 'SpO₂ trend support', value: fmt((rangeRows.dailySpo2 || []).length, 0), note: spo2Series.length ? 'Trend data available in selected range' : 'No SpO₂ trend data in selected range' }
+      ])}
+
+      ${!range.isSingleDay ? renderAxisLineChart({ title: 'Daily SpO₂ average trend', series: spo2Series, yUnit: '%', yDomainConfig: { minPadding: 0.5, maxPadding: 0.5 } }) : ''}
+    </section>
+  `;
 }
 
 function renderPreviewCard({ title, subtitle, metrics, footer }) {
@@ -270,31 +577,9 @@ function renderHome(range, day, rangeRows) {
 function renderDomainPage(pageKey, range, day, rangeRows) {
   const [datasetKey, scoreKey] = SCORE_FIELDS[pageKey] || [];
   const title = PAGE_META[pageKey]?.title || pageKey;
-  const labelMap = CONTRIBUTOR_LABELS[pageKey] || {};
   const dataRows = datasetKey ? rangeRows[datasetKey] || [] : [];
   const dayValue = datasetKey ? day?.[datasetKey]?.[scoreKey] : null;
   const rangeValue = datasetKey ? average(dataRows, scoreKey) : null;
-
-  const baseMetrics = [
-    { label: range.isSingleDay ? 'Selected day score' : 'Range average score', value: fmt(range.isSingleDay ? dayValue : rangeValue) },
-    { label: 'Window', value: summarizeRange(range) }
-  ];
-
-  if (pageKey === 'sleep') {
-    baseMetrics.push(
-      { label: 'Sleep model efficiency', value: fmt(average(rangeRows.sleepModel, 'efficiencyPct'), 0, '%') },
-      { label: 'Avg HRV', value: fmt(average(rangeRows.sleepModel, 'avgHrv'), 1, ' ms') }
-    );
-  }
-
-  if (pageKey === 'activity') {
-    baseMetrics.push(
-      { label: 'Avg steps', value: fmt(average(dataRows, 'steps'), 0) },
-      { label: 'Active calories', value: fmt(average(dataRows, 'activeCalories'), 0, ' cal') }
-    );
-  }
-
-  const contributorRows = summarizeContributors(dataRows, labelMap);
 
   return `
     ${renderHeroCard({
@@ -310,25 +595,12 @@ function renderDomainPage(pageKey, range, day, rangeRows) {
     <section class="card section-card">
       <div class="section-head">
         <h3>Key metrics</h3>
-        <p class="muted">Compact overview using the shared card and metric system.</p>
+        <p class="muted">Page parity for this tab remains intentionally limited in PR3.</p>
       </div>
-      ${renderMetricGrid(baseMetrics)}
-    </section>
-
-    <section class="card section-card">
-      <div class="section-head">
-        <h3>Contributors</h3>
-        <p class="muted">Top contributors for the selected date/range.</p>
-      </div>
-      ${renderContributorRows(contributorRows)}
-    </section>
-
-    <section class="card section-card">
-      <div class="section-head">
-        <h3>Detail card</h3>
-        <p class="muted">Unified chart/detail chrome in place. Full parity mapping continues in PR3+.</p>
-      </div>
-      <div class="placeholder">Detailed visual layers are intentionally deferred while preserving real data summaries.</div>
+      ${renderMetricGrid([
+        { label: range.isSingleDay ? 'Selected day score' : 'Range average score', value: fmt(range.isSingleDay ? dayValue : rangeValue) },
+        { label: 'Window', value: summarizeRange(range) }
+      ])}
     </section>
   `;
 }
@@ -358,11 +630,6 @@ function renderHeartRatePage(range, day, rangeRows) {
         { label: 'Range', value: summarizeRange(range) }
       ])}
     </section>
-
-    <section class="card section-card">
-      <div class="section-head"><h3>Trend card</h3><p class="muted">Shared trend card styling for chart surfaces.</p></div>
-      <div class="placeholder">Trend visualization scaffold is in place and will be deepened in PR3+.</div>
-    </section>
   `;
 }
 
@@ -387,16 +654,6 @@ function renderStressPage(range, rangeRows) {
         { label: 'Days in range', value: fmt((rangeRows.derivedNightlyVitals || []).length, 0) },
         { label: 'Selected range', value: summarizeRange(range) }
       ])}
-    </section>
-
-    <section class="card section-card">
-      <div class="section-head"><h3>Contributors</h3><p class="muted">Shared contributor row treatment.</p></div>
-      ${renderContributorRows(
-        [
-          { label: 'Recovery variability', avg: Number.isFinite(stressProxy) ? Math.max(0, Math.min(100, stressProxy)) : null },
-          { label: 'Overnight resting HR', avg: Number.isFinite(restingHr) ? Math.max(0, Math.min(100, 100 - restingHr)) : null }
-        ].filter((item) => Number.isFinite(item.avg))
-      )}
     </section>
   `;
 }
@@ -527,6 +784,16 @@ function renderPageContent(range, day, rangeRows) {
 
   if (page === 'stress') {
     content.innerHTML = renderStressPage(range, rangeRows);
+    return;
+  }
+
+  if (page === 'readiness') {
+    content.innerHTML = renderReadinessPage(range, day, rangeRows);
+    return;
+  }
+
+  if (page === 'sleep') {
+    content.innerHTML = renderSleepPage(range, day, rangeRows);
     return;
   }
 

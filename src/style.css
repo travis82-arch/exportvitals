@@ -319,6 +319,35 @@ body {
   font-style: italic;
 }
 
+
+.chart-card {
+  border: 1px solid rgba(125, 176, 255, 0.2);
+  border-radius: var(--radius-md);
+  background: rgba(10, 18, 29, 0.92);
+  padding: 10px;
+}
+
+.axis-chart {
+  width: 100%;
+  display: block;
+}
+
+.grid-line {
+  stroke: rgba(150, 166, 193, 0.22);
+  stroke-width: 0.8;
+}
+
+.axis-line {
+  stroke: rgba(163, 195, 244, 0.5);
+  stroke-width: 1;
+}
+
+.tick {
+  fill: #aac2e8;
+  font-size: 9px;
+  letter-spacing: 0.01em;
+}
+
 .top-gap {
   margin-top: 8px;
 }
