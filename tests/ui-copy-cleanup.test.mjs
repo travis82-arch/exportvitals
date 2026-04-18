@@ -8,4 +8,7 @@ test('user-facing copy avoids derived-from implementation notes', () => {
   assert.equal(source.includes('Derived from daytime heart-rate points'), false);
   assert.equal(source.includes('Derived from sleep-model nightly range'), false);
   assert.equal(source.includes('Derived from available nightly variability proxy'), false);
+  assert.equal(source.includes('Preview card uses available data only. Full sleep deep-dive remains in the Sleep tab.'), false);
+  assert.equal(source.includes('Selected day:'), false);
+  assert.equal(source.includes('Daily view for'), false);
 });

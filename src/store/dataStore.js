@@ -58,6 +58,18 @@ function parseCsv(text) {
   return data || [];
 }
 
+function pickRowValue(row, aliases = []) {
+  if (!row || typeof row !== 'object') return null;
+  const direct = aliases.map((key) => row[key]).find((value) => value != null && String(value).trim() !== '');
+  if (direct != null && String(direct).trim() !== '') return direct;
+  const normalized = new Map(Object.entries(row).map(([key, value]) => [normalizeName(key), value]));
+  for (const alias of aliases) {
+    const candidate = normalized.get(normalizeName(alias));
+    if (candidate != null && String(candidate).trim() !== '') return candidate;
+  }
+  return null;
+}
+
 function normalizeRows(dataset, rows) {
   if (dataset === 'dailyReadiness')
     return rows
@@ -101,26 +113,27 @@ function normalizeRows(dataset, rows) {
   if (dataset === 'dailyStress')
     return rows
       .map((r) => ({
-        date: r.day ?? r.date,
-        score: toNumber(r.score ?? r.stress_score),
-        high: toNumber(r.high ?? r.high_stress_duration),
-        medium: toNumber(r.medium ?? r.medium_stress_duration),
-        low: toNumber(r.low ?? r.low_stress_duration),
-        recovery: toNumber(r.recovery ?? r.restorative_time)
+        date: pickRowValue(r, ['day', 'date']),
+        score: toNumber(pickRowValue(r, ['score', 'stress_score', 'daily_stress_score', 'stress'])),
+        high: toNumber(pickRowValue(r, ['high', 'high_stress_duration', 'high_stress_duration_min', 'high_stress_duration_minutes'])),
+        medium: toNumber(pickRowValue(r, ['medium', 'medium_stress_duration', 'medium_stress_duration_min', 'medium_stress_duration_minutes'])),
+        low: toNumber(pickRowValue(r, ['low', 'low_stress_duration', 'low_stress_duration_min', 'low_stress_duration_minutes'])),
+        recovery: toNumber(pickRowValue(r, ['recovery', 'restorative_time', 'restored_duration', 'restoration_duration', 'restorative_duration']))
       }))
       .filter((r) => r.date);
 
   if (dataset === 'daytimeStress')
     return rows
       .map((r) => {
-        const timestamp = r.timestamp ?? r.datetime ?? r.time ?? null;
-        const score = toNumber(r.stress_score ?? r.score ?? r.level);
-        const date = r.day ?? r.date ?? (timestamp ? new Date(timestamp).toISOString().slice(0, 10) : null);
+        const timestamp = pickRowValue(r, ['timestamp', 'datetime', 'time', 'start_time']);
+        const score = toNumber(pickRowValue(r, ['stress_score', 'score', 'level', 'stress_level']));
+        const dateRaw = pickRowValue(r, ['day', 'date']);
+        const date = dateRaw ?? (timestamp ? new Date(timestamp).toISOString().slice(0, 10) : null);
         return {
           date,
           timestamp,
           score,
-          category: r.category ?? r.stress_category ?? r.state ?? null
+          category: pickRowValue(r, ['category', 'stress_category', 'state', 'stress_state'])
         };
       })
       .filter((r) => r.date && (r.timestamp || Number.isFinite(r.score)));
