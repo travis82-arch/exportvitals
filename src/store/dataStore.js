@@ -2,7 +2,12 @@ import { normalizeName, parseContributors, parseSpo2Average, toNumber, median, s
 import JSZip from 'jszip';
 import Papa from 'papaparse';
 
-const STORAGE_KEY = 'ouraDerivedMetricsV3';
+const LEGACY_STORAGE_KEY = 'ouraDerivedMetricsV3';
+const META_STORAGE_KEY = 'ouraDerivedMetricsMetaV1';
+const DB_NAME = 'ouraDerivedMetricsDbV1';
+const DB_VERSION = 1;
+const STORE_NAME = 'largeState';
+const STORE_ID = 'latest';
 
 const DATASET_ALIASES = {
   dailyReadiness: ['dailyreadiness.csv'],
@@ -20,7 +25,11 @@ const store = {
   ingestReport: {},
   availabilityMatrix: {},
   uiSnapshot: {},
-  importState: { status: 'idle', phase: 'Idle', percent: 0, lastResult: null, lastError: null, lastSuccessAt: null }
+  importState: { status: 'idle', phase: 'Idle', percent: 0, lastResult: null, lastError: null, lastSuccessAt: null },
+  storageState: {
+    backend: 'indexeddb',
+    largeState: { ok: false, readable: false, rowCounts: {}, updatedAt: null, error: null }
+  }
 };
 const listeners = new Set();
 
@@ -313,30 +322,217 @@ function getDateRangeFromDatasets(datasets) {
   return { start: unique[0], end: unique.at(-1), days: unique.length };
 }
 
-export function loadFromLocalCache(storage = (typeof localStorage !== 'undefined' ? localStorage : null)) {
+function getStorage(storage) {
+  if (storage) return storage;
+  return typeof localStorage !== 'undefined' ? localStorage : null;
+}
+
+function getIndexedDb(indexedDb) {
+  if (indexedDb) return indexedDb;
+  return typeof indexedDB !== 'undefined' ? indexedDB : null;
+}
+
+function largeStatePayload() {
+  return {
+    datasets: store.datasets,
+    derivedNightlyVitals: store.derivedNightlyVitals,
+    ingestReport: store.ingestReport,
+    availabilityMatrix: store.availabilityMatrix,
+    uiSnapshot: store.uiSnapshot
+  };
+}
+
+function applyLargeState(payload = {}) {
+  Object.assign(store, {
+    datasets: { ...store.datasets, ...(payload.datasets || {}) },
+    derivedNightlyVitals: payload.derivedNightlyVitals || [],
+    ingestReport: payload.ingestReport || {},
+    availabilityMatrix: payload.availabilityMatrix || {},
+    uiSnapshot: payload.uiSnapshot || {}
+  });
+  if (!payload.availabilityMatrix || !Object.keys(payload.availabilityMatrix).length) {
+    computeAvailabilityMatrix();
+  }
+}
+
+function metaStatePayload() {
+  return {
+    importState: store.importState,
+    storageState: store.storageState
+  };
+}
+
+function openDb(indexedDb = getIndexedDb()) {
+  if (!indexedDb?.open) return Promise.resolve(null);
+  return new Promise((resolve, reject) => {
+    const request = indexedDb.open(DB_NAME, DB_VERSION);
+    request.onupgradeneeded = () => {
+      const db = request.result;
+      if (!db.objectStoreNames.contains(STORE_NAME)) {
+        db.createObjectStore(STORE_NAME, { keyPath: 'id' });
+      }
+    };
+    request.onerror = () => reject(request.error || new Error('Failed to open IndexedDB.'));
+    request.onsuccess = () => resolve(request.result);
+  });
+}
+
+function idbPut(db, value) {
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(STORE_NAME, 'readwrite');
+    const storeRef = tx.objectStore(STORE_NAME);
+    storeRef.put(value);
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error || new Error('Failed to write IndexedDB.'));
+  });
+}
+
+function idbGet(db, id) {
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(STORE_NAME, 'readonly');
+    const storeRef = tx.objectStore(STORE_NAME);
+    const request = storeRef.get(id);
+    request.onsuccess = () => resolve(request.result || null);
+    request.onerror = () => reject(request.error || new Error('Failed to read IndexedDB.'));
+  });
+}
+
+function saveMetaToLocalStorage(storage = getStorage()) {
+  if (!storage?.setItem) return;
+  storage.setItem(META_STORAGE_KEY, JSON.stringify(metaStatePayload()));
+}
+
+async function saveLargeToIndexedDb(indexedDb = getIndexedDb()) {
+  if (!indexedDb?.open) {
+    store.storageState = {
+      ...store.storageState,
+      backend: 'indexeddb-unavailable',
+      largeState: {
+        ok: false,
+        readable: false,
+        rowCounts: store.ingestReport?.rowCounts || {},
+        updatedAt: null,
+        error: 'IndexedDB unavailable in this environment'
+      }
+    };
+    return false;
+  }
+  const db = await openDb(indexedDb);
+  try {
+    const updatedAt = new Date().toISOString();
+    await idbPut(db, { id: STORE_ID, updatedAt, payload: largeStatePayload() });
+    store.storageState = {
+      ...store.storageState,
+      backend: 'indexeddb',
+      largeState: {
+        ok: true,
+        readable: true,
+        rowCounts: store.ingestReport?.rowCounts || {},
+        updatedAt,
+        error: null
+      }
+    };
+    return true;
+  } finally {
+    db?.close?.();
+  }
+}
+
+async function loadLargeFromIndexedDb(indexedDb = getIndexedDb()) {
+  if (!indexedDb?.open) {
+    store.storageState = {
+      ...store.storageState,
+      backend: 'indexeddb-unavailable',
+      largeState: { ok: false, readable: false, rowCounts: {}, updatedAt: null, error: 'IndexedDB unavailable in this environment' }
+    };
+    return false;
+  }
+  const db = await openDb(indexedDb);
+  try {
+    const record = await idbGet(db, STORE_ID);
+    if (!record?.payload) {
+      store.storageState = {
+        ...store.storageState,
+        backend: 'indexeddb',
+        largeState: { ok: false, readable: false, rowCounts: {}, updatedAt: null, error: null }
+      };
+      return false;
+    }
+    applyLargeState(record.payload);
+    store.storageState = {
+      ...store.storageState,
+      backend: 'indexeddb',
+      largeState: {
+        ok: true,
+        readable: true,
+        rowCounts: record.payload?.ingestReport?.rowCounts || {},
+        updatedAt: record.updatedAt || null,
+        error: null
+      }
+    };
+    return true;
+  } finally {
+    db?.close?.();
+  }
+}
+
+export function loadFromLocalCache(storage = getStorage()) {
   if (!storage?.getItem) return store;
   try {
-    const parsed = JSON.parse(storage.getItem(STORAGE_KEY) || '{}');
+    const parsed = JSON.parse(storage.getItem(META_STORAGE_KEY) || '{}');
     Object.assign(store, {
-      datasets: { ...store.datasets, ...(parsed.datasets || {}) },
-      derivedNightlyVitals: parsed.derivedNightlyVitals || [],
-      ingestReport: parsed.ingestReport || {},
-      availabilityMatrix: parsed.availabilityMatrix || {},
-      uiSnapshot: parsed.uiSnapshot || {},
-      importState: { ...store.importState, ...(parsed.importState || {}) }
+      importState: { ...store.importState, ...(parsed.importState || {}) },
+      storageState: { ...store.storageState, ...(parsed.storageState || {}) }
     });
-    if (!parsed.availabilityMatrix || !Object.keys(parsed.availabilityMatrix).length) {
-      computeAvailabilityMatrix();
-    }
   } catch {
     // noop
+  }
+  if (store.importState?.status === 'success' && !store.ingestReport?.dateRange?.end) {
+    store.importState = { ...store.importState, status: 'idle', lastResult: null };
+  }
+
+  if (!store.ingestReport?.dateRange?.end) {
+    try {
+      const legacyParsed = JSON.parse(storage.getItem(LEGACY_STORAGE_KEY) || '{}');
+      if (legacyParsed?.datasets) {
+        applyLargeState(legacyParsed);
+        store.storageState = {
+          ...store.storageState,
+          backend: 'localstorage-legacy',
+          largeState: {
+            ok: true,
+            readable: true,
+            rowCounts: legacyParsed?.ingestReport?.rowCounts || {},
+            updatedAt: null,
+            error: null
+          }
+        };
+      }
+    } catch {
+      // noop
+    }
   }
   return store;
 }
 
-export function saveToLocalCache(storage = (typeof localStorage !== 'undefined' ? localStorage : null)) {
-  if (!storage?.setItem) return;
-  storage.setItem(STORAGE_KEY, JSON.stringify(store));
+export async function hydrateFromPersistence({ storage = getStorage(), indexedDb = getIndexedDb() } = {}) {
+  loadFromLocalCache(storage);
+  try {
+    await loadLargeFromIndexedDb(indexedDb);
+  } catch (error) {
+    store.storageState = {
+      ...store.storageState,
+      backend: 'indexeddb',
+      largeState: { ok: false, readable: false, rowCounts: {}, updatedAt: null, error: error?.message || String(error) }
+    };
+  }
+  saveMetaToLocalStorage(storage);
+  emitStoreChange();
+  return store;
+}
+
+export function saveToLocalCache(storage = getStorage()) {
+  saveMetaToLocalStorage(storage);
 }
 
 export async function importZipArrayBuffer({ fileName, arrayBuffer, options = {}, onProgress } = {}) {
@@ -403,7 +599,8 @@ export async function importZipArrayBuffer({ fileName, arrayBuffer, options = {}
       lastSuccessAt: new Date().toISOString()
     };
 
-    saveToLocalCache();
+    await saveLargeToIndexedDb();
+    saveMetaToLocalStorage();
     emitStoreChange();
     if (onProgress) onProgress(store.importState);
     return store.ingestReport;
@@ -414,7 +611,7 @@ export async function importZipArrayBuffer({ fileName, arrayBuffer, options = {}
       phase: 'Failed',
       lastError: { message: error?.message || String(error), stack: error?.stack || null }
     };
-    saveToLocalCache();
+    saveMetaToLocalStorage();
     emitStoreChange();
     if (onProgress) onProgress(store.importState);
     throw error;
@@ -537,7 +734,7 @@ export function getBaseline(metric, windowDays = 14, endDate) {
 
 export function setUiSnapshot(snapshot) {
   store.uiSnapshot = snapshot;
-  saveToLocalCache();
+  saveMetaToLocalStorage();
   emitStoreChange();
 }
 
@@ -559,7 +756,7 @@ export function setImportError(error, context = {}) {
       ...context
     }
   };
-  saveToLocalCache();
+  saveMetaToLocalStorage();
   emitStoreChange();
 }
 

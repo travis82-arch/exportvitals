@@ -1,5 +1,6 @@
 export const RESETTABLE_LOCAL_STORAGE_KEYS = [
   'ouraDerivedMetricsV3',
+  'ouraDerivedMetricsMetaV1',
   'ouraDashboardSettingsV1',
   'ouraInsightsLogV1',
   'ouraDerivedMetricsV4',

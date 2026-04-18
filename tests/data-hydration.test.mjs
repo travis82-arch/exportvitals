@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import JSZip from 'jszip';
-import { importZipArrayBuffer, getAvailableDates, getDay, getStoreSnapshot } from '../src/store/dataStore.js';
+import { importZipArrayBuffer, getAvailableDates, getDay, getStoreSnapshot, hydrateFromPersistence } from '../src/store/dataStore.js';
 import { resolveSelectedRange } from '../src/state/selectedRange.js';
 import { shouldRenderDateRangeForPage } from '../src/state/pageConfig.js';
 import { runSettingsUploadImport } from '../src/state/importFlow.js';
@@ -10,6 +10,60 @@ async function buildZip(nameToCsv) {
   const zip = new JSZip();
   for (const [name, csv] of Object.entries(nameToCsv)) zip.file(name, csv);
   return zip.generateAsync({ type: 'arraybuffer' });
+}
+
+function createMemoryStorage() {
+  const data = new Map();
+  const writes = [];
+  return {
+    writes,
+    getItem: (key) => (data.has(key) ? data.get(key) : null),
+    setItem: (key, value) => {
+      writes.push({ key, value });
+      data.set(key, String(value));
+    },
+    removeItem: (key) => data.delete(key)
+  };
+}
+
+function createFakeIndexedDb() {
+  const records = new Map();
+  return {
+    open() {
+      const request = { result: null, error: null, onupgradeneeded: null, onsuccess: null, onerror: null };
+      queueMicrotask(() => {
+        const db = {
+          objectStoreNames: { contains: () => true },
+          createObjectStore: () => {},
+          transaction: (_storeName, mode) => {
+            const tx = { oncomplete: null, onerror: null, error: null };
+            const objectStore = {
+              put(value) {
+                records.set(value.id, structuredClone(value));
+                queueMicrotask(() => tx.oncomplete?.());
+              },
+              get(id) {
+                const getRequest = { result: null, error: null, onsuccess: null, onerror: null };
+                queueMicrotask(() => {
+                  getRequest.result = records.get(id) || null;
+                  getRequest.onsuccess?.();
+                });
+                return getRequest;
+              }
+            };
+            tx.objectStore = () => objectStore;
+            tx.mode = mode;
+            return tx;
+          },
+          close: () => {}
+        };
+        request.result = db;
+        request.onupgradeneeded?.();
+        request.onsuccess?.();
+      });
+      return request;
+    }
+  };
 }
 
 test('successful upload updates active state and latest day is renderable', async () => {
@@ -99,4 +153,45 @@ test('settings page does not render date range controls', () => {
   assert.equal(shouldRenderDateRangeForPage('index'), true);
   assert.equal(shouldRenderDateRangeForPage('readiness'), true);
   assert.equal(shouldRenderDateRangeForPage('sleep'), true);
+});
+
+test('large import persists in indexeddb and not full payload localStorage key', async () => {
+  const originalLocalStorage = globalThis.localStorage;
+  const originalIndexedDb = globalThis.indexedDB;
+  const local = createMemoryStorage();
+  const fakeIndexedDb = createFakeIndexedDb();
+  globalThis.localStorage = local;
+  globalThis.indexedDB = fakeIndexedDb;
+
+  try {
+    const zip = await buildZip({
+      'daily_readiness.csv': 'day,score,temperature_deviation\n2026-05-01,75,0.1\n2026-05-02,80,0.0\n2026-05-03,81,0.0',
+      'daily_sleep.csv': 'day,score\n2026-05-01,73\n2026-05-02,74\n2026-05-03,76',
+      'sleep_model.csv': 'day,total_sleep_duration,time_in_bed,efficiency,latency,awake_time,deep_sleep_duration,light_sleep_duration,rem_sleep_duration,lowest_heart_rate,average_heart_rate,average_hrv,average_breath\n2026-05-01,24000,28000,85,500,900,5000,11000,8000,52,60,42,13.8\n2026-05-02,24400,28100,86,480,840,5200,11200,8000,51,59,43,13.7\n2026-05-03,24800,28300,87,460,800,5400,11400,8000,50,58,44,13.5'
+    });
+
+    await importZipArrayBuffer({ fileName: 'oura.zip', arrayBuffer: zip });
+    const snapshot = getStoreSnapshot();
+    assert.equal(snapshot.importState.status, 'success');
+    assert.equal(snapshot.importState.lastError, null);
+    assert.equal(snapshot.ingestReport.dateRange.end, '2026-05-03');
+    assert.equal(snapshot.storageState.backend, 'indexeddb');
+    assert.equal(snapshot.storageState.largeState.ok, true);
+    assert.equal(snapshot.storageState.largeState.readable, true);
+
+    const persistedKeys = local.writes.map((entry) => entry.key);
+    assert.ok(persistedKeys.includes('ouraDerivedMetricsMetaV1'));
+    assert.ok(!persistedKeys.includes('ouraDerivedMetricsV3'));
+
+    const selected = resolveSelectedRange(getAvailableDates(), { preset: 'latest-day' });
+    assert.equal(selected.end, '2026-05-03');
+    assert.equal(selected.disabled, false);
+
+    await hydrateFromPersistence({ storage: local, indexedDb: fakeIndexedDb });
+    assert.equal(getDay('2026-05-03').dailyReadiness?.score, 81);
+    assert.equal(getDay('2026-05-03').dailySleep?.score, 76);
+  } finally {
+    globalThis.localStorage = originalLocalStorage;
+    globalThis.indexedDB = originalIndexedDb;
+  }
 });
