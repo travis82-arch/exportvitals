@@ -87,7 +87,7 @@ export function resolveSelectedRange(availableDates, preferred = null) {
 
 export function summarizeRange(range) {
   if (!range || !range.start || !range.end) return 'No data loaded';
-  if (range.start === range.end) return `Single day: ${range.end}`;
+  if (range.start === range.end) return range.end;
   return `${range.start} → ${range.end}`;
 }
 

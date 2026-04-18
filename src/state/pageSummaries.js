@@ -94,3 +94,61 @@ export function stressSummary(range, day, rangeRows = {}) {
     stressDays: stressRows.length
   };
 }
+
+export function stressDailyBreakdownRows(rows = []) {
+  const safe = (value) => {
+    if (value == null || value === '') return null;
+    const numeric = Number(value);
+    return Number.isFinite(numeric) ? numeric : null;
+  };
+  return (rows || [])
+    .filter((row) => row?.date)
+    .map((row) => ({
+      date: row.date,
+      stressedMinutes: safe(row?.high),
+      engagedMinutes: safe(row?.medium),
+      lowMinutes: safe(row?.low),
+      restoredMinutes: safe(row?.recovery),
+      peakScore: safe(row?.score)
+    }));
+}
+
+export function stressDayTimelineRows(range, rangeRows = {}) {
+  const selectedDate = range?.end || null;
+  const rows = (rangeRows?.daytimeStress || []).filter((row) => row?.date === selectedDate);
+  if (!rows.length) return [];
+  return rows
+    .map((row, index) => {
+      const tMs = Number.isFinite(new Date(row?.timestamp).getTime())
+        ? new Date(row.timestamp).getTime()
+        : (selectedDate ? new Date(`${selectedDate}T00:00:00`).getTime() + index * 15 * 60 * 1000 : NaN);
+      return {
+        tMs,
+        score: Number(row?.score),
+        category: row?.category ? String(row.category) : null
+      };
+    })
+    .filter((row) => Number.isFinite(row.tMs))
+    .sort((a, b) => a.tMs - b.tMs);
+}
+
+export function stressCategorySeries(timelineRows = []) {
+  const ordered = ['restored', 'relaxed', 'engaged', 'stressed', 'high', 'high stress'];
+  const values = [...new Set((timelineRows || []).map((row) => String(row?.category || '').trim().toLowerCase()).filter(Boolean))];
+  const categories = [...ordered.filter((name) => values.includes(name)), ...values.filter((name) => !ordered.includes(name))];
+  const indexByCategory = new Map(categories.map((name, idx) => [name, idx]));
+  const series = (timelineRows || [])
+    .map((row) => {
+      const key = String(row?.category || '').trim().toLowerCase();
+      return {
+        tMs: row.tMs,
+        v: indexByCategory.has(key) ? indexByCategory.get(key) : null
+      };
+    })
+    .filter((row) => Number.isFinite(row.tMs) && Number.isFinite(row.v));
+
+  return {
+    series,
+    categories
+  };
+}

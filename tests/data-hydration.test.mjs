@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import JSZip from 'jszip';
 import { importZipArrayBuffer, getAvailableDates, getDay, getRange, getStoreSnapshot, hydrateFromPersistence } from '../src/store/dataStore.js';
 import { resolveSelectedRange } from '../src/state/selectedRange.js';
-import { shouldRenderDateRangeForPage } from '../src/state/pageConfig.js';
+import { shouldRenderDateRangeForPage, shouldRenderIntroBanner } from '../src/state/pageConfig.js';
 import { runSettingsUploadImport } from '../src/state/importFlow.js';
 
 async function buildZip(nameToCsv) {
@@ -153,6 +153,9 @@ test('settings page does not render date range controls', () => {
   assert.equal(shouldRenderDateRangeForPage('index'), true);
   assert.equal(shouldRenderDateRangeForPage('readiness'), true);
   assert.equal(shouldRenderDateRangeForPage('sleep'), true);
+  assert.equal(shouldRenderIntroBanner('index'), true);
+  assert.equal(shouldRenderIntroBanner('stress'), false);
+  assert.equal(shouldRenderIntroBanner('settings'), false);
 });
 
 test('large import persists in indexeddb and not full payload localStorage key', async () => {
@@ -217,4 +220,20 @@ test('activity and heart-rate range data exposes aggregated inputs and activity 
   assert.equal(range.session.length, 1);
   assert.equal(range.daytimeHeartRate.length >= 1, true);
   assert.equal(range.heartRate.length >= 3, true);
+});
+
+test('stress datasets hydrate selected-day and range rows', async () => {
+  const zip = await buildZip({
+    'daily_stress.csv': 'day,score,high_stress_duration,medium_stress_duration,low_stress_duration,restorative_time\n2026-07-01,61,90,120,80,45\n2026-07-02,74,130,110,60,32',
+    'daytime_stress.csv': 'timestamp,stress_score,stress_category\n2026-07-02T08:00:00Z,44,engaged\n2026-07-02T12:00:00Z,78,stress\n2026-07-02T19:30:00Z,35,restored'
+  });
+
+  await importZipArrayBuffer({ fileName: 'stress.zip', arrayBuffer: zip });
+  const day = getDay('2026-07-02');
+  const range = getRange('2026-07-01', '2026-07-02');
+  assert.equal(day.dailyStress?.score, 74);
+  assert.equal(day.dailyStress?.high, 130);
+  assert.equal(range.dailyStress.length, 2);
+  assert.equal(range.daytimeStress.length, 3);
+  assert.equal(range.daytimeStress.some((row) => row.category === 'stress'), true);
 });
