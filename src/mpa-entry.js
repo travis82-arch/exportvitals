@@ -20,6 +20,7 @@ import { hasPurgedReloadFlag, purgeStaleServiceWorkersAndCaches, setPurgedReload
 import { renderAxisLineChart } from './charts/AxisLineChart.js';
 import { renderAxisBarChart } from './charts/AxisBarChart.js';
 import { renderSleepStageChart } from './charts/SleepStageChart.js';
+import { activitySummary, heartRateSummary } from './state/pageSummaries.js';
 
 const page = document.body.dataset.page || 'index';
 const settings = loadSettings();
@@ -81,7 +82,18 @@ function fmt(value, digits = 0, suffix = '') {
 }
 
 function emptyRangeRows() {
-  return { dailySleep: [], dailyReadiness: [], dailyActivity: [], derivedNightlyVitals: [], sleepModel: [], dailySpo2: [] };
+  return {
+    dailySleep: [],
+    dailyReadiness: [],
+    dailyActivity: [],
+    derivedNightlyVitals: [],
+    sleepModel: [],
+    dailySpo2: [],
+    workout: [],
+    session: [],
+    heartRate: [],
+    daytimeHeartRate: []
+  };
 }
 
 function fmtDurationSeconds(sec, compact = false) {
@@ -99,6 +111,11 @@ function fmtSigned(value, digits = 1, suffix = '') {
   const num = Number(value);
   const sign = num > 0 ? '+' : '';
   return `${sign}${num.toFixed(digits)}${suffix}`;
+}
+
+function fmtMinutes(value) {
+  if (!Number.isFinite(Number(value))) return '<span class="placeholder">Unavailable</span>';
+  return `${Math.round(Number(value))} min`;
 }
 
 function scoreStatus(score, domain = 'default') {
@@ -224,6 +241,50 @@ function buildDailyLine(rows, field) {
     .filter((row) => row?.date && Number.isFinite(Number(row?.[field])))
     .map((row) => ({ tMs: new Date(`${row.date}T12:00:00`).getTime(), v: Number(row[field]) }))
     .filter((point) => Number.isFinite(point.tMs));
+}
+
+function buildDailyActivitySeconds(rows) {
+  return (rows || [])
+    .filter((row) => row?.date)
+    .map((row) => {
+      const totalSec = (Number(row?.lowActivityTime) || 0) + (Number(row?.mediumActivityTime) || 0) + (Number(row?.highActivityTime) || 0);
+      return { tMs: new Date(`${row.date}T12:00:00`).getTime(), v: Math.round(totalSec / 60) };
+    })
+    .filter((point) => Number.isFinite(point.tMs));
+}
+
+function aggregateActivities(day, rangeRows, limit = 18) {
+  const raw = day?.activities?.length
+    ? day.activities
+    : [...(rangeRows.workout || []), ...(rangeRows.session || [])];
+  return raw
+    .map((item) => ({
+      ...item,
+      sortMs: new Date(item.startTime || `${item.date}T00:00:00`).getTime()
+    }))
+    .sort((a, b) => b.sortMs - a.sortMs)
+    .slice(0, limit);
+}
+
+function renderActivitiesList(activities, isSingleDay) {
+  if (!activities.length) return '<div class="placeholder">No activity sessions are available for the selected range.</div>';
+  return `<div class="activity-list">${activities
+    .map((activity) => `<article class="activity-item">
+      <div class="row split-row">
+        <strong>${activity.type || 'Activity'}</strong>
+        <span class="small muted">${activity.source || 'dataset'}</span>
+      </div>
+      <div class="small muted">
+        ${activity.startTime ? new Date(activity.startTime).toLocaleString([], { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) : activity.date}
+        ${isSingleDay ? '' : ` · ${activity.date}`}
+      </div>
+      <div class="row">
+        <span class="small">Duration: ${Number.isFinite(Number(activity.durationSec)) ? fmtDurationSeconds(activity.durationSec, true) : '<span class="placeholder">Unavailable</span>'}</span>
+        <span class="small">Calories: ${Number.isFinite(Number(activity.calories)) ? `${Math.round(Number(activity.calories))} cal` : '<span class="placeholder">Unavailable</span>'}</span>
+        <span class="small">Avg HR: ${Number.isFinite(Number(activity.avgHr)) ? `${Math.round(Number(activity.avgHr))} bpm` : '<span class="placeholder">Unavailable</span>'}</span>
+      </div>
+    </article>`)
+    .join('')}</div>`;
 }
 
 function contributorFromRange(rangeRows, singleRow, keys, { label, formatter = (value) => `${Math.round(value)}`, note = '' }) {
@@ -487,6 +548,126 @@ function renderSleepPage(range, day, rangeRows) {
   `;
 }
 
+function renderActivityPage(range, day, rangeRows) {
+  const summary = activitySummary(range, day, rangeRows);
+  const selected = day?.dailyActivity;
+  const goalProgress = range.isSingleDay
+    ? (Number(selected?.targetCalories) > 0 ? (Number(selected?.totalCalories) / Number(selected?.targetCalories)) * 100 : null)
+    : average((rangeRows.dailyActivity || []).map((row) => ({
+      progress: Number(row?.targetCalories) > 0 ? (Number(row.totalCalories) / Number(row.targetCalories)) * 100 : null
+    })), 'progress');
+  const activities = aggregateActivities(day, rangeRows);
+  const movementSeries = range.isSingleDay
+    ? (day?.activityClassSeries || []).map((point) => ({ tMs: point.tMs, v: point.level }))
+    : buildDailyActivitySeconds(rangeRows.dailyActivity);
+  const stepsTrend = buildDailyLine(rangeRows.dailyActivity, 'steps');
+
+  const contributorRows = [
+    contributorFromRange({ isSingleDay: range.isSingleDay, rows: rangeRows.dailyActivity }, selected, ['stay_active'], { label: 'Stay active' }),
+    contributorFromRange({ isSingleDay: range.isSingleDay, rows: rangeRows.dailyActivity }, selected, ['move_every_hour'], { label: 'Move every hour' }),
+    contributorFromRange({ isSingleDay: range.isSingleDay, rows: rangeRows.dailyActivity }, selected, ['meet_daily_targets', 'meet_daily_goals'], { label: 'Meet daily goals' }),
+    contributorFromRange({ isSingleDay: range.isSingleDay, rows: rangeRows.dailyActivity }, selected, ['training_frequency'], { label: 'Training frequency' }),
+    contributorFromRange({ isSingleDay: range.isSingleDay, rows: rangeRows.dailyActivity }, selected, ['training_volume'], { label: 'Training volume' }),
+    contributorFromRange({ isSingleDay: range.isSingleDay, rows: rangeRows.dailyActivity }, selected, ['recovery_time'], { label: 'Recovery time' })
+  ];
+
+  const zoneRows = range.isSingleDay
+    ? [{
+        label: 'Sedentary',
+        value: fmtMinutes((Number(selected?.sedentaryTime) || 0) / 60),
+        note: 'Low-movement minutes from daily activity'
+      }, {
+        label: 'Low activity',
+        value: fmtMinutes((Number(selected?.lowActivityTime) || 0) / 60),
+        note: 'Estimated low intensity movement'
+      }, {
+        label: 'Medium activity',
+        value: fmtMinutes((Number(selected?.mediumActivityTime) || 0) / 60),
+        note: 'Moderate intensity minutes'
+      }, {
+        label: 'High activity',
+        value: fmtMinutes((Number(selected?.highActivityTime) || 0) / 60),
+        note: 'High intensity minutes'
+      }]
+    : [{
+        label: 'Average sedentary',
+        value: fmtMinutes(average(rangeRows.dailyActivity, 'sedentaryTime') / 60),
+        note: 'Average per day in selected range'
+      }, {
+        label: 'Average low activity',
+        value: fmtMinutes(average(rangeRows.dailyActivity, 'lowActivityTime') / 60),
+        note: 'Average per day in selected range'
+      }, {
+        label: 'Average medium activity',
+        value: fmtMinutes(average(rangeRows.dailyActivity, 'mediumActivityTime') / 60),
+        note: 'Average per day in selected range'
+      }, {
+        label: 'Average high activity',
+        value: fmtMinutes(average(rangeRows.dailyActivity, 'highActivityTime') / 60),
+        note: 'Average per day in selected range'
+      }];
+
+  const zoneSupport = (rangeRows.dailyActivity || []).some((row) => Number(row?.lowActivityTime) || Number(row?.mediumActivityTime) || Number(row?.highActivityTime));
+
+  return `
+    ${renderHeroCard({
+      eyebrow: range.isSingleDay ? 'Activity · selected day' : 'Activity · range average',
+      title: range.isSingleDay ? 'Activity score' : 'Average Activity',
+      value: fmt(summary.score),
+      status: scoreStatus(summary.score),
+      detail: range.isSingleDay
+        ? `Selected day activity: ${fmt(summary.steps, 0)} steps and ${fmt(summary.totalBurn, 0, ' cal')} total burn.`
+        : `Average activity for ${summarizeRange(range)}: ${fmt(summary.steps, 0)} steps/day and ${fmt(summary.totalBurn, 0, ' cal')} total burn/day.`,
+      extra: `<p class="muted">${range.isSingleDay ? 'Detail cards use only selected-day activity and session records.' : 'Range mode swaps intraday views for daily aggregate trends.'}</p>`
+    })}
+
+    <section class="card section-card">
+      <div class="section-head"><h3>Contributors</h3><p class="muted">${range.isSingleDay ? 'Selected day contributor values.' : 'Average contributor summaries across selected range.'}</p></div>
+      ${renderContributorRows(contributorRows)}
+    </section>
+
+    <section class="card section-card">
+      <div class="section-head"><h3>Key metrics</h3><p class="muted">${range.isSingleDay ? 'Selected day metrics.' : 'Average daily metrics in selected range.'}</p></div>
+      ${renderMetricGrid([
+        { label: range.isSingleDay ? 'Goal progress' : 'Average goal progress', value: fmt(goalProgress, 0, '%'), note: 'Total burn ÷ target calories' },
+        { label: range.isSingleDay ? 'Total burn' : 'Average total burn', value: fmt(summary.totalBurn, 0, ' cal'), note: 'Daily total calories' },
+        { label: range.isSingleDay ? 'Activity time' : 'Average activity time', value: fmtDurationSeconds(summary.activitySeconds, true), note: 'Medium + high activity duration' },
+        { label: range.isSingleDay ? 'Steps' : 'Average steps', value: fmt(summary.steps, 0), note: 'Daily step count' }
+      ])}
+    </section>
+
+    <section class="card section-card">
+      <div class="section-head"><h3>Activities</h3><p class="muted">${range.isSingleDay ? 'Activities logged on selected day.' : 'Newest activities in selected range.'}</p></div>
+      ${renderActivitiesList(activities, range.isSingleDay)}
+    </section>
+
+    <section class="card section-card">
+      <div class="section-head"><h3>Daily movement</h3><p class="muted">${range.isSingleDay ? 'Intraday movement intensity from class_5_min.' : 'Daily movement trend across selected range.'}</p></div>
+      ${range.isSingleDay
+        ? renderAxisBarChart({ title: 'Intraday movement intensity', series: movementSeries, yTicks: [0, 1, 2, 3], yLabelFormatter: (value) => ['Rest', 'Low', 'Med', 'High'][value] || String(value) })
+        : renderAxisLineChart({ title: 'Daily activity minutes trend', series: movementSeries, yUnit: 'min', yDomainConfig: { minPadding: 10, maxPadding: 10 } })}
+    </section>
+
+    <section class="card section-card">
+      <div class="section-head"><h3>${range.isSingleDay ? 'This week' : 'Range summary'}</h3><p class="muted">Data-driven movement summary from selected range.</p></div>
+      ${renderMetricGrid([
+        { label: 'Workout entries', value: fmt(summary.workoutCount, 0), note: 'Rows from workout.csv' },
+        { label: 'Session entries', value: fmt(summary.sessionCount, 0), note: 'Rows from session.csv' },
+        { label: 'Total range steps', value: fmt(summary.totalRangeSteps, 0), note: 'Sum across selected daily activity rows' },
+        { label: 'Inactivity alerts', value: fmt(summary.inactivityAlerts, 1), note: range.isSingleDay ? 'Selected day' : 'Average per day' }
+      ])}
+      ${renderAxisLineChart({ title: 'Daily steps trend', series: stepsTrend, yUnit: 'steps', yDomainConfig: { minPadding: 250, maxPadding: 250 } })}
+    </section>
+
+    <section class="card section-card">
+      <div class="section-head"><h3>Weekly zone minutes</h3><p class="muted">Zone minutes derived from exported activity-time bands.</p></div>
+      ${zoneSupport
+        ? renderMetricGrid(zoneRows)
+        : '<div class="placeholder">Heart-rate activity zones are deferred until robust source mapping is available.</div>'}
+    </section>
+  `;
+}
+
 function renderPreviewCard({ title, subtitle, metrics, footer }) {
   return `
     <section class="card section-card">
@@ -502,13 +683,14 @@ function renderPreviewCard({ title, subtitle, metrics, footer }) {
 
 function renderHome(range, day, rangeRows) {
   const summaries = DOMAIN_ORDER.map((domain) => metricDomainSummary(domain, range, day, rangeRows));
+  const activity = activitySummary(range, day, rangeRows);
+  const heart = heartRateSummary(range, day, rangeRows);
   const readiness = summaries.find((item) => item.domain === 'readiness');
   const heroDetail = range.isSingleDay
     ? `Selected day: ${range.end || 'n/a'}.`
     : `Multi-day mode: values are averages for ${summarizeRange(range)}.`;
 
   const sleepRows = rangeRows.dailySleep || [];
-  const activityRows = rangeRows.dailyActivity || [];
   const vitalsRows = rangeRows.derivedNightlyVitals || [];
 
   return `
@@ -545,10 +727,10 @@ function renderHome(range, day, rangeRows) {
       title: 'Activity preview',
       subtitle: range.isSingleDay ? 'Selected day movement' : 'Range movement summary',
       metrics: [
-        { label: 'Activity score', value: fmt(range.isSingleDay ? day?.dailyActivity?.score : average(activityRows, 'score')) },
-        { label: 'Steps', value: fmt(average(activityRows, 'steps'), 0) },
-        { label: 'Active calories', value: fmt(average(activityRows, 'activeCalories'), 0, ' cal') },
-        { label: 'Inactivity alerts', value: fmt(average(activityRows, 'inactivityAlerts'), 1) }
+        { label: 'Activity score', value: fmt(activity.score) },
+        { label: 'Steps', value: fmt(activity.steps, 0) },
+        { label: 'Active calories', value: fmt(activity.activeBurn, 0, ' cal') },
+        { label: 'Inactivity alerts', value: fmt(activity.inactivityAlerts, 1) }
       ],
       footer: 'Activity preview reflects selected range; detailed contributors remain on Activity tab.'
     })}
@@ -569,10 +751,10 @@ function renderHome(range, day, rangeRows) {
       title: 'Heart Rate preview',
       subtitle: range.isSingleDay ? 'Single-day overnight' : 'Multi-day heart trend snapshot',
       metrics: [
-        { label: 'Overnight avg', value: fmt(range.isSingleDay ? day?.heartRateWindowSummary?.avg : average(vitalsRows, 'rhr_night_bpm'), 1, ' bpm') },
-        { label: 'Min overnight', value: fmt(day?.heartRateWindowSummary?.min, 1, ' bpm') },
-        { label: 'Max overnight', value: fmt(day?.heartRateWindowSummary?.max, 1, ' bpm') },
-        { label: 'Points', value: fmt(day?.heartRateWindowSummary?.points, 0) }
+        { label: 'Overnight avg', value: fmt(heart.overnightAvg, 1, ' bpm') },
+        { label: 'Min overnight', value: fmt(heart.overnightMin, 1, ' bpm') },
+        { label: 'Max overnight', value: fmt(heart.overnightMax, 1, ' bpm') },
+        { label: 'Points', value: fmt(heart.points, 0) }
       ],
       footer: 'Heart Rate tab contains the dedicated range-aware detail view scaffold.'
     })}
@@ -611,28 +793,63 @@ function renderDomainPage(pageKey, range, day, rangeRows) {
 }
 
 function renderHeartRatePage(range, day, rangeRows) {
-  const rhr = average(rangeRows.derivedNightlyVitals, 'rhr_night_bpm');
-  const hrvProxy = average(rangeRows.derivedNightlyVitals, 'hrv_rmssd_proxy_ms');
-  const heroValue = range.isSingleDay ? day?.heartRateWindowSummary?.avg : rhr;
+  const summary = heartRateSummary(range, day, rangeRows);
+  const hrSeries = range.isSingleDay
+    ? (day?.heartRateSeries || []).map((row) => ({ tMs: row.t, v: row.bpm }))
+    : buildDailyLine(rangeRows.sleepModel, 'lowestHeartRate');
+  const overnightAvgTrend = buildDailyLine(rangeRows.sleepModel, 'avgHeartRate');
+  const daytimeTrend = buildDailyLine(rangeRows.daytimeHeartRate, 'min');
+  const sleepRange = range.isSingleDay
+    ? (Number.isFinite(summary.overnightMin) && Number.isFinite(summary.overnightMax) ? `${Math.round(summary.overnightMin)}-${Math.round(summary.overnightMax)} bpm` : '<span class="placeholder">Unavailable</span>')
+    : (Number.isFinite(average(rangeRows.sleepModel, 'lowestHeartRate')) && Number.isFinite(average(rangeRows.sleepModel, 'highestHeartRate'))
+        ? `${Math.round(average(rangeRows.sleepModel, 'lowestHeartRate'))}-${Math.round(average(rangeRows.sleepModel, 'highestHeartRate'))} bpm`
+        : '<span class="placeholder">Unavailable</span>');
+  const activityRange = range.isSingleDay
+    ? (Number.isFinite(day?.daytimeHeartRateSummary?.min) && Number.isFinite(day?.daytimeHeartRateSummary?.max) ? `${Math.round(day.daytimeHeartRateSummary.min)}-${Math.round(day.daytimeHeartRateSummary.max)} bpm` : '<span class="placeholder">Unavailable</span>')
+    : (Number.isFinite(average(rangeRows.daytimeHeartRate, 'min')) && Number.isFinite(average(rangeRows.daytimeHeartRate, 'max'))
+        ? `${Math.round(average(rangeRows.daytimeHeartRate, 'min'))}-${Math.round(average(rangeRows.daytimeHeartRate, 'max'))} bpm`
+        : '<span class="placeholder">Unavailable</span>');
 
   return `
     ${renderHeroCard({
-      eyebrow: 'Heart Rate hero',
-      title: 'Overnight heart-rate summary',
-      value: fmt(heroValue, 1, ' bpm'),
-      status: range.isSingleDay ? 'Single day' : 'Range average',
+      eyebrow: range.isSingleDay ? 'Heart Rate · selected day' : 'Heart Rate · range average',
+      title: range.isSingleDay ? 'Overnight average HR' : 'Average Overnight HR',
+      value: fmt(summary.overnightAvg, 1, ' bpm'),
+      status: range.isSingleDay ? 'Single day detail' : 'Range aggregation',
       detail: range.isSingleDay
-        ? 'Single-day overnight summary from selected date.'
-        : `Multi-day range average for ${summarizeRange(range)}.`
+        ? `Selected day overnight heart-rate summary with ${fmt(summary.points, 0)} points.`
+        : `Average heart-rate metrics across ${summarizeRange(range)}.`,
+      extra: `<p class="muted">${range.isSingleDay ? 'Intraday chart uses selected-day heart-rate trace.' : 'Range mode switches to daily aggregated trends.'}</p>`
     })}
 
     <section class="card section-card">
-      <div class="section-head"><h3>Metrics</h3><p class="muted">Range-aware values from derived nightly vitals.</p></div>
+      <div class="section-head"><h3>Key metrics</h3><p class="muted">${range.isSingleDay ? 'Selected-day heart-rate metrics.' : 'Average heart-rate metrics for selected range.'}</p></div>
       ${renderMetricGrid([
-        { label: 'Resting HR (range avg)', value: fmt(rhr, 1, ' bpm') },
-        { label: 'HRV proxy', value: fmt(hrvProxy, 1, ' ms') },
-        { label: 'Overnight points', value: fmt(day?.heartRateWindowSummary?.points, 0) },
-        { label: 'Range', value: summarizeRange(range) }
+        { label: range.isSingleDay ? 'Overnight avg HR' : 'Average overnight HR', value: fmt(summary.overnightAvg, 1, ' bpm') },
+        { label: range.isSingleDay ? 'Overnight lowest HR' : 'Average overnight lowest', value: fmt(summary.overnightMin, 1, ' bpm') },
+        { label: range.isSingleDay ? 'Overnight max HR' : 'Average overnight max', value: fmt(summary.overnightMax, 1, ' bpm') },
+        { label: range.isSingleDay ? 'Daytime lowest' : 'Average daytime lowest', value: fmt(summary.daytimeLowest, 1, ' bpm') },
+        { label: 'Sleeping range', value: sleepRange, note: 'Derived from sleep-model nightly range' },
+        { label: 'Activity range', value: activityRange, note: 'Derived from daytime heart-rate points' },
+        { label: 'Recovery proxy', value: fmt(summary.recoveryProxy, 1, ' ms'), note: 'RMSSD-like variability proxy' },
+        { label: 'Data coverage', value: fmt(summary.points, 0), note: range.isSingleDay ? 'Heart-rate points in selected night window' : 'Total points in selected date range' }
+      ])}
+    </section>
+
+    <section class="card section-card">
+      <div class="section-head"><h3>${range.isSingleDay ? 'Overnight trace' : 'Daily heart-rate trends'}</h3><p class="muted">${range.isSingleDay ? 'Heart-rate trace for selected night window.' : 'Daily aggregated trends (no fake continuous trace).'}</p></div>
+      ${renderAxisLineChart({ title: range.isSingleDay ? 'Overnight heart rate trace' : 'Daily lowest HR trend', series: hrSeries, yUnit: 'bpm', yDomainConfig: { minPadding: 3, maxPadding: 3 } })}
+      ${!range.isSingleDay ? renderAxisLineChart({ title: 'Daily overnight average HR trend', series: overnightAvgTrend, yUnit: 'bpm', yDomainConfig: { minPadding: 3, maxPadding: 3 } }) : ''}
+      ${!range.isSingleDay ? renderAxisLineChart({ title: 'Daily daytime lowest HR trend', series: daytimeTrend, yUnit: 'bpm', yDomainConfig: { minPadding: 3, maxPadding: 3 } }) : ''}
+    </section>
+
+    <section class="card section-card">
+      <div class="section-head"><h3>Context</h3><p class="muted">Heart-rate context cards, excluding deep stress classification.</p></div>
+      ${renderMetricGrid([
+        { label: 'Overnight summary', value: range.isSingleDay ? `Min ${fmt(summary.overnightMin, 1)} · Avg ${fmt(summary.overnightAvg, 1)} · Max ${fmt(summary.overnightMax, 1)}` : `Avg min ${fmt(summary.overnightMin, 1)} · Avg ${fmt(summary.overnightAvg, 1)}`, note: 'Night-window heart-rate context' },
+        { label: 'Daytime lowest avg', value: fmt(summary.daytimeLowest, 1, ' bpm'), note: 'Based on daytime samples only' },
+        { label: 'Nightly rows', value: fmt(summary.nightlyRows, 0), note: 'Sleep-model rows in selected range' },
+        { label: 'Restorative overlap', value: '<span class="placeholder">Deferred to Stress tab refit</span>', note: 'Kept intentionally minimal in Heart Rate tab' }
       ])}
     </section>
   `;
@@ -868,6 +1085,11 @@ function renderPageContent(range, day, rangeRows, rerender) {
 
   if (page === 'sleep') {
     content.innerHTML = renderSleepPage(range, day, rangeRows);
+    return;
+  }
+
+  if (page === 'activity') {
+    content.innerHTML = renderActivityPage(range, day, rangeRows);
     return;
   }
 

@@ -16,11 +16,13 @@ const DATASET_ALIASES = {
   dailySpo2: ['dailyspo2.csv'],
   sleepTime: ['sleeptime.csv'],
   heartRate: ['heartrate.csv'],
-  sleepModel: ['sleepmodel.csv']
+  sleepModel: ['sleepmodel.csv'],
+  workout: ['workout.csv', 'workouts.csv'],
+  session: ['session.csv', 'sessions.csv']
 };
 
 const store = {
-  datasets: { dailyReadiness: [], dailySleep: [], dailyActivity: [], dailySpo2: [], sleepTime: [], heartRate: [], sleepModel: [] },
+  datasets: { dailyReadiness: [], dailySleep: [], dailyActivity: [], dailySpo2: [], sleepTime: [], heartRate: [], sleepModel: [], workout: [], session: [] },
   derivedNightlyVitals: [],
   ingestReport: {},
   availabilityMatrix: {},
@@ -116,6 +118,7 @@ function normalizeRows(dataset, rows) {
         lightSec: toNumber(r.light_sleep_duration),
         remSec: toNumber(r.rem_sleep_duration),
         lowestHeartRate: toNumber(r.lowest_heart_rate),
+        highestHeartRate: toNumber(r.highest_heart_rate),
         avgHeartRate: toNumber(r.average_heart_rate),
         avgHrv: toNumber(r.average_hrv),
         avgBreath: toNumber(r.average_breath),
@@ -124,6 +127,44 @@ function normalizeRows(dataset, rows) {
         hrJson: r.heart_rate,
         hrvJson: r.hrv
       }))
+      .filter((r) => r.date);
+
+  if (dataset === 'workout')
+    return rows
+      .map((r) => {
+        const startTs = r.start_datetime || r.start_time || r.start || r.timestamp;
+        const endTs = r.end_datetime || r.end_time || r.end;
+        const date = r.day ?? r.date ?? (startTs ? new Date(startTs).toISOString().slice(0, 10) : null);
+        return {
+          date,
+          source: 'workout',
+          type: r.activity || r.workout_type || r.type || 'Workout',
+          startTime: startTs || null,
+          endTime: endTs || null,
+          durationSec: toNumber(r.duration) ?? toNumber(r.duration_seconds),
+          calories: toNumber(r.calories) ?? toNumber(r.active_kilocalories),
+          avgHr: toNumber(r.average_heart_rate) ?? toNumber(r.avg_hr)
+        };
+      })
+      .filter((r) => r.date);
+
+  if (dataset === 'session')
+    return rows
+      .map((r) => {
+        const startTs = r.start_datetime || r.start_time || r.timestamp || null;
+        const endTs = r.end_datetime || r.end_time || null;
+        const date = r.day ?? r.date ?? (startTs ? new Date(startTs).toISOString().slice(0, 10) : null);
+        return {
+          date,
+          source: 'session',
+          type: r.type || r.session_type || 'Session',
+          startTime: startTs,
+          endTime: endTs,
+          durationSec: toNumber(r.duration) ?? toNumber(r.duration_seconds),
+          calories: toNumber(r.calories),
+          avgHr: toNumber(r.average_heart_rate) ?? toNumber(r.avg_hr)
+        };
+      })
       .filter((r) => r.date);
 
   return [];
@@ -292,7 +333,9 @@ function computeAvailabilityMatrix() {
     dailySpo2: has('dailySpo2'),
     heartRate: has('heartRate'),
     sleepTime: has('sleepTime'),
-    sleepModel: has('sleepModel')
+    sleepModel: has('sleepModel'),
+    workout: has('workout'),
+    session: has('session')
   };
   return store.availabilityMatrix;
 }
@@ -633,7 +676,9 @@ export function getAvailableDates() {
     ...store.datasets.dailyActivity.map((r) => r.date),
     ...store.datasets.dailySpo2.map((r) => r.date),
     ...store.datasets.sleepTime.map((r) => r.date)
-    ,...store.datasets.sleepModel.map((r) => r.date)
+    ,...store.datasets.sleepModel.map((r) => r.date),
+    ...store.datasets.workout.map((r) => r.date),
+    ...store.datasets.session.map((r) => r.date)
   ].filter(Boolean);
   return [...new Set(dates)].sort();
 }
@@ -655,7 +700,14 @@ export function getDay(date, options = {}) {
     .filter((_, index) => index % step === 0)
     .map((row) => ({ t: row.t, bpm: row.bpm }));
   const hrMin = sortedHr.length ? Math.min(...sortedHr.map((row) => row.bpm)) : null;
+  const hrMax = sortedHr.length ? Math.max(...sortedHr.map((row) => row.bpm)) : null;
   const hrAvg = sortedHr.length ? sortedHr.reduce((sum, row) => sum + row.bpm, 0) / sortedHr.length : null;
+  const dayStart = new Date(`${date}T06:00:00`).getTime();
+  const dayEnd = new Date(`${date}T23:59:59`).getTime();
+  const daytimeHr = (store.datasets.heartRate || [])
+    .map((row) => ({ t: new Date(row.timestamp).getTime(), bpm: row.bpm }))
+    .filter((row) => Number.isFinite(row.t) && row.t >= dayStart && row.t <= dayEnd && Number.isFinite(Number(row.bpm)))
+    .map((row) => Number(row.bpm));
   const sleepModel = pick(store.datasets.sleepModel);
   const hrParsed = parseSeriesJson(sleepModel?.hrJson);
   const hrvParsed = parseSeriesJson(sleepModel?.hrvJson);
@@ -683,13 +735,22 @@ export function getDay(date, options = {}) {
     sleepStages,
     sleepMovement,
     activityClassSeries,
+    activities: [...store.datasets.workout.filter((r) => r.date === date), ...store.datasets.session.filter((r) => r.date === date)]
+      .sort((a, b) => new Date(b.startTime || `${b.date}T00:00:00`).getTime() - new Date(a.startTime || `${a.date}T00:00:00`).getTime()),
     derivedNightlyVitals: pick(store.derivedNightlyVitals),
     sleepTime: pick(store.datasets.sleepTime),
     heartRateWindowSummary: {
       points: hrRows.length,
       min: hrMin,
+      max: hrMax,
       avg: hrAvg,
       modeUsed: window.modeUsed
+    },
+    daytimeHeartRateSummary: {
+      points: daytimeHr.length,
+      min: daytimeHr.length ? Math.min(...daytimeHr) : null,
+      max: daytimeHr.length ? Math.max(...daytimeHr) : null,
+      avg: daytimeHr.length ? daytimeHr.reduce((sum, value) => sum + value, 0) / daytimeHr.length : null
     },
     heartRateSeries,
     hrSeries: heartRateSeries,
@@ -700,12 +761,43 @@ export function getDay(date, options = {}) {
 
 export function getRange(start, end) {
   const inRange = (r) => r.date >= start && r.date <= end;
+  const heartRateInRange = (store.datasets.heartRate || []).filter((row) => {
+    const t = new Date(row.timestamp).getTime();
+    if (!Number.isFinite(t)) return false;
+    const date = new Date(t).toISOString().slice(0, 10);
+    return date >= start && date <= end;
+  });
+  const heartRatePointRows = heartRateInRange.map((row) => ({
+    ...row,
+    pointCount: Number.isFinite(Number(row.bpm)) ? 1 : 0
+  }));
+  const daytimeByDate = new Map();
+  for (const row of heartRatePointRows) {
+    const t = new Date(row.timestamp).getTime();
+    const hour = new Date(t).getUTCHours();
+    if (hour < 6 || hour > 23) continue;
+    const date = new Date(t).toISOString().slice(0, 10);
+    const bucket = daytimeByDate.get(date) || { date, values: [] };
+    const bpm = Number(row.bpm);
+    if (Number.isFinite(bpm)) bucket.values.push(bpm);
+    daytimeByDate.set(date, bucket);
+  }
+  const daytimeHeartRate = [...daytimeByDate.values()].map((bucket) => ({
+    date: bucket.date,
+    min: bucket.values.length ? Math.min(...bucket.values) : null,
+    avg: bucket.values.length ? bucket.values.reduce((sum, value) => sum + value, 0) / bucket.values.length : null,
+    max: bucket.values.length ? Math.max(...bucket.values) : null
+  }));
   return {
     dailySleep: store.datasets.dailySleep.filter(inRange),
     dailyReadiness: store.datasets.dailyReadiness.filter(inRange),
     dailyActivity: store.datasets.dailyActivity.filter(inRange),
     dailySpo2: store.datasets.dailySpo2.filter(inRange),
     sleepModel: store.datasets.sleepModel.filter(inRange),
+    workout: store.datasets.workout.filter(inRange),
+    session: store.datasets.session.filter(inRange),
+    heartRate: heartRatePointRows,
+    daytimeHeartRate,
     derivedNightlyVitals: store.derivedNightlyVitals.filter(inRange)
   };
 }

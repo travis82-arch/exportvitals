@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import JSZip from 'jszip';
-import { importZipArrayBuffer, getAvailableDates, getDay, getStoreSnapshot, hydrateFromPersistence } from '../src/store/dataStore.js';
+import { importZipArrayBuffer, getAvailableDates, getDay, getRange, getStoreSnapshot, hydrateFromPersistence } from '../src/store/dataStore.js';
 import { resolveSelectedRange } from '../src/state/selectedRange.js';
 import { shouldRenderDateRangeForPage } from '../src/state/pageConfig.js';
 import { runSettingsUploadImport } from '../src/state/importFlow.js';
@@ -194,4 +194,27 @@ test('large import persists in indexeddb and not full payload localStorage key',
     globalThis.localStorage = originalLocalStorage;
     globalThis.indexedDB = originalIndexedDb;
   }
+});
+
+test('activity and heart-rate range data exposes aggregated inputs and activity lists', async () => {
+  const zip = await buildZip({
+    'daily_activity.csv': 'day,score,steps,active_calories,total_calories,target_calories,low_activity_time,medium_activity_time,high_activity_time,sedentary_time,inactivity_alerts,contributors,class_5_min\n2026-06-01,75,8000,420,2100,2500,3600,2400,600,36000,4,"{""stay_active"":70}",001122\n2026-06-02,85,12000,650,2500,2500,3000,3600,1200,30000,1,"{""stay_active"":88}",112233',
+    'sleep_model.csv': 'day,total_sleep_duration,time_in_bed,efficiency,latency,awake_time,deep_sleep_duration,light_sleep_duration,rem_sleep_duration,lowest_heart_rate,highest_heart_rate,average_heart_rate,average_hrv,average_breath\n2026-06-01,24800,28600,86,500,900,5200,11200,8400,51,75,60,41,13.7\n2026-06-02,25200,28800,87,480,850,5400,11300,8500,49,73,58,44,13.6',
+    'heart_rate.csv': 'timestamp,bpm\n2026-06-01T21:00:00Z,62\n2026-06-01T22:00:00Z,58\n2026-06-02T01:00:00Z,53\n2026-06-02T10:00:00Z,64\n2026-06-02T14:00:00Z,67',
+    'workout.csv': 'day,start_datetime,duration,calories,average_heart_rate,activity\n2026-06-02,2026-06-02T17:15:00Z,2700,340,141,Running',
+    'session.csv': 'day,start_datetime,duration,type\n2026-06-02,2026-06-02T07:00:00Z,1200,Breathwork'
+  });
+
+  await importZipArrayBuffer({ fileName: 'activity-heart.zip', arrayBuffer: zip });
+  const selectedDay = getDay('2026-06-02');
+  assert.equal(selectedDay.dailyActivity?.steps, 12000);
+  assert.equal(selectedDay.heartRateWindowSummary?.max, 67);
+  assert.equal(selectedDay.activities.length, 2);
+
+  const range = getRange('2026-06-01', '2026-06-02');
+  assert.equal(range.dailyActivity.length, 2);
+  assert.equal(range.workout.length, 1);
+  assert.equal(range.session.length, 1);
+  assert.equal(range.daytimeHeartRate.length >= 1, true);
+  assert.equal(range.heartRate.length >= 3, true);
 });
