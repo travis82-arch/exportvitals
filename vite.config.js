@@ -3,16 +3,19 @@ import { resolve } from 'node:path';
 
 const pages = [
   'index.html',
-  'sleep.html',
   'readiness.html',
+  'sleep.html',
   'activity.html',
+  'heart-rate.html',
+  'stress.html',
+  'settings.html',
+  // legacy pages kept in build output for safer PR1 transition
   'vitals.html',
   'trends.html',
   'journal.html',
   'data-tools-import.html',
   'data-tools-export.html',
   'glossary.html',
-  'settings.html',
   'debug.html',
   'my-health.html'
 ];
