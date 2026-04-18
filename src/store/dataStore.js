@@ -20,8 +20,9 @@ const store = {
   ingestReport: {},
   availabilityMatrix: {},
   uiSnapshot: {},
-  importState: { status: 'idle', phase: 'Idle', percent: 0, lastResult: null, lastError: null }
+  importState: { status: 'idle', phase: 'Idle', percent: 0, lastResult: null, lastError: null, lastSuccessAt: null }
 };
+const listeners = new Set();
 
 const byDate = (rows) => Object.fromEntries((rows || []).map((r) => [r.date, r]));
 
@@ -289,7 +290,18 @@ function computeAvailabilityMatrix() {
 
 function updateImportState(next, onProgress) {
   store.importState = { ...store.importState, ...next };
+  emitStoreChange();
   if (onProgress) onProgress(store.importState);
+}
+
+function emitStoreChange() {
+  for (const listener of listeners) {
+    try {
+      listener(getStoreSnapshot());
+    } catch {
+      // noop listener isolation
+    }
+  }
 }
 
 function getDateRangeFromDatasets(datasets) {
@@ -332,67 +344,81 @@ export async function importZipArrayBuffer({ fileName, arrayBuffer, options = {}
     throw new Error('Please choose a valid .zip export file from Oura.');
   }
 
-  updateImportState({ status: 'importing', phase: 'Reading ZIP', percent: 5, lastError: null }, onProgress);
+  updateImportState({ status: 'loading', phase: 'Reading ZIP', percent: 5, lastError: null }, onProgress);
+  try {
+    const zip = await JSZip.loadAsync(arrayBuffer);
+    updateImportState({ phase: 'Decompressing files', percent: 25 }, onProgress);
 
-  const zip = await JSZip.loadAsync(arrayBuffer);
-  updateImportState({ phase: 'Decompressing files', percent: 25 }, onProgress);
+    const found = {};
+    const report = {};
+    const parsedFiles = [];
 
-  const found = {};
-  const report = {};
-  const parsedFiles = [];
-
-  for (const entryName of Object.keys(zip.files)) {
-    if (zip.files[entryName].dir) continue;
-    parsedFiles.push(entryName);
-    const short = normalizeName(entryName.split('/').pop());
-    for (const [dataset, aliases] of Object.entries(DATASET_ALIASES)) {
-      if (aliases.some((alias) => normalizeName(alias) === short)) {
-        updateImportState({ phase: 'Parsing JSON/CSV', percent: 55 }, onProgress);
-        const text = await zip.files[entryName].async('string');
-        found[dataset] = normalizeRows(dataset, parseCsv(text));
-        report[dataset] = found[dataset].length;
+    for (const entryName of Object.keys(zip.files)) {
+      if (zip.files[entryName].dir) continue;
+      parsedFiles.push(entryName);
+      const short = normalizeName(entryName.split('/').pop());
+      for (const [dataset, aliases] of Object.entries(DATASET_ALIASES)) {
+        if (aliases.some((alias) => normalizeName(alias) === short)) {
+          updateImportState({ phase: 'Parsing JSON/CSV', percent: 55 }, onProgress);
+          const text = await zip.files[entryName].async('string');
+          found[dataset] = normalizeRows(dataset, parseCsv(text));
+          report[dataset] = found[dataset].length;
+        }
       }
     }
+
+    updateImportState({ phase: 'Normalizing daily tables', percent: 75 }, onProgress);
+    store.datasets = Object.fromEntries(Object.keys(store.datasets).map((name) => [name, found[name] || []]));
+
+    updateImportState({ phase: 'Deriving nightly vitals', percent: 90 }, onProgress);
+    store.derivedNightlyVitals = deriveNightlyVitals(options);
+    computeAvailabilityMatrix();
+
+    const dateRange = getDateRangeFromDatasets({ ...store.datasets, derivedNightlyVitals: store.derivedNightlyVitals });
+    const rowCounts = {
+      ...Object.fromEntries(Object.entries(store.datasets).map(([name, rows]) => [name, rows.length])),
+      derivedNightlyVitals: store.derivedNightlyVitals.length
+    };
+    const daysPerDataset = Object.fromEntries(
+      Object.entries(store.datasets).map(([name, rows]) => [name, new Set(rows.map((row) => row.date).filter(Boolean)).size])
+    );
+
+    updateImportState({ phase: 'Saving + indexing dates', percent: 100 }, onProgress);
+    store.ingestReport = {
+      ...report,
+      parsedFiles,
+      dateRange,
+      daysPerDataset,
+      rowCounts,
+      mostRecentDate: dateRange.end
+    };
+
+    store.importState = {
+      ...store.importState,
+      status: 'success',
+      phase: 'Done',
+      percent: 100,
+      lastResult: store.ingestReport,
+      lastError: null,
+      lastSuccessAt: new Date().toISOString()
+    };
+
+    saveToLocalCache();
+    emitStoreChange();
+    if (onProgress) onProgress(store.importState);
+    return store.ingestReport;
+  } catch (error) {
+    store.importState = {
+      ...store.importState,
+      status: 'error',
+      phase: 'Failed',
+      lastError: { message: error?.message || String(error), stack: error?.stack || null }
+    };
+    saveToLocalCache();
+    emitStoreChange();
+    if (onProgress) onProgress(store.importState);
+    throw error;
   }
-
-  updateImportState({ phase: 'Normalizing daily tables', percent: 75 }, onProgress);
-  store.datasets = Object.fromEntries(Object.keys(store.datasets).map((name) => [name, found[name] || []]));
-
-  updateImportState({ phase: 'Deriving nightly vitals', percent: 90 }, onProgress);
-  store.derivedNightlyVitals = deriveNightlyVitals(options);
-  computeAvailabilityMatrix();
-
-  const dateRange = getDateRangeFromDatasets({ ...store.datasets, derivedNightlyVitals: store.derivedNightlyVitals });
-  const rowCounts = {
-    ...Object.fromEntries(Object.entries(store.datasets).map(([name, rows]) => [name, rows.length])),
-    derivedNightlyVitals: store.derivedNightlyVitals.length
-  };
-  const daysPerDataset = Object.fromEntries(
-    Object.entries(store.datasets).map(([name, rows]) => [name, new Set(rows.map((row) => row.date).filter(Boolean)).size])
-  );
-
-  updateImportState({ phase: 'Saving + indexing dates', percent: 100 }, onProgress);
-  store.ingestReport = {
-    ...report,
-    parsedFiles,
-    dateRange,
-    daysPerDataset,
-    rowCounts,
-    mostRecentDate: dateRange.end
-  };
-
-  store.importState = {
-    ...store.importState,
-    status: 'success',
-    phase: 'Done',
-    percent: 100,
-    lastResult: store.ingestReport,
-    lastError: null
-  };
-
-  saveToLocalCache();
-  if (onProgress) onProgress(store.importState);
-  return store.ingestReport;
 }
 
 export async function importZip(file, options = {}, onProgress) {
@@ -512,6 +538,7 @@ export function getBaseline(metric, windowDays = 14, endDate) {
 export function setUiSnapshot(snapshot) {
   store.uiSnapshot = snapshot;
   saveToLocalCache();
+  emitStoreChange();
 }
 
 export function getStoreSnapshot() {
@@ -533,4 +560,11 @@ export function setImportError(error, context = {}) {
     }
   };
   saveToLocalCache();
+  emitStoreChange();
+}
+
+export function subscribeToStore(listener) {
+  if (typeof listener !== 'function') return () => {};
+  listeners.add(listener);
+  return () => listeners.delete(listener);
 }
