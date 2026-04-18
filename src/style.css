@@ -319,6 +319,20 @@ body {
   font-style: italic;
 }
 
+.activity-list {
+  display: grid;
+  gap: 8px;
+}
+
+.activity-item {
+  border: 1px solid rgba(125, 176, 255, 0.14);
+  border-radius: var(--radius-md);
+  background: rgba(13, 22, 34, 0.9);
+  padding: 10px;
+  display: grid;
+  gap: 6px;
+}
+
 
 .chart-card {
   border: 1px solid rgba(125, 176, 255, 0.2);
