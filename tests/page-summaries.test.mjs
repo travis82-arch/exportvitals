@@ -106,7 +106,7 @@ test('stressSummary averages multi-day stress rows in range mode', () => {
       { date: '2026-08-20', score: 65, high: 95, recovery: 60 },
       { date: '2026-08-21', score: 75, high: 125, recovery: 42 }
     ],
-    daytimeStress: [{ score: 52 }, { score: 68 }],
+    daytimeStress: [{ date: '2026-08-20', score: 52 }, { date: '2026-08-21', score: 68 }],
     derivedNightlyVitals: [{ hrv_rmssd_proxy_ms: 20, rhr_night_bpm: 53 }, { hrv_rmssd_proxy_ms: 28, rhr_night_bpm: 49 }]
   });
   assert.equal(result.stressScore, 70);
@@ -114,6 +114,35 @@ test('stressSummary averages multi-day stress rows in range mode', () => {
   assert.equal(result.recoveryTime, 51);
   assert.equal(result.daytimePeak, 60);
   assert.equal(result.restingHr, 51);
+});
+
+test('stressSummary falls back to daytime average when single-day daily score is missing', () => {
+  const range = { isSingleDay: true, end: '2026-08-21' };
+  const result = stressSummary(range, { dailyStress: { score: null } }, {
+    dailyStress: [],
+    daytimeStress: [
+      { date: '2026-08-21', score: 30 },
+      { date: '2026-08-21', score: 60 }
+    ],
+    derivedNightlyVitals: []
+  });
+  assert.equal(result.stressScore, 45);
+  assert.equal(result.daytimePeak, 60);
+});
+
+test('stressSummary uses per-day daytime peaks in multi-day mode', () => {
+  const range = { isSingleDay: false };
+  const result = stressSummary(range, {}, {
+    dailyStress: [{ date: '2026-08-20', score: 70 }],
+    daytimeStress: [
+      { date: '2026-08-20', score: 20 },
+      { date: '2026-08-20', score: 80 },
+      { date: '2026-08-21', score: 40 },
+      { date: '2026-08-21', score: 60 }
+    ],
+    derivedNightlyVitals: []
+  });
+  assert.equal(result.daytimePeak, 70);
 });
 
 test('stress timeline/category helpers support categorical daytime rows', () => {

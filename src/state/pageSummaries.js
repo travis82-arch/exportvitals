@@ -77,8 +77,16 @@ export function stressSummary(range, day, rangeRows = {}) {
     .filter((value) => Number.isFinite(value));
   const daytimePeak = daytimeValues.length ? Math.max(...daytimeValues) : null;
   const daytimeAvg = daytimeValues.length ? daytimeValues.reduce((sum, value) => sum + value, 0) / daytimeValues.length : null;
+  const daytimePeakByDate = new Map();
+  for (const row of daytimeRows || []) {
+    const date = row?.date;
+    const value = Number(row?.score);
+    if (!date || !Number.isFinite(value)) continue;
+    daytimePeakByDate.set(date, Math.max(daytimePeakByDate.get(date) ?? Number.NEGATIVE_INFINITY, value));
+  }
+  const daytimeDailyPeaks = [...daytimePeakByDate.values()].filter((value) => Number.isFinite(value));
 
-  const stressScore = isSingleDay ? day?.dailyStress?.score : average(stressRows, 'score');
+  const stressScore = isSingleDay ? (day?.dailyStress?.score ?? daytimeAvg) : average(stressRows, 'score');
   const highStress = isSingleDay ? day?.dailyStress?.high : average(stressRows, 'high');
   const recoveryTime = isSingleDay ? day?.dailyStress?.recovery : average(stressRows, 'recovery');
 
@@ -86,7 +94,7 @@ export function stressSummary(range, day, rangeRows = {}) {
     stressScore,
     highStress,
     recoveryTime,
-    daytimePeak: isSingleDay ? daytimePeak : average(daytimeRows, 'score'),
+    daytimePeak: isSingleDay ? daytimePeak : (daytimeDailyPeaks.length ? daytimeDailyPeaks.reduce((sum, value) => sum + value, 0) / daytimeDailyPeaks.length : null),
     daytimeAvg: isSingleDay ? daytimeAvg : average(daytimeRows, 'score'),
     overnightProxy: isSingleDay ? day?.derivedNightlyVitals?.hrv_rmssd_proxy_ms : average(vitalsRows, 'hrv_rmssd_proxy_ms'),
     restingHr: isSingleDay ? day?.derivedNightlyVitals?.rhr_night_bpm : average(vitalsRows, 'rhr_night_bpm'),
