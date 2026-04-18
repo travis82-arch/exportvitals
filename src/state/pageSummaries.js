@@ -64,3 +64,33 @@ export function heartRateSummary(range, day, rangeRows = {}) {
     nightlyRows: sleepModelRows.length
   };
 }
+
+export function stressSummary(range, day, rangeRows = {}) {
+  const stressRows = rangeRows.dailyStress || [];
+  const daytimeRows = rangeRows.daytimeStress || [];
+  const vitalsRows = rangeRows.derivedNightlyVitals || [];
+  const isSingleDay = Boolean(range?.isSingleDay);
+
+  const daytimeForSelectedDay = (daytimeRows || []).filter((row) => row?.date === range?.end);
+  const daytimeValues = daytimeForSelectedDay
+    .map((row) => Number(row?.score))
+    .filter((value) => Number.isFinite(value));
+  const daytimePeak = daytimeValues.length ? Math.max(...daytimeValues) : null;
+  const daytimeAvg = daytimeValues.length ? daytimeValues.reduce((sum, value) => sum + value, 0) / daytimeValues.length : null;
+
+  const stressScore = isSingleDay ? day?.dailyStress?.score : average(stressRows, 'score');
+  const highStress = isSingleDay ? day?.dailyStress?.high : average(stressRows, 'high');
+  const recoveryTime = isSingleDay ? day?.dailyStress?.recovery : average(stressRows, 'recovery');
+
+  return {
+    stressScore,
+    highStress,
+    recoveryTime,
+    daytimePeak: isSingleDay ? daytimePeak : average(daytimeRows, 'score'),
+    daytimeAvg: isSingleDay ? daytimeAvg : average(daytimeRows, 'score'),
+    overnightProxy: isSingleDay ? day?.derivedNightlyVitals?.hrv_rmssd_proxy_ms : average(vitalsRows, 'hrv_rmssd_proxy_ms'),
+    restingHr: isSingleDay ? day?.derivedNightlyVitals?.rhr_night_bpm : average(vitalsRows, 'rhr_night_bpm'),
+    daytimePoints: isSingleDay ? daytimeValues.length : (daytimeRows || []).length,
+    stressDays: stressRows.length
+  };
+}
