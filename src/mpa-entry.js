@@ -121,6 +121,16 @@ function fmtMinutes(value) {
   return `${Math.round(Number(value))} min`;
 }
 
+function startCase(value) {
+  return String(value || '')
+    .trim()
+    .toLowerCase()
+    .split(/[\s_-]+/)
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(' ');
+}
+
 function scoreStatus(score, domain = 'default') {
   if (!Number.isFinite(Number(score))) return 'Unavailable';
   const value = Number(score);
@@ -610,10 +620,10 @@ function renderSleepPage(range, day, rangeRows) {
   const debtFillPct = Math.max(0, Math.min(100, (sleepDebtMinutes / (12 * 60)) * 100));
   const debtStatusClass = `sleep-debt-${sleepDebtEstimate.display.statusBand}`;
   const sleepDebtCard = `
-    <section class="card section-card sleep-card debt-card ${debtStatusClass}">
+    <section class="card section-card sleep-card sleep-card--secondary debt-card ${debtStatusClass}">
       <div class="section-head">
         <h3>Sleep Debt</h3>
-        <p class="muted">Past 14 days</p>
+        <span class="small muted sleep-estimate-chip">Estimate</span>
       </div>
       <div class="sleep-debt-value">${sleepDebtEstimate.display.label}</div>
       <div class="sleep-debt-status">${sleepDebtEstimate.display.status.toUpperCase()}</div>
@@ -654,9 +664,10 @@ function renderSleepPage(range, day, rangeRows) {
   };
 
   const bodyClockCard = `
-    <section class="card section-card sleep-card body-clock-card">
+    <section class="card section-card sleep-card sleep-card--secondary body-clock-card">
       <div class="section-head">
         <h3>Body Clock</h3>
+        <span class="small muted sleep-estimate-chip">Estimate</span>
       </div>
       ${renderBodyClockArc()}
       <p class="sleep-card-copy">${bodyClockEstimate.display.narrative}</p>
@@ -918,7 +929,7 @@ function renderHome(range, day, rangeRows) {
         { label: 'Stress score', value: fmt(range.isSingleDay ? day?.dailyStress?.score : average(rangeRows.dailyStress, 'score')) },
         { label: 'High stress', value: fmtMinutes(range.isSingleDay ? day?.dailyStress?.high : average(rangeRows.dailyStress, 'high')) },
         { label: 'Restored', value: fmtMinutes(range.isSingleDay ? day?.dailyStress?.recovery : average(rangeRows.dailyStress, 'recovery')) },
-        { label: 'Daytime points', value: fmt((rangeRows.daytimeStress || []).length, 0) }
+        { label: 'Daytime samples', value: fmt((rangeRows.daytimeStress || []).length, 0) }
       ],
       footer: ''
     })}
@@ -956,7 +967,6 @@ function renderDomainPage(pageKey, range, day, rangeRows) {
     <section class="card section-card">
       <div class="section-head">
         <h3>Key metrics</h3>
-        <p class="muted">Page parity for this tab remains intentionally limited in PR3.</p>
       </div>
       ${renderMetricGrid([
         { label: 'Score', value: fmt(range.isSingleDay ? dayValue : rangeValue) },
@@ -1056,18 +1066,24 @@ function renderStressPage(range, day, rangeRows) {
       v: row.restoredMinutes
     }))
     .filter((point) => Number.isFinite(point.tMs) && Number.isFinite(point.v));
+  const stressState = summary.daySummary ? startCase(summary.daySummary) : null;
   const stressValue = range.isSingleDay ? summary.highStress : summary.highStress;
   const heroCopy = range.isSingleDay
-    ? `${summary.daySummary ? `${summary.daySummary} · ` : ''}high stress ${fmtMinutes(summary.highStress)} · restored ${fmtMinutes(summary.recoveryTime)}.`
+    ? `${stressState ? `${stressState} · ` : ''}high stress ${fmtMinutes(summary.highStress)} · restored ${fmtMinutes(summary.recoveryTime)}.`
     : `${fmtMinutes(summary.highStress)} high stress · ${fmtMinutes(summary.recoveryTime)} restored.`;
   const hasStressData = Number.isFinite(summary.highStress) || dayScoreSeries.length || dayRecoverySeries.length || dayCategory.series.length;
   const dominantSummary = summary.summaryDistribution?.[0];
+  const peakHighStress = (rangeRows.dailyStress || [])
+    .map((row) => Number(row?.high))
+    .filter((value) => Number.isFinite(value))
+    .reduce((max, value) => Math.max(max, value), Number.NEGATIVE_INFINITY);
+  const peakHighStressDisplay = Number.isFinite(peakHighStress) ? fmtMinutes(peakHighStress) : '<span class="placeholder">Unavailable</span>';
 
   return `
     ${renderHeroCard({
       eyebrow: 'Stress',
-      title: range.isSingleDay ? 'High stress' : 'Average high stress',
-      value: fmtMinutes(stressValue),
+      title: range.isSingleDay ? (stressState ? 'Stress state' : 'High stress') : 'Average high stress',
+      value: range.isSingleDay ? (stressState || fmtMinutes(stressValue)) : fmtMinutes(stressValue),
       status: '',
       detail: heroCopy,
       trend: !range.isSingleDay ? renderHeroRangeChart({ title: 'Daily high stress minutes', series: highStressTrend, tone: 'stress' }) : ''
@@ -1078,11 +1094,11 @@ function renderStressPage(range, day, rangeRows) {
       ${renderMetricGrid([
         { label: range.isSingleDay ? 'High stress' : 'Avg high stress', value: fmtMinutes(summary.highStress) },
         { label: range.isSingleDay ? 'Restored' : 'Avg restored', value: fmtMinutes(summary.recoveryTime) },
-        { label: range.isSingleDay ? 'Day summary' : 'Top summary', value: range.isSingleDay ? (summary.daySummary || '<span class="placeholder">Unavailable</span>') : (dominantSummary ? `${dominantSummary.summary} (${dominantSummary.count})` : '<span class="placeholder">Unavailable</span>') },
-        { label: range.isSingleDay ? 'Peak stress value' : 'Avg daytime stress value', value: fmt(summary.daytimePeak, 1) },
+        { label: range.isSingleDay ? 'Day summary' : 'Most common summary', value: range.isSingleDay ? (stressState || '<span class="placeholder">Unavailable</span>') : (dominantSummary ? `${startCase(dominantSummary.summary)} (${dominantSummary.count})` : '<span class="placeholder">Unavailable</span>') },
+        { label: range.isSingleDay ? 'Peak stress value' : 'Peak daily high stress', value: range.isSingleDay ? fmt(summary.daytimePeak, 1) : peakHighStressDisplay },
         { label: range.isSingleDay ? 'Recovery value avg' : 'Avg recovery value', value: fmt(summary.recoveryDaytimeAvg, 1) },
         { label: 'Days with stress data', value: fmt(summary.stressDays, 0) },
-        { label: 'Daytime points', value: fmt(summary.daytimePoints, 0) }
+        { label: 'Daytime samples', value: fmt(summary.daytimePoints, 0) }
       ])}
     </section>
 
@@ -1123,7 +1139,7 @@ function renderStressPage(range, day, rangeRows) {
             { label: range.isSingleDay ? 'Recent high stress avg' : 'High stress avg', value: fmtMinutes(average((rangeRows.dailyStress || []).slice(-7), 'high')) },
             { label: range.isSingleDay ? 'Recent restored avg' : 'Restored avg', value: fmtMinutes(average((rangeRows.dailyStress || []).slice(-7), 'recovery')) },
             { label: 'Tracked days', value: fmt((rangeRows.dailyStress || []).length, 0) },
-            { label: 'Daytime points', value: fmt((rangeRows.daytimeStress || []).length, 0) }
+            { label: 'Daytime samples', value: fmt((rangeRows.daytimeStress || []).length, 0) }
           ])
         : '<div class="placeholder">Daily stress breakdown fields are unavailable in this export.</div>'}
     </section>

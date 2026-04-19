@@ -11,4 +11,7 @@ test('user-facing copy avoids derived-from implementation notes', () => {
   assert.equal(source.includes('Preview card uses available data only. Full sleep deep-dive remains in the Sleep tab.'), false);
   assert.equal(source.includes('Selected day:'), false);
   assert.equal(source.includes('Daily view for'), false);
+  assert.equal(source.includes('Past 14 days'), false);
+  assert.equal(source.includes('Page parity for this tab remains intentionally limited in PR3.'), false);
+  assert.equal(source.includes('sleep-estimate-chip'), true);
 });

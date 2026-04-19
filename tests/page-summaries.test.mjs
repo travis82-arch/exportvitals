@@ -134,6 +134,20 @@ test('stressSummary falls back to daytime average when single-day daily score is
   assert.equal(result.daytimePeak, 60);
 });
 
+test('stressSummary uses selected dailyStress row when selected-day object is incomplete', () => {
+  const range = { isSingleDay: true, end: '2026-08-21' };
+  const result = stressSummary(range, { dailyStress: { score: null } }, {
+    dailyStress: [{ date: '2026-08-21', score: 68, high: 124, recovery: 41, daySummary: 'stressed' }],
+    daytimeStress: [{ date: '2026-08-21', score: 50 }],
+    derivedNightlyVitals: []
+  });
+  assert.equal(result.stressScore, 68);
+  assert.equal(result.highStress, 124);
+  assert.equal(result.recoveryTime, 41);
+  assert.equal(result.daySummary, 'stressed');
+  assert.equal(result.stressDays, 1);
+});
+
 test('stressSummary uses per-day daytime peaks in multi-day mode', () => {
   const range = { isSingleDay: false };
   const result = stressSummary(range, {}, {

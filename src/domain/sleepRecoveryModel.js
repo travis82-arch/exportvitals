@@ -310,7 +310,7 @@ export function computeSleepDebtEstimate({ selectedDate, dailySleepRows = [], sl
         { label: 'Moderate', min: 120, max: 300 },
         { label: 'High', min: 300, max: 720 }
       ],
-      helperText: 'Estimated from your recent sleep amount vs personal target.'
+      helperText: 'Estimated from recent sleep amount versus a rolling personal target.'
     },
     debug: {
       metric: 'derivedSleepDebtEstimate',
@@ -399,8 +399,8 @@ export function computeBodyClockOffset({ selectedDate, dailySleepRows = [], slee
       habitualMidpointClockMinutes: baseline.baselineMidpointClockMinutes,
       offsetMinutes,
       narrative: Number.isFinite(offsetMinutes)
-        ? `The midpoint of your sleep was ${formatAheadBehind(offsetMinutes)}.`
-        : 'Not enough nights to estimate body clock offset yet.'
+        ? `Estimated sleep midpoint was ${formatAheadBehind(offsetMinutes)}.`
+        : 'Not enough recent nights to estimate body clock offset.'
     },
     debug: {
       metric: 'derivedBodyClockOffsetEstimate',
