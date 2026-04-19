@@ -170,7 +170,50 @@ function metricDomainSummary(domain, range, day, rangeRows) {
   };
 }
 
-function renderHeroCard({ eyebrow = '', title = '', value = '', status = '', detail = '', extra = '' }) {
+function renderHeroRangeChart({ title = '', series = [], tone = 'accent' }) {
+  const clean = (series || [])
+    .filter((point) => Number.isFinite(point?.tMs))
+    .map((point) => ({ tMs: Number(point.tMs), v: Number(point.v) }))
+    .filter((point) => Number.isFinite(point.v))
+    .sort((a, b) => a.tMs - b.tMs);
+  if (!clean.length) return '<div class="small muted">Trend unavailable for this range.</div>';
+
+  const values = clean.map((point) => point.v);
+  const min = Math.min(...values);
+  const max = Math.max(...values);
+  const span = max - min || 1;
+  const first = clean[0].tMs;
+  const last = clean.at(-1).tMs;
+
+  const m = { l: 2, r: 2, t: 3, b: 3 };
+  const w = 320;
+  const h = 70;
+  const plotW = w - m.l - m.r;
+  const plotH = h - m.t - m.b;
+  const xPos = (tMs) => m.l + ((tMs - first) / Math.max(last - first, 1)) * plotW;
+  const yPos = (value) => m.t + (1 - (value - min) / span) * plotH;
+  const points = clean.map((point) => `${xPos(point.tMs)},${yPos(point.v)}`).join(' ');
+
+  const toneClass = tone === 'stress'
+    ? 'hero-trend-stress'
+    : tone === 'calm'
+      ? 'hero-trend-calm'
+      : 'hero-trend-default';
+  const dateLabel = (tMs) => new Date(tMs).toLocaleDateString([], { month: 'short', day: 'numeric' });
+
+  return `<div class="hero-trend ${toneClass}" aria-label="${title}">
+    <div class="hero-trend-head">
+      <span>${title}</span>
+      <span>${dateLabel(first)} — ${dateLabel(last)}</span>
+    </div>
+    <svg class="hero-trend-svg" viewBox="0 0 ${w} ${h}" preserveAspectRatio="none" role="img" aria-label="${title}">
+      <polyline class="hero-trend-line" points="${points}"></polyline>
+      ${clean.map((point) => `<circle class="hero-trend-dot" cx="${xPos(point.tMs)}" cy="${yPos(point.v)}" r="1.6"></circle>`).join('')}
+    </svg>
+  </div>`;
+}
+
+function renderHeroCard({ eyebrow = '', title = '', value = '', status = '', detail = '', trend = '', extra = '' }) {
   return `
     <section class="card hero-card">
       <div class="hero-top">
@@ -180,6 +223,7 @@ function renderHeroCard({ eyebrow = '', title = '', value = '', status = '', det
       <h2>${title}</h2>
       <div class="hero-value">${value}</div>
       <p class="muted">${detail}</p>
+      ${trend ? `<div class="hero-trend-wrap">${trend}</div>` : ''}
       ${extra ? `<div class="hero-extra">${extra}</div>` : ''}
     </section>
   `;
@@ -243,6 +287,13 @@ function buildDailyLine(rows, field) {
     .filter((row) => row?.date && Number.isFinite(Number(row?.[field])))
     .map((row) => ({ tMs: new Date(`${row.date}T12:00:00`).getTime(), v: Number(row[field]) }))
     .filter((point) => Number.isFinite(point.tMs));
+}
+
+function pickFirstSeries(candidates = []) {
+  for (const candidate of candidates) {
+    if ((candidate?.series || []).length) return candidate;
+  }
+  return { title: '', series: [] };
 }
 
 function renderDualStressDailyChart({ title, stressSeries = [], recoverySeries = [] }) {
@@ -400,6 +451,7 @@ function renderReadinessPage(range, day, rangeRows) {
   const hrvSeries = range.isSingleDay
     ? seriesToPoints(parseSeriesJson(day?.sleepModel?.hrvJson))
     : buildDailyLine(rangeRows.sleepModel, 'avgHrv');
+  const readinessRangeSeries = buildDailyLine(rangeRows.dailyReadiness, 'score');
 
   const readinessBaseline = average((rangeRows.dailyReadiness || []).slice(-14), 'score');
 
@@ -410,6 +462,7 @@ function renderReadinessPage(range, day, rangeRows) {
       value: fmt(score),
       status: scoreStatus(score),
       detail: insightHeadline,
+      trend: !range.isSingleDay ? renderHeroRangeChart({ title: 'Daily readiness score', series: readinessRangeSeries }) : '',
       extra: `<p class="muted">${insightBody}</p>`
     })}
 
@@ -528,6 +581,7 @@ function renderSleepPage(range, day, rangeRows) {
   const spo2Series = buildDailyLine(rangeRows.dailySpo2, 'spo2Average');
   const totalSleepTrend = buildDailyLine(rangeRows.sleepModel, 'totalSleepSec').map((point) => ({ ...point, v: Math.round(point.v / 60) }));
   const efficiencyTrend = buildDailyLine(rangeRows.sleepModel, 'efficiencyPct');
+  const sleepScoreTrend = buildDailyLine(rangeRows.dailySleep, 'score');
 
   const stageTotal = range.isSingleDay ? (day?.sleepModel?.totalSleepSec || 0) : average(rangeRows.sleepModel, 'totalSleepSec');
   const deepSec = range.isSingleDay ? day?.sleepModel?.deepSec : average(rangeRows.sleepModel, 'deepSec');
@@ -542,7 +596,8 @@ function renderSleepPage(range, day, rangeRows) {
       title: range.isSingleDay ? 'Sleep score' : 'Average Sleep Score',
       value: fmt(score),
       status: scoreStatus(score, 'sleep'),
-      detail: heroDetail
+      detail: heroDetail,
+      trend: !range.isSingleDay ? renderHeroRangeChart({ title: 'Daily sleep score', series: sleepScoreTrend, tone: 'calm' }) : ''
     })}
 
     <section class="card section-card">
@@ -602,6 +657,7 @@ function renderActivityPage(range, day, rangeRows) {
     ? (day?.activityClassSeries || []).map((point) => ({ tMs: point.tMs, v: point.level }))
     : buildDailyActivitySeconds(rangeRows.dailyActivity);
   const stepsTrend = buildDailyLine(rangeRows.dailyActivity, 'steps');
+  const activityScoreTrend = buildDailyLine(rangeRows.dailyActivity, 'score');
 
   const contributorRows = [
     contributorFromRange({ isSingleDay: range.isSingleDay, rows: rangeRows.dailyActivity }, selected, ['stay_active'], { label: 'Stay active' }),
@@ -658,7 +714,8 @@ function renderActivityPage(range, day, rangeRows) {
       status: scoreStatus(summary.score),
       detail: range.isSingleDay
         ? `${fmt(summary.steps, 0)} steps · ${fmt(summary.totalBurn, 0, ' cal')} total burn.`
-        : `${fmt(summary.steps, 0)} steps/day · ${fmt(summary.totalBurn, 0, ' cal')} total burn/day.`
+        : `${fmt(summary.steps, 0)} steps/day · ${fmt(summary.totalBurn, 0, ' cal')} burn/day.`,
+      trend: !range.isSingleDay ? renderHeroRangeChart({ title: 'Daily activity score', series: activityScoreTrend }) : ''
     })}
 
     <section class="card section-card">
@@ -726,7 +783,8 @@ function renderHome(range, day, rangeRows) {
   const activity = activitySummary(range, day, rangeRows);
   const heart = heartRateSummary(range, day, rangeRows);
   const readiness = summaries.find((item) => item.domain === 'readiness');
-  const heroDetail = range.isSingleDay ? 'Latest daily snapshot.' : 'Multi-day averages.';
+  const heroDetail = range.isSingleDay ? 'Latest daily snapshot.' : 'Readiness-led average for selected days.';
+  const homeHeroTrend = buildDailyLine(rangeRows.dailyReadiness, 'score');
 
   const sleepRows = rangeRows.dailySleep || [];
   const vitalsRows = rangeRows.derivedNightlyVitals || [];
@@ -746,6 +804,7 @@ function renderHome(range, day, rangeRows) {
       value: readiness?.value || '<span class="placeholder">No readiness data</span>',
       status: '',
       detail: heroDetail,
+      trend: !range.isSingleDay ? renderHeroRangeChart({ title: 'Daily readiness score', series: homeHeroTrend }) : '',
       extra: ''
     })}
 
@@ -835,6 +894,11 @@ function renderHeartRatePage(range, day, rangeRows) {
     : buildDailyLine(rangeRows.sleepModel, 'lowestHeartRate');
   const overnightAvgTrend = buildDailyLine(rangeRows.sleepModel, 'avgHeartRate');
   const daytimeTrend = buildDailyLine(rangeRows.daytimeHeartRate, 'min');
+  const heroTrendConfig = pickFirstSeries([
+    { title: 'Daily overnight average HR', series: overnightAvgTrend },
+    { title: 'Daily overnight lowest HR', series: hrSeries },
+    { title: 'Daily daytime lowest HR', series: daytimeTrend }
+  ]);
   const sleepRange = range.isSingleDay
     ? (Number.isFinite(summary.overnightMin) && Number.isFinite(summary.overnightMax) ? `${Math.round(summary.overnightMin)}-${Math.round(summary.overnightMax)} bpm` : '<span class="placeholder">Unavailable</span>')
     : (Number.isFinite(average(rangeRows.sleepModel, 'lowestHeartRate')) && Number.isFinite(average(rangeRows.sleepModel, 'highestHeartRate'))
@@ -854,7 +918,8 @@ function renderHeartRatePage(range, day, rangeRows) {
       status: '',
       detail: range.isSingleDay
         ? `Overnight heart-rate summary with ${fmt(summary.points, 0)} points.`
-        : 'Average heart-rate metrics for the selected range.'
+        : 'Overnight heart-rate average across selected days.',
+      trend: !range.isSingleDay ? renderHeroRangeChart({ title: heroTrendConfig.title, series: heroTrendConfig.series }) : ''
     })}
 
     <section class="card section-card">
@@ -915,7 +980,7 @@ function renderStressPage(range, day, rangeRows) {
   const stressValue = range.isSingleDay ? summary.highStress : summary.highStress;
   const heroCopy = range.isSingleDay
     ? `${summary.daySummary ? `${summary.daySummary} · ` : ''}high stress ${fmtMinutes(summary.highStress)} · restored ${fmtMinutes(summary.recoveryTime)}.`
-    : `Avg high stress ${fmtMinutes(summary.highStress)} · restored ${fmtMinutes(summary.recoveryTime)}.`;
+    : `${fmtMinutes(summary.highStress)} high stress · ${fmtMinutes(summary.recoveryTime)} restored.`;
   const hasStressData = Number.isFinite(summary.highStress) || dayScoreSeries.length || dayRecoverySeries.length || dayCategory.series.length;
   const dominantSummary = summary.summaryDistribution?.[0];
 
@@ -926,7 +991,7 @@ function renderStressPage(range, day, rangeRows) {
       value: fmtMinutes(stressValue),
       status: '',
       detail: heroCopy,
-      extra: !range.isSingleDay ? renderDualStressDailyChart({ title: 'Selected range trend', stressSeries: highStressTrend, recoverySeries: restoredTrend }) : ''
+      trend: !range.isSingleDay ? renderHeroRangeChart({ title: 'Daily high stress minutes', series: highStressTrend, tone: 'stress' }) : ''
     })}
 
     <section class="card section-card">
