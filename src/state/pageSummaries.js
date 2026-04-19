@@ -70,6 +70,9 @@ export function stressSummary(range, day, rangeRows = {}) {
   const daytimeRows = rangeRows.daytimeStress || [];
   const vitalsRows = rangeRows.derivedNightlyVitals || [];
   const isSingleDay = Boolean(range?.isSingleDay);
+  const selectedDailyRow = isSingleDay
+    ? (stressRows.find((row) => row?.date === range?.end) || null)
+    : null;
 
   const daytimeForSelectedDay = (daytimeRows || []).filter((row) => row?.date === range?.end);
   const stressDaytimeValues = daytimeForSelectedDay
@@ -89,9 +92,9 @@ export function stressSummary(range, day, rangeRows = {}) {
   }
   const daytimeDailyPeaks = [...daytimePeakByDate.values()].filter((value) => Number.isFinite(value));
 
-  const stressScore = isSingleDay ? (day?.dailyStress?.score ?? daytimeAvg) : average(stressRows, 'score');
-  const highStress = isSingleDay ? day?.dailyStress?.high : average(stressRows, 'high');
-  const recoveryTime = isSingleDay ? day?.dailyStress?.recovery : average(stressRows, 'recovery');
+  const stressScore = isSingleDay ? (day?.dailyStress?.score ?? selectedDailyRow?.score ?? daytimeAvg) : average(stressRows, 'score');
+  const highStress = isSingleDay ? (day?.dailyStress?.high ?? selectedDailyRow?.high) : average(stressRows, 'high');
+  const recoveryTime = isSingleDay ? (day?.dailyStress?.recovery ?? selectedDailyRow?.recovery) : average(stressRows, 'recovery');
   const daySummaryCounts = new Map();
   for (const row of stressRows) {
     const key = String(row?.daySummary || '').trim().toLowerCase();
@@ -114,8 +117,8 @@ export function stressSummary(range, day, rangeRows = {}) {
     overnightProxy: isSingleDay ? day?.derivedNightlyVitals?.hrv_rmssd_proxy_ms : average(vitalsRows, 'hrv_rmssd_proxy_ms'),
     restingHr: isSingleDay ? day?.derivedNightlyVitals?.rhr_night_bpm : average(vitalsRows, 'rhr_night_bpm'),
     daytimePoints: isSingleDay ? Math.max(stressDaytimeValues.length, recoveryDaytimeValues.length) : (daytimeRows || []).length,
-    stressDays: stressRows.length,
-    daySummary: day?.dailyStress?.daySummary || null,
+    stressDays: isSingleDay ? (selectedDailyRow ? 1 : 0) : stressRows.length,
+    daySummary: day?.dailyStress?.daySummary || selectedDailyRow?.daySummary || null,
     summaryDistribution
   };
 }

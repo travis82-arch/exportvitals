@@ -454,6 +454,19 @@ body[data-page='sleep'] .status-pill {
   gap: 12px;
 }
 
+.sleep-card--secondary {
+  border-color: rgba(120, 138, 188, 0.2) !important;
+  box-shadow: 0 8px 20px rgba(2, 7, 15, 0.3), inset 0 1px 0 rgba(180, 193, 255, 0.04) !important;
+  background:
+    linear-gradient(180deg, rgba(21, 29, 43, 0.95), rgba(11, 16, 27, 0.9)),
+    radial-gradient(110% 95% at 10% 0%, rgba(86, 101, 136, 0.18), transparent 65%) !important;
+}
+
+.sleep-estimate-chip {
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
 .sleep-card-copy {
   margin: 2px 0 0;
   color: #9badd2;
