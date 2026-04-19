@@ -126,6 +126,8 @@ body[data-page='sleep'] {
   --accent-soft: rgba(125, 152, 255, 0.25);
   --accent-surface: rgba(22, 33, 62, 0.82);
   --chart-bar: #8da0ff;
+  --sleep-surface-top: rgba(53, 74, 128, 0.22);
+  --sleep-surface-bottom: rgba(9, 14, 24, 0.95);
 }
 
 body[data-page='activity'] {
@@ -350,11 +352,13 @@ body[data-page='settings'] {
 
 .section-head h3 {
   margin: 0;
-  font-size: 1rem;
+  font-size: 0.98rem;
+  letter-spacing: 0.02em;
 }
 
 .section-head p {
-  margin: 4px 0 0;
+  margin: 3px 0 0;
+  font-size: 0.8rem;
 }
 
 .metric-grid {
@@ -399,6 +403,166 @@ body[data-page='settings'] {
   border-radius: var(--radius-md);
   padding: 10px;
   background: rgba(14, 22, 34, 0.92);
+}
+
+.sleep-surface {
+  display: grid;
+  gap: 14px;
+  padding: 2px;
+}
+
+body[data-page='sleep'] .page-stack {
+  gap: 14px;
+}
+
+body[data-page='sleep'] .card {
+  background:
+    linear-gradient(180deg, rgba(25, 32, 49, 0.98), rgba(12, 18, 30, 0.95)),
+    radial-gradient(110% 95% at 10% 0%, var(--sleep-surface-top), transparent 65%);
+  border-color: rgba(128, 147, 203, 0.26);
+  box-shadow: 0 12px 28px rgba(2, 7, 15, 0.42), inset 0 1px 0 rgba(180, 193, 255, 0.06);
+}
+
+body[data-page='sleep'] .hero-card .eyebrow,
+body[data-page='sleep'] .metric-label {
+  color: #95a7cf;
+  letter-spacing: 0.09em;
+}
+
+body[data-page='sleep'] .hero-value {
+  font-size: 2.35rem;
+  letter-spacing: -0.02em;
+}
+
+body[data-page='sleep'] .muted {
+  color: #8e9fbe;
+}
+
+body[data-page='sleep'] .status-pill {
+  font-size: 0.68rem;
+  letter-spacing: 0.08em;
+  font-weight: 650;
+}
+
+.sleep-duo {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 12px;
+}
+
+.sleep-card {
+  gap: 12px;
+}
+
+.sleep-card-copy {
+  margin: 2px 0 0;
+  color: #9badd2;
+  line-height: 1.4;
+}
+
+.sleep-debt-value {
+  font-size: 2rem;
+  font-weight: 760;
+  line-height: 1;
+  letter-spacing: -0.02em;
+}
+
+.sleep-debt-status {
+  font-size: 0.72rem;
+  letter-spacing: 0.11em;
+  color: #aebde0;
+  font-weight: 700;
+}
+
+.sleep-debt-gauge {
+  display: grid;
+  gap: 8px;
+}
+
+.sleep-debt-track {
+  height: 12px;
+  border-radius: 999px;
+  padding: 1px;
+  background: linear-gradient(90deg, rgba(95, 122, 176, 0.22) 0 20%, rgba(100, 130, 191, 0.3) 20% 45%, rgba(132, 120, 201, 0.34) 45% 75%, rgba(160, 110, 202, 0.42) 75% 100%);
+  box-shadow: inset 0 0 0 1px rgba(138, 155, 196, 0.24);
+}
+
+.sleep-debt-track > span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #8ca7ff, #b39bff);
+  box-shadow: 0 0 14px rgba(138, 163, 255, 0.38);
+}
+
+.sleep-debt-bands {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.64rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #8597bb;
+}
+
+.sleep-debt-high .sleep-debt-status { color: #d5a8ff; }
+.sleep-debt-moderate .sleep-debt-status { color: #b8a7ff; }
+.sleep-debt-low .sleep-debt-status { color: #9fb6ff; }
+.sleep-debt-none .sleep-debt-status { color: #98c8ff; }
+
+.body-clock-arc {
+  width: 100%;
+  height: 132px;
+}
+
+.clock-track {
+  fill: none;
+  stroke-linecap: round;
+}
+
+.clock-track.outer {
+  stroke: rgba(143, 161, 215, 0.22);
+  stroke-width: 12;
+}
+
+.clock-track.inner {
+  stroke: rgba(176, 154, 243, 0.35);
+  stroke-width: 8;
+}
+
+.clock-dot {
+  stroke: rgba(10, 16, 28, 0.85);
+  stroke-width: 1.8;
+}
+
+.clock-dot.selected {
+  fill: #9ab0ff;
+}
+
+.clock-dot.habitual {
+  fill: #c1b1ff;
+}
+
+.debug-meta {
+  margin-top: 6px;
+}
+
+.debug-meta summary {
+  cursor: pointer;
+  font-size: 0.76rem;
+  color: #8ea3cb;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.debug-meta pre {
+  margin: 6px 0 0;
+  max-height: 180px;
+  overflow: auto;
+  font-size: 0.7rem;
+  border-radius: 10px;
+  border: 1px solid rgba(120, 141, 191, 0.25);
+  background: rgba(10, 16, 29, 0.85);
+  padding: 8px;
 }
 
 .progress {
@@ -524,5 +688,9 @@ textarea.debug-text {
 
   .metric-grid {
     grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+
+  .sleep-duo {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }

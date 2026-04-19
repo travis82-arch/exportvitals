@@ -21,6 +21,7 @@ import { renderAxisLineChart } from './charts/AxisLineChart.js';
 import { renderAxisBarChart } from './charts/AxisBarChart.js';
 import { renderSleepStageChart } from './charts/SleepStageChart.js';
 import { activitySummary, heartRateSummary, stressSummary, stressDailyBreakdownRows, stressDayTimelineRows, stressCategorySeries } from './state/pageSummaries.js';
+import { computeBodyClockOffset, computeSleepDebtEstimate } from './domain/sleepRecoveryModel.js';
 
 const page = document.body.dataset.page || 'index';
 const settings = loadSettings();
@@ -560,6 +561,23 @@ function sleepContributorRows(range, day, rangeRows) {
 }
 
 function renderSleepPage(range, day, rangeRows) {
+  const selectedDate = range?.end || range?.start || null;
+  const snapshot = getStoreSnapshot();
+  const sleepDebtEstimate = computeSleepDebtEstimate({
+    selectedDate,
+    dailySleepRows: snapshot.datasets?.dailySleep || [],
+    sleepTimeRows: snapshot.datasets?.sleepTime || [],
+    sleepModelRows: snapshot.datasets?.sleepModel || [],
+    heartRateRows: snapshot.datasets?.heartRate || []
+  });
+  const bodyClockEstimate = computeBodyClockOffset({
+    selectedDate,
+    dailySleepRows: snapshot.datasets?.dailySleep || [],
+    sleepTimeRows: snapshot.datasets?.sleepTime || [],
+    sleepModelRows: snapshot.datasets?.sleepModel || [],
+    heartRateRows: snapshot.datasets?.heartRate || []
+  });
+
   const daySleep = day?.dailySleep;
   const score = range.isSingleDay ? daySleep?.score : average(rangeRows.dailySleep, 'score');
   const totalSleepSec = range.isSingleDay ? day?.sleepModel?.totalSleepSec : average(rangeRows.sleepModel, 'totalSleepSec');
@@ -588,9 +606,66 @@ function renderSleepPage(range, day, rangeRows) {
   const remSec = range.isSingleDay ? day?.sleepModel?.remSec : average(rangeRows.sleepModel, 'remSec');
   const lightSec = range.isSingleDay ? day?.sleepModel?.lightSec : average(rangeRows.sleepModel, 'lightSec');
 
-  const bodyClockCard = '';
+  const sleepDebtMinutes = sleepDebtEstimate.display.minutes || 0;
+  const debtFillPct = Math.max(0, Math.min(100, (sleepDebtMinutes / (12 * 60)) * 100));
+  const debtStatusClass = `sleep-debt-${sleepDebtEstimate.display.statusBand}`;
+  const sleepDebtCard = `
+    <section class="card section-card sleep-card debt-card ${debtStatusClass}">
+      <div class="section-head">
+        <h3>Sleep Debt</h3>
+        <p class="muted">Past 14 days</p>
+      </div>
+      <div class="sleep-debt-value">${sleepDebtEstimate.display.label}</div>
+      <div class="sleep-debt-status">${sleepDebtEstimate.display.status.toUpperCase()}</div>
+      <div class="sleep-debt-gauge" role="img" aria-label="Sleep debt estimate gauge">
+        <div class="sleep-debt-track">
+          <span style="width:${debtFillPct}%"></span>
+        </div>
+        <div class="sleep-debt-bands">
+          <span>None</span><span>Low</span><span>Moderate</span><span>High</span>
+        </div>
+      </div>
+      <p class="muted sleep-card-copy">${sleepDebtEstimate.display.helperText}</p>
+      ${settings.developerMode ? `<details class="debug-meta"><summary>debug</summary><pre>${JSON.stringify(sleepDebtEstimate.debug, null, 2)}</pre></details>` : ''}
+    </section>
+  `;
+
+  const renderBodyClockArc = () => {
+    const selectedMidpoint = bodyClockEstimate.display.selectedMidpointClockMinutes;
+    const habitualMidpoint = bodyClockEstimate.display.habitualMidpointClockMinutes;
+    if (!Number.isFinite(selectedMidpoint) || !Number.isFinite(habitualMidpoint)) {
+      return '<div class="muted">Need more sleep timing history to estimate body clock.</div>';
+    }
+    const toAngle = (minute) => ((minute / 1440) * 300) - 240;
+    const toPoint = (minute, radius) => {
+      const angle = (toAngle(minute) * Math.PI) / 180;
+      const x = 160 + Math.cos(angle) * radius;
+      const y = 120 + Math.sin(angle) * radius;
+      return `${x},${y}`;
+    };
+    const selected = toPoint(selectedMidpoint, 82);
+    const habitual = toPoint(habitualMidpoint, 60);
+    return `<svg class="body-clock-arc" viewBox="0 0 320 160" role="img" aria-label="Body clock arc estimate">
+      <path class="clock-track outer" d="M35,122 A125,125 0 0 1 285,122"></path>
+      <path class="clock-track inner" d="M62,122 A98,98 0 0 1 258,122"></path>
+      <circle class="clock-dot selected" cx="${selected.split(',')[0]}" cy="${selected.split(',')[1]}" r="6"></circle>
+      <circle class="clock-dot habitual" cx="${habitual.split(',')[0]}" cy="${habitual.split(',')[1]}" r="4.5"></circle>
+    </svg>`;
+  };
+
+  const bodyClockCard = `
+    <section class="card section-card sleep-card body-clock-card">
+      <div class="section-head">
+        <h3>Body Clock</h3>
+      </div>
+      ${renderBodyClockArc()}
+      <p class="sleep-card-copy">${bodyClockEstimate.display.narrative}</p>
+      ${settings.developerMode ? `<details class="debug-meta"><summary>debug</summary><pre>${JSON.stringify(bodyClockEstimate.debug, null, 2)}</pre></details>` : ''}
+    </section>
+  `;
 
   return `
+    <section class="sleep-surface">
     ${renderHeroCard({
       eyebrow: 'Sleep',
       title: range.isSingleDay ? 'Sleep score' : 'Average Sleep Score',
@@ -599,6 +674,11 @@ function renderSleepPage(range, day, rangeRows) {
       detail: heroDetail,
       trend: !range.isSingleDay ? renderHeroRangeChart({ title: 'Daily sleep score', series: sleepScoreTrend, tone: 'calm' }) : ''
     })}
+
+    <div class="sleep-duo">
+      ${sleepDebtCard}
+      ${bodyClockCard}
+    </div>
 
     <section class="card section-card">
       <div class="section-head"><h3>Contributors</h3></div>
@@ -614,8 +694,6 @@ function renderSleepPage(range, day, rangeRows) {
         { label: 'Resting heart rate', value: fmt(restingHr, 1, ' bpm'), note: range.isSingleDay ? 'Lowest overnight heart rate' : 'Average nightly lowest HR' }
       ])}
     </section>
-
-    ${bodyClockCard}
 
     <section class="card section-card">
       <div class="section-head"><h3>Sleep details</h3></div>
@@ -640,6 +718,7 @@ function renderSleepPage(range, day, rangeRows) {
       ])}
 
       ${!range.isSingleDay ? renderAxisLineChart({ title: 'Daily SpO₂ average trend', series: spo2Series, yUnit: '%', yDomainConfig: { minPadding: 0.5, maxPadding: 0.5 } }) : ''}
+    </section>
     </section>
   `;
 }
