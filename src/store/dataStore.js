@@ -176,7 +176,16 @@ function normalizeRows(dataset, rows) {
 
   if (dataset === 'sleepTime')
     return rows
-      .map((r) => ({ date: r.day ?? r.date, bedtimeStart: r.bedtime_start, bedtimeEnd: r.bedtime_end }))
+      .map((r) => ({
+        date: r.day ?? r.date,
+        bedtimeStart: r.bedtime_start ?? r.start_datetime ?? r.start_time ?? null,
+        bedtimeEnd: r.bedtime_end ?? r.end_datetime ?? r.end_time ?? null,
+        sleepDurationSec: toNumber(pickRowValue(r, ['sleep_duration', 'sleep_duration_seconds', 'asleep_duration', 'asleep_duration_seconds'])),
+        totalSleepDurationSec: toNumber(pickRowValue(r, ['total_sleep_duration', 'total_sleep_duration_seconds'])),
+        asleepDurationSec: toNumber(pickRowValue(r, ['asleep_time', 'asleep_time_seconds'])),
+        durationSec: toNumber(pickRowValue(r, ['duration', 'duration_seconds'])),
+        timeInBedSec: toNumber(pickRowValue(r, ['time_in_bed', 'time_in_bed_seconds']))
+      }))
       .filter((r) => r.date);
 
   if (dataset === 'heartRate')
@@ -936,6 +945,7 @@ export function getRange(start, end) {
     dailyStress: store.datasets.dailyStress.filter(inRange),
     daytimeStress: store.datasets.daytimeStress.filter(inRange),
     dailySpo2: store.datasets.dailySpo2.filter(inRange),
+    sleepTime: store.datasets.sleepTime.filter(inRange),
     sleepModel: store.datasets.sleepModel.filter(inRange),
     workout: store.datasets.workout.filter(inRange),
     session: store.datasets.session.filter(inRange),
