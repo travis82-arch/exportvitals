@@ -23,12 +23,13 @@ import { renderAxisBarChart } from './charts/AxisBarChart.js';
 import { renderSleepStageChart } from './charts/SleepStageChart.js';
 import { activitySummary, heartRateSummary, stressSummary, stressDailyBreakdownRows, stressDayTimelineRows, stressCategorySeries, strainSummary } from './state/pageSummaries.js';
 import { computeBodyClockOffset, computeSleepDebtEstimate } from './domain/sleepRecoveryModel.js';
+import { SITE_COPY } from './config/siteCopy.js';
 
 const page = document.body.dataset.page || 'index';
 const settings = loadSettings();
 
 const PAGE_META = {
-  index: { title: 'Home', subtitle: '' },
+  index: { title: 'Dashboard', subtitle: '' },
   readiness: { title: 'Readiness', subtitle: '' },
   sleep: { title: 'Sleep', subtitle: '' },
   activity: { title: 'Activity', subtitle: '' },
@@ -140,6 +141,12 @@ function scoreStatus(score, domain = 'default') {
   if (value >= thresholds[1]) return 'Good';
   if (value >= thresholds[2]) return 'Fair';
   return 'Pay attention';
+}
+
+
+function applyPageMetadata() {
+  const meta = PAGE_META[page] || PAGE_META.index;
+  document.title = `${SITE_COPY.productName} - ${meta.title}`;
 }
 
 function hideBootShell() {
@@ -879,7 +886,7 @@ function renderHome(range, day, rangeRows) {
 
   const sleepRows = rangeRows.dailySleep || [];
   const strain = strainSummary(range, rangeRows, rangeRows);
-  const pageHrefForDomain = (domain) => (domain === 'home' ? '/index.html' : `/${domain}.html`);
+  const pageHrefForDomain = (domain) => (domain === 'home' ? '/index.html' : `/app/${domain}/index.html`);
 
   return `
     <section class="summary-strip">
@@ -896,7 +903,7 @@ function renderHome(range, day, rangeRows) {
       tone: 'home'
     })}
 
-    <a class="card-link" href="/sleep.html">${renderPreviewCard({
+    <a class="card-link" href="/app/sleep/index.html">${renderPreviewCard({
       accentClass: destinationAccentClass('sleep'),
       title: 'Sleep',
       subtitle: '',
@@ -909,7 +916,7 @@ function renderHome(range, day, rangeRows) {
       footer: ''
     })}</a>
 
-    <a class="card-link" href="/activity.html">${renderPreviewCard({
+    <a class="card-link" href="/app/activity/index.html">${renderPreviewCard({
       accentClass: destinationAccentClass('activity'),
       title: 'Activity',
       subtitle: '',
@@ -922,7 +929,7 @@ function renderHome(range, day, rangeRows) {
       footer: ''
     })}</a>
 
-    <a class="card-link" href="/stress.html">${renderPreviewCard({
+    <a class="card-link" href="/app/stress/index.html">${renderPreviewCard({
       accentClass: destinationAccentClass('stress'),
       title: 'Stress',
       subtitle: '',
@@ -935,7 +942,7 @@ function renderHome(range, day, rangeRows) {
       footer: ''
     })}</a>
 
-    <a class="card-link" href="/heart-rate.html">${renderPreviewCard({
+    <a class="card-link" href="/app/heart-rate/index.html">${renderPreviewCard({
       accentClass: destinationAccentClass('heart-rate'),
       title: 'Heart Rate',
       subtitle: '',
@@ -948,7 +955,7 @@ function renderHome(range, day, rangeRows) {
       footer: ''
     })}</a>
 
-    <a class="card-link" href="/strain.html">${renderPreviewCard({
+    <a class="card-link" href="/app/strain/index.html">${renderPreviewCard({
       accentClass: destinationAccentClass('strain'),
       title: 'Strain',
       subtitle: '',
@@ -1394,6 +1401,7 @@ async function bootstrap() {
   if (!app) throw new Error('Missing app mount node');
 
   const meta = PAGE_META[page] || PAGE_META.index;
+  applyPageMetadata();
   renderPageShell(app, meta.title, meta.subtitle);
 
   const rerender = (range) => {

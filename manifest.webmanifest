@@ -1,7 +1,7 @@
 {
-  "name": "Oura Dashboard (Starter)",
-  "short_name": "OuraDash",
-  "start_url": "./",
+  "name": "Wearable Export Viewer",
+  "short_name": "ExportViewer",
+  "start_url": "/app",
   "display": "standalone",
   "background_color": "#0b1220",
   "theme_color": "#111827",

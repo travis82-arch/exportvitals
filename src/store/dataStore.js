@@ -1,6 +1,5 @@
-import { normalizeName, parseContributors, parseSpo2Average, toNumber, median, sniffDelimiter, stripBom } from '../vitals-core.mjs';
-import JSZip from 'jszip';
-import Papa from 'papaparse';
+import { normalizeName, parseContributors, parseSpo2Average, toNumber, median } from '../vitals-core.mjs';
+import { detectSource, parseOuraExport, mapToCanonicalModel, deriveSharedMetrics } from '../import/adapters.js';
 
 const LEGACY_STORAGE_KEY = 'ouraDerivedMetricsV3';
 const META_STORAGE_KEY = 'ouraDerivedMetricsMetaV1';
@@ -8,20 +7,6 @@ const DB_NAME = 'ouraDerivedMetricsDbV1';
 const DB_VERSION = 1;
 const STORE_NAME = 'largeState';
 const STORE_ID = 'latest';
-
-const DATASET_ALIASES = {
-  dailyReadiness: ['dailyreadiness.csv'],
-  dailySleep: ['dailysleep.csv'],
-  dailyActivity: ['dailyactivity.csv'],
-  dailyStress: ['dailystress.csv'],
-  daytimeStress: ['daytimestress.csv'],
-  dailySpo2: ['dailyspo2.csv'],
-  sleepTime: ['sleeptime.csv'],
-  heartRate: ['heartrate.csv'],
-  sleepModel: ['sleepmodel.csv'],
-  workout: ['workout.csv', 'workouts.csv'],
-  session: ['session.csv', 'sessions.csv']
-};
 
 const store = {
   datasets: {
@@ -64,13 +49,6 @@ const toLocalDateKey = (timestamp) => {
   const dd = String(parsed.getDate()).padStart(2, '0');
   return `${yyyy}-${mm}-${dd}`;
 };
-
-function parseCsv(text) {
-  const clean = stripBom(text);
-  const { delimiter } = sniffDelimiter(clean);
-  const { data } = Papa.parse(clean, { header: true, skipEmptyLines: true, delimiter });
-  return data || [];
-}
 
 function pickRowValue(row, aliases = []) {
   if (!row || typeof row !== 'object') return null;
@@ -727,37 +705,28 @@ export function saveToLocalCache(storage = getStorage()) {
 
 export async function importZipArrayBuffer({ fileName, arrayBuffer, options = {}, onProgress } = {}) {
   if (!arrayBuffer || !String(fileName || '').toLowerCase().endsWith('.zip')) {
-    throw new Error('Please choose a valid .zip export file from Oura.');
+    throw new Error('Please choose a valid .zip export file.');
   }
 
   updateImportState({ status: 'loading', phase: 'Reading ZIP', percent: 5, lastError: null }, onProgress);
   try {
-    const zip = await JSZip.loadAsync(arrayBuffer);
     updateImportState({ phase: 'Decompressing files', percent: 25 }, onProgress);
-
-    const found = {};
-    const report = {};
-    const parsedFiles = [];
-
-    for (const entryName of Object.keys(zip.files)) {
-      if (zip.files[entryName].dir) continue;
-      parsedFiles.push(entryName);
-      const short = normalizeName(entryName.split('/').pop());
-      for (const [dataset, aliases] of Object.entries(DATASET_ALIASES)) {
-        if (aliases.some((alias) => normalizeName(alias) === short)) {
-          updateImportState({ phase: 'Parsing JSON/CSV', percent: 55 }, onProgress);
-          const text = await zip.files[entryName].async('string');
-          found[dataset] = normalizeRows(dataset, parseCsv(text));
-          report[dataset] = found[dataset].length;
-        }
-      }
+    const sourceData = await parseOuraExport(arrayBuffer);
+    const source = detectSource(fileName, sourceData.parsedFiles);
+    if (source !== 'oura') {
+      throw new Error('Unsupported export source. Oura export ZIP is currently supported.');
     }
 
+    updateImportState({ phase: 'Parsing JSON/CSV', percent: 55 }, onProgress);
+    const canonicalData = mapToCanonicalModel(sourceData, normalizeRows);
+    const report = Object.fromEntries(Object.entries(canonicalData).map(([datasetName, rows]) => [datasetName, rows.length]));
+
     updateImportState({ phase: 'Normalizing daily tables', percent: 75 }, onProgress);
-    store.datasets = Object.fromEntries(Object.keys(store.datasets).map((name) => [name, found[name] || []]));
+    store.datasets = Object.fromEntries(Object.keys(store.datasets).map((name) => [name, canonicalData[name] || []]));
 
     updateImportState({ phase: 'Deriving nightly vitals', percent: 90 }, onProgress);
-    store.derivedNightlyVitals = deriveNightlyVitals(options);
+    const sharedMetrics = deriveSharedMetrics({ source, canonicalData: store.datasets, deriveNightlyVitals, options });
+    store.derivedNightlyVitals = sharedMetrics.canonicalData.derivedNightlyVitals;
     computeAvailabilityMatrix();
 
     const dateRange = getDateRangeFromDatasets({ ...store.datasets, derivedNightlyVitals: store.derivedNightlyVitals });
@@ -772,11 +741,13 @@ export async function importZipArrayBuffer({ fileName, arrayBuffer, options = {}
     updateImportState({ phase: 'Saving + indexing dates', percent: 100 }, onProgress);
     store.ingestReport = {
       ...report,
-      parsedFiles,
+      parsedFiles: sourceData.parsedFiles,
       dateRange,
       daysPerDataset,
       rowCounts,
-      mostRecentDate: dateRange.end
+      mostRecentDate: dateRange.end,
+      source: sharedMetrics.source,
+      capabilities: sharedMetrics.capabilities
     };
 
     store.importState = {
@@ -810,7 +781,7 @@ export async function importZipArrayBuffer({ fileName, arrayBuffer, options = {}
 
 export async function importZip(file, options = {}, onProgress) {
   if (!file || !String(file.name || '').toLowerCase().endsWith('.zip') || typeof file.arrayBuffer !== 'function') {
-    throw new Error('Please choose a valid .zip export file from Oura.');
+    throw new Error('Please choose a valid .zip export file.');
   }
   const arrayBuffer = await file.arrayBuffer();
   return importZipArrayBuffer({ fileName: file.name, arrayBuffer, options, onProgress });

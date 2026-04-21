@@ -12,8 +12,8 @@ test('menu destinations include Strain without Debug/Settings/Insights', () => {
   assert.equal(labels.includes('Debug'), false);
   assert.equal(labels.includes('Insights'), false);
   assert.equal(labels.includes('Settings'), false);
-  assert.equal(navManifest.some((item) => item.href === '/strain'), true);
-  assert.equal(navManifest.some((item) => item.href === '/debug'), false);
+  assert.equal(navManifest.some((item) => item.href === '/app/strain'), true);
+  assert.equal(navManifest.some((item) => item.href === '/app/debug'), false);
 });
 
 test('strain page renderer is wired in app entry', () => {

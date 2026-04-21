@@ -1,74 +1,35 @@
-# Oura PWA Dashboard
+# Wearable Export Viewer
 
-Static, local-only Oura-style dashboard (no build step, no backend).
+Wearable Export Viewer is an independent, open-source, local-first web app for viewing wearable export ZIP files in your browser.
 
-## Navigation map
-Top tabs (always visible):
-- By Date
-- Readiness
-- Sleep
-- Activity
-- Vitals
-- My Health
+## Current support
+- ✅ Oura export ZIP (available now)
+- 🕒 Fitbit export (planned, not yet implemented)
 
-Inside **My Health**:
-- Trends
-- Journal (Tags)
-- Data Tools
-- Settings
+## Trust and privacy
+When you import an Oura export ZIP, parsing and metric generation run in your browser. Imported files and derived health data are stored locally on your device and are not sent to app server endpoints.
 
-Inside **Data Tools**:
-- Import
-- Export
-- Glossary
-- Debug (visible only in Developer Mode)
+- No account required
+- No backend upload flow
+- Unofficial project, not affiliated with Oura
 
-Unknown routes fall back to `/by-date`.
+## Routes
+- `/` → marketing landing page
+- `/app` → dashboard app
+- `/about` → about page
+- `/privacy` → privacy page
 
-## How “By Date” works
-- The app opens on `/by-date`.
-- A shared **Date Context** controls By Date, Readiness, Sleep, Activity, and Vitals.
-- **Day** mode shows latest date + previous 6 calendar days as chips.
-- Choosing a date older than latest-6 days auto-switches to **Week**.
-- **Week** uses ISO week (Mon–Sun), with prev/next navigation.
-- **Month** shows month-level aggregate medians and available-day counts.
-- Long-term history remains in **My Health → Trends**.
-
-## Data import support
-ZIP parsing is in-browser only and keeps compatibility with semicolon-delimited CSV exports.
-
-Required for full experience:
-- `daily_readiness.csv`
-- `daily_sleep.csv`
-- `daily_activity.csv`
-
-Optional:
-- `daily_spo2.csv` (SpO2 average + BDI)
-- `heart_rate.csv` + `sleep_time.csv` (derived nightly vitals)
-
-## Exported vs derived metrics
-Export files:
-- `normalized_daily_readiness.csv`
-- `normalized_daily_sleep.csv`
-- `normalized_daily_activity.csv`
-- `normalized_daily_spo2.csv`
-- `derived_nightly_vitals.csv`
-- `journal_tags.csv`
-- `normalized_all.json`
-
-Derived locally (not uploaded):
-- `rhr_night_bpm`
-- `hrv_rmssd_proxy_ms`
-- baseline medians (7/14/30)
-- insight cards (rule-based, explainable)
-- week/month aggregates
-
-## Testing
-Run:
+## Local development
 ```bash
-node --test
+npm install
+npm run build
+npm test
 ```
 
-## Local preview / deploy
-Open `index.html` directly, or serve with any static server.
-Cloudflare Pages: no build step required.
+## Cloudflare Pages deployment notes
+- This project is static and works on Cloudflare Pages free tier.
+- Client-side parsing and metric derivation run in-browser only.
+- Routing support is handled with `public/_redirects` for `/app`, `/about`, and `/privacy` friendly paths.
+
+## Support
+If this project helped you, support development: https://paypal.me/placeholder

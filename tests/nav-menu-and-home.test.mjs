@@ -5,7 +5,8 @@ import { navManifest } from '../src/nav/navManifest.js';
 
 const topNavSource = readFileSync(new URL('../src/components/TopNav.js', import.meta.url), 'utf8');
 const entrySource = readFileSync(new URL('../src/mpa-entry.js', import.meta.url), 'utf8');
-const indexHtml = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
+const landingHtml = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
+const appIndexHtml = readFileSync(new URL('../app/index.html', import.meta.url), 'utf8');
 const cssSource = readFileSync(new URL('../src/style.css', import.meta.url), 'utf8');
 
 const requiredMenuLabels = ['Home', 'Readiness', 'Sleep', 'Activity', 'Heart Rate', 'Stress', 'Strain'];
@@ -41,19 +42,20 @@ test('menu panel uses hidden attribute as the single source of visibility truth'
 });
 
 test('home remains default landing view and does not render redundant heading copy', () => {
-  assert.equal(indexHtml.includes('data-page="index"'), true);
+  assert.equal(landingHtml.includes('Wearable Export Viewer'), true);
+  assert.equal(appIndexHtml.includes('data-page="index"'), true);
   assert.equal(entrySource.includes('OURA DASHBOARD'), false);
   assert.equal(entrySource.includes('PAGE_META ='), true);
 });
 
 test('home summary cards include navigation links to detail pages', () => {
   assert.equal(entrySource.includes('chip-link'), true);
-  assert.equal(entrySource.includes("`/${domain}.html`"), true);
-  assert.equal(entrySource.includes('href="/sleep.html"'), true);
-  assert.equal(entrySource.includes('href="/activity.html"'), true);
-  assert.equal(entrySource.includes('href="/heart-rate.html"'), true);
-  assert.equal(entrySource.includes('href="/stress.html"'), true);
-  assert.equal(entrySource.includes('href="/strain.html"'), true);
+  assert.equal(entrySource.includes("`/app/${domain}/index.html`"), true);
+  assert.equal(entrySource.includes('href="/app/sleep/index.html"'), true);
+  assert.equal(entrySource.includes('href="/app/activity/index.html"'), true);
+  assert.equal(entrySource.includes('href="/app/heart-rate/index.html"'), true);
+  assert.equal(entrySource.includes('href="/app/stress/index.html"'), true);
+  assert.equal(entrySource.includes('href="/app/strain/index.html"'), true);
 });
 
 test('home cards use destination accent treatment classes', () => {
