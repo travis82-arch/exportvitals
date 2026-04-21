@@ -16,7 +16,9 @@ test('top-level nav uses Strain tab and no Insights tab', () => {
 test('strain page renderer is wired in app entry', () => {
   assert.equal(entrySource.includes('function renderStrainPage('), true);
   assert.equal(entrySource.includes("if (page === 'strain')"), true);
-  assert.equal(entrySource.includes('Signs of Strain'), true);
+  assert.equal(entrySource.includes('Biometrics'), true);
+  assert.equal(entrySource.includes('Strain states by day'), true);
+  assert.equal(entrySource.includes('byDateInsights'), false);
 });
 
 test('strain selector returns allowed state labels with sufficient history', () => {

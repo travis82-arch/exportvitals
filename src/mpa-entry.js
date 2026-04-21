@@ -15,7 +15,7 @@ import { loadSettings } from './state/settings.js';
 import { loadSelectedRange, persistSelectedRange, resolveSelectedRange, summarizeRange } from './state/selectedRange.js';
 import { runSettingsUploadImport } from './state/importFlow.js';
 import { installRuntimeDiagnostics } from './state/runtimeDiagnostics.js';
-import { shouldRenderDateRangeForPage, shouldRenderIntroBanner } from './state/pageConfig.js';
+import { shouldRenderDateRangeForPage } from './state/pageConfig.js';
 import { hasPurgedReloadFlag, purgeStaleServiceWorkersAndCaches, setPurgedReloadFlag } from './boot/swPurge.js';
 import { renderAxisLineChart } from './charts/AxisLineChart.js';
 import { renderAxisBarChart } from './charts/AxisBarChart.js';
@@ -222,15 +222,15 @@ function renderHeroRangeChart({ title = '', series = [], tone = 'accent' }) {
   </div>`;
 }
 
-function renderHeroCard({ eyebrow = '', title = '', value = '', status = '', detail = '', trend = '', extra = '' }) {
+function renderHeroCard({ eyebrow = '', title = '', value = '', status = '', detail = '', trend = '', extra = '', tone = 'default' }) {
   return `
-    <section class="card hero-card">
+    <section class="card hero-card hero-tone-${tone}">
       <div class="hero-top">
         ${eyebrow ? `<p class="eyebrow">${eyebrow}</p>` : ''}
         ${status ? `<span class="status-pill">${status}</span>` : ''}
       </div>
-      ${title ? `<h2>${title}</h2>` : ''}
-      <div class="hero-value">${value}</div>
+      ${title ? `<p class="hero-title">${title}</p>` : ''}
+      <div class="hero-value-wrap"><div class="hero-value-circle"><div class="hero-value">${value}</div></div></div>
       ${detail ? `<p class="muted">${detail}</p>` : ''}
       ${trend ? `<div class="hero-trend-wrap">${trend}</div>` : ''}
       ${extra ? `<div class="hero-extra">${extra}</div>` : ''}
@@ -432,7 +432,7 @@ function renderReadinessPage(range, day, rangeRows) {
   const avgBreath = range.isSingleDay ? day?.sleepModel?.avgBreath : average(rangeRows.sleepModel, 'avgBreath');
   const avgTempDeviation = range.isSingleDay ? dayReadiness?.temperatureDeviation : average(rangeRows.dailyReadiness, 'temperatureDeviation');
 
-  const insightHeadline = Number.isFinite(score) ? `${scoreStatus(score)} readiness` : 'Readiness unavailable';
+  const insightHeadline = Number.isFinite(score) ? (range.isSingleDay ? 'Recovery snapshot from overnight + previous day signals.' : 'Average recovery trend across selected days.') : 'Readiness unavailable';
 
   const insightBody = range.isSingleDay
     ? `Lowest HR ${fmt(avgLowestHr, 1, ' bpm')}, average HRV ${fmt(avgHrv, 1, ' ms')}, respiratory rate ${fmt(avgBreath, 1, ' /min')}.`
@@ -466,12 +466,12 @@ function renderReadinessPage(range, day, rangeRows) {
 
   return `
     ${renderHeroCard({
-      title: range.isSingleDay ? 'Readiness score' : 'Average Readiness',
       value: fmt(score),
       status: scoreStatus(score),
       detail: insightHeadline,
       trend: !range.isSingleDay ? renderHeroRangeChart({ title: 'Daily readiness score', series: readinessRangeSeries }) : '',
-      extra: `<p class="muted">${insightBody}</p>`
+      extra: `<p class="muted">${insightBody}</p>`,
+      tone: 'readiness'
     })}
 
     <section class="card section-card">
@@ -483,7 +483,7 @@ function renderReadinessPage(range, day, rangeRows) {
     </section>
 
     <section class="card section-card">
-      <div class="section-head"><h3>Key metrics</h3></div>
+      <div class="section-head"><h3>Overview</h3></div>
       ${renderMetricGrid([
         { label: 'Resting heart rate', value: fmt(avgLowestHr, 1, ' bpm'), note: range.isSingleDay ? 'Lowest overnight heart rate' : 'Average nightly lowest heart rate' },
         { label: 'Heart rate variability', value: fmt(avgHrv, 1, ' ms'), note: range.isSingleDay ? 'Average overnight HRV' : 'Average HRV across range' },
@@ -675,11 +675,11 @@ function renderSleepPage(range, day, rangeRows) {
   return `
     <section class="sleep-surface">
     ${renderHeroCard({
-      title: range.isSingleDay ? 'Sleep score' : 'Average Sleep Score',
       value: fmt(score),
       status: scoreStatus(score, 'sleep'),
       detail: heroDetail,
-      trend: !range.isSingleDay ? renderHeroRangeChart({ title: 'Daily sleep score', series: sleepScoreTrend, tone: 'calm' }) : ''
+      trend: !range.isSingleDay ? renderHeroRangeChart({ title: 'Daily sleep score', series: sleepScoreTrend, tone: 'calm' }) : '',
+      tone: 'sleep'
     })}
 
     <div class="sleep-duo">
@@ -693,7 +693,7 @@ function renderSleepPage(range, day, rangeRows) {
     </section>
 
     <section class="card section-card">
-      <div class="section-head"><h3>Key metrics</h3></div>
+      <div class="section-head"><h3>Overview</h3></div>
       ${renderMetricGrid([
         { label: 'Total sleep time', value: fmtDurationSeconds(totalSleepSec, true), note: 'Sleep model duration' },
         { label: 'Time in bed', value: fmtDurationSeconds(timeInBed, true), note: 'Bedtime interval from sleep model' },
@@ -794,13 +794,13 @@ function renderActivityPage(range, day, rangeRows) {
 
   return `
     ${renderHeroCard({
-      title: range.isSingleDay ? 'Activity score' : 'Average Activity',
       value: fmt(summary.score),
       status: scoreStatus(summary.score),
       detail: range.isSingleDay
         ? `${fmt(summary.steps, 0)} steps · ${fmt(summary.totalBurn, 0, ' cal')} total burn.`
         : `${fmt(summary.steps, 0)} steps/day · ${fmt(summary.totalBurn, 0, ' cal')} burn/day.`,
-      trend: !range.isSingleDay ? renderHeroRangeChart({ title: 'Daily activity score', series: activityScoreTrend }) : ''
+      trend: !range.isSingleDay ? renderHeroRangeChart({ title: 'Daily activity score', series: activityScoreTrend }) : '',
+      tone: 'activity'
     })}
 
     <section class="card section-card">
@@ -809,7 +809,7 @@ function renderActivityPage(range, day, rangeRows) {
     </section>
 
     <section class="card section-card">
-      <div class="section-head"><h3>Key metrics</h3></div>
+      <div class="section-head"><h3>Overview</h3></div>
       ${renderMetricGrid([
         { label: range.isSingleDay ? 'Goal progress' : 'Average goal progress', value: fmt(goalProgress, 0, '%'), note: 'Total burn ÷ target calories' },
         { label: range.isSingleDay ? 'Total burn' : 'Average total burn', value: fmt(summary.totalBurn, 0, ' cal'), note: 'Daily total calories' },
@@ -853,12 +853,8 @@ function renderActivityPage(range, day, rangeRows) {
 function renderPreviewCard({ title, subtitle, metrics, footer }) {
   return `
     <section class="card section-card">
-      <div class="section-head">
-        <h3>${title}</h3>
-        ${subtitle ? `<p class="muted">${subtitle}</p>` : ''}
-      </div>
+      <h3>${title}</h3>
       ${renderMetricGrid(metrics)}
-      ${footer ? `<p class="small muted">${footer}</p>` : ''}
     </section>
   `;
 }
@@ -868,7 +864,7 @@ function renderHome(range, day, rangeRows) {
   const activity = activitySummary(range, day, rangeRows);
   const heart = heartRateSummary(range, day, rangeRows);
   const readiness = summaries.find((item) => item.domain === 'readiness');
-  const heroDetail = range.isSingleDay ? 'Latest daily snapshot.' : 'Readiness-led average for selected days.';
+  const heroDetail = range.isSingleDay ? 'Latest readiness score.' : 'Average readiness across selected days.';
   const homeHeroTrend = buildDailyLine(rangeRows.dailyReadiness, 'score');
 
   const sleepRows = rangeRows.dailySleep || [];
@@ -884,11 +880,11 @@ function renderHome(range, day, rangeRows) {
     </section>
 
     ${renderHeroCard({
-      title: 'Readiness',
       value: readiness?.value || '<span class="placeholder">No readiness data</span>',
       detail: heroDetail,
       trend: !range.isSingleDay ? renderHeroRangeChart({ title: 'Daily readiness score', series: homeHeroTrend }) : '',
-      extra: ''
+      extra: '',
+      tone: 'home'
     })}
 
     ${renderPreviewCard({
@@ -950,14 +946,14 @@ function renderDomainPage(pageKey, range, day, rangeRows) {
 
   return `
     ${renderHeroCard({
-      title: `${title}`,
       value: fmt(range.isSingleDay ? dayValue : rangeValue),
-      detail: ''
+      detail: '',
+      tone: pageKey
     })}
 
     <section class="card section-card">
       <div class="section-head">
-        <h3>Key metrics</h3>
+        <h3>Overview</h3>
       </div>
       ${renderMetricGrid([
         { label: 'Score', value: fmt(range.isSingleDay ? dayValue : rangeValue) },
@@ -992,16 +988,16 @@ function renderHeartRatePage(range, day, rangeRows) {
 
   return `
     ${renderHeroCard({
-      title: range.isSingleDay ? 'Overnight average HR' : 'Average Overnight HR',
       value: fmt(summary.overnightAvg, 1, ' bpm'),
       detail: range.isSingleDay
         ? `Overnight heart-rate summary with ${fmt(summary.points, 0)} points.`
         : 'Overnight heart-rate average across selected days.',
-      trend: !range.isSingleDay ? renderHeroRangeChart({ title: heroTrendConfig.title, series: heroTrendConfig.series }) : ''
+      trend: !range.isSingleDay ? renderHeroRangeChart({ title: heroTrendConfig.title, series: heroTrendConfig.series }) : '',
+      tone: 'heart-rate'
     })}
 
     <section class="card section-card">
-      <div class="section-head"><h3>Key metrics</h3></div>
+      <div class="section-head"><h3>Overview</h3></div>
       ${renderMetricGrid([
         { label: range.isSingleDay ? 'Overnight avg HR' : 'Average overnight HR', value: fmt(summary.overnightAvg, 1, ' bpm') },
         { label: range.isSingleDay ? 'Overnight lowest HR' : 'Average overnight lowest', value: fmt(summary.overnightMin, 1, ' bpm') },
@@ -1070,14 +1066,14 @@ function renderStressPage(range, day, rangeRows) {
 
   return `
     ${renderHeroCard({
-      title: range.isSingleDay ? (stressState ? 'Stress state' : 'High stress') : 'Average high stress',
       value: range.isSingleDay ? (stressState || fmtMinutes(stressValue)) : fmtMinutes(stressValue),
       detail: heroCopy,
-      trend: !range.isSingleDay ? renderHeroRangeChart({ title: 'Daily high stress minutes', series: highStressTrend, tone: 'stress' }) : ''
+      trend: !range.isSingleDay ? renderHeroRangeChart({ title: 'Daily high stress minutes', series: highStressTrend, tone: 'stress' }) : '',
+      tone: 'stress'
     })}
 
     <section class="card section-card">
-      <div class="section-head"><h3>Key metrics</h3></div>
+      <div class="section-head"><h3>Overview</h3></div>
       ${renderMetricGrid([
         { label: range.isSingleDay ? 'High stress' : 'Avg high stress', value: fmtMinutes(summary.highStress) },
         { label: range.isSingleDay ? 'Restored' : 'Avg restored', value: fmtMinutes(summary.recoveryTime) },
@@ -1156,11 +1152,10 @@ function renderStrainPage(range, day, rangeRows) {
 
   return `
     ${renderHeroCard({
-      title: 'Signs of Strain',
       value: strain.state.label,
-      status: '',
       detail,
-      trend: !range.isSingleDay ? renderHeroRangeChart({ title: 'Recent strain states', series: trendSeries, tone: 'stress' }) : ''
+      trend: !range.isSingleDay ? renderHeroRangeChart({ title: 'Recent strain states', series: trendSeries, tone: 'stress' }) : '',
+      tone: 'strain'
     })}
     <section class="card section-card">
       <div class="strain-legend">${legend}</div>
@@ -1336,16 +1331,7 @@ function renderSettingsPage(range, day, rangeRows, rerender) {
 }
 
 function renderPageShell(app, title, subtitle) {
-  const showBanner = shouldRenderIntroBanner(page);
-  const showHeader = showBanner;
   app.innerHTML = `
-    ${showHeader ? `<section class="page-header ${showBanner ? 'card' : ''}">
-      <div>
-        ${showBanner ? '<p class="eyebrow">Oura dashboard</p>' : ''}
-        <h1>${title}</h1>
-        ${subtitle ? `<p class="muted">${subtitle}</p>` : ''}
-      </div>
-    </section>` : ''}
     <section id="dateRangeMount"></section>
     <section id="pageContent" class="page-stack"></section>
   `;

@@ -10,20 +10,18 @@ export function renderDateRangeControl(target, { range, availableDates, onChange
 
   target.className = 'date-range-control card';
   target.innerHTML = `
-    <div class="row split-row range-head">
-      <div class="small muted">${summarizeRange(range)}</div>
+    <div class="row split-row compact-range-row compact-range-top">
+      <select class="compact-select" data-role="preset" aria-label="Date range preset" ${disabled ? 'disabled' : ''}>
+        ${RANGE_PRESETS.map((preset) => `<option value="${preset.key}" ${selectedPreset === preset.key ? 'selected' : ''}>${preset.label}</option>`).join('')}
+      </select>
+      <span class="small muted range-active-date">${summarizeRange(range)}</span>
     </div>
-    <div class="row compact-range-row">
-      <label class="small muted range-preset-label">Preset
-        <select class="compact-select" data-role="preset" ${disabled ? 'disabled' : ''}>
-          ${RANGE_PRESETS.map((preset) => `<option value="${preset.key}" ${selectedPreset === preset.key ? 'selected' : ''}>${preset.label}</option>`).join('')}
-        </select>
-      </label>
-    </div>
-    <div class="row compact-range-row">
-      <label class="small muted">Start <input type="date" data-role="start" min="${minDate}" max="${maxDate}" value="${range?.start || ''}" ${disabled || selectedPreset !== 'custom' ? 'disabled' : ''}></label>
-      <label class="small muted">End <input type="date" data-role="end" min="${minDate}" max="${maxDate}" value="${range?.end || ''}" ${disabled || selectedPreset !== 'custom' ? 'disabled' : ''}></label>
-    </div>
+    ${selectedPreset === 'custom'
+      ? `<div class="row compact-range-row compact-range-custom">
+          <label class="small muted">Start <input type="date" data-role="start" min="${minDate}" max="${maxDate}" value="${range?.start || ''}" ${disabled ? 'disabled' : ''}></label>
+          <label class="small muted">End <input type="date" data-role="end" min="${minDate}" max="${maxDate}" value="${range?.end || ''}" ${disabled ? 'disabled' : ''}></label>
+        </div>`
+      : ''}
   `;
 
   const presetSelect = target.querySelector('[data-role="preset"]');

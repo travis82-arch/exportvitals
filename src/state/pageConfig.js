@@ -3,5 +3,5 @@ export function shouldRenderDateRangeForPage(pageKey) {
 }
 
 export function shouldRenderIntroBanner(pageKey) {
-  return pageKey === 'index';
+  return false;
 }

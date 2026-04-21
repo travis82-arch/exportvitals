@@ -309,8 +309,16 @@ export function strainSummary(range, rangeRows = {}, allRows = {}) {
     if (avgLevel >= 0.5) return STRAIN_STATES.minor;
     return STRAIN_STATES.none;
   })();
+  const lastThreeEvaluable = evaluableDays.slice(-3);
+  const sustainedRecentMajor = lastThreeEvaluable.length >= 2
+    && lastThreeEvaluable.filter((row) => row.state.level === 2).length >= 2;
   const current = range?.isSingleDay
-    ? (days.find((row) => row.date === range.end)?.state || STRAIN_STATES.insufficient)
+    ? (() => {
+        const today = days.find((row) => row.date === range.end);
+        if (!today) return STRAIN_STATES.insufficient;
+        if (today.state.level === 2 && !sustainedRecentMajor) return STRAIN_STATES.minor;
+        return today.state;
+      })()
     : dominant;
   const driverSource = range?.isSingleDay
     ? (days.find((row) => row.date === range.end)?.drivers || [])
