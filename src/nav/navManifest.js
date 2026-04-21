@@ -5,6 +5,5 @@ export const navManifest = [
   { key: 'activity', label: 'Activity', href: '/activity' },
   { key: 'heart-rate', label: 'Heart Rate', href: '/heart-rate' },
   { key: 'stress', label: 'Stress', href: '/stress' },
-  { key: 'strain', label: 'Strain', href: '/strain' },
-  { key: 'debug', label: 'Debug', href: '/debug' }
+  { key: 'strain', label: 'Strain', href: '/strain' }
 ];

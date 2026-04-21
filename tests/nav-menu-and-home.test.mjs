@@ -6,11 +6,11 @@ import { navManifest } from '../src/nav/navManifest.js';
 const topNavSource = readFileSync(new URL('../src/components/TopNav.js', import.meta.url), 'utf8');
 const entrySource = readFileSync(new URL('../src/mpa-entry.js', import.meta.url), 'utf8');
 const indexHtml = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
+const cssSource = readFileSync(new URL('../src/style.css', import.meta.url), 'utf8');
 
-const requiredMenuLabels = ['Home', 'Readiness', 'Sleep', 'Activity', 'Heart Rate', 'Stress', 'Strain', 'Debug'];
+const requiredMenuLabels = ['Home', 'Readiness', 'Sleep', 'Activity', 'Heart Rate', 'Stress', 'Strain'];
 
 test('persistent tab strip is replaced by upper-right menu navigation', () => {
-  assert.equal(topNavSource.includes('tabs'), false);
   assert.equal(topNavSource.includes('menu-trigger'), true);
   assert.equal(topNavSource.includes('menu-panel'), true);
   assert.equal(topNavSource.includes('Upload'), true);
@@ -18,12 +18,23 @@ test('persistent tab strip is replaced by upper-right menu navigation', () => {
   requiredMenuLabels.forEach((label) => {
     assert.equal(labels.includes(label), true);
   });
+  assert.equal(labels.includes('Debug'), false);
+});
+
+test('menu controller defaults closed and closes safely on navigation interactions', () => {
+  assert.equal(topNavSource.includes('let isOpen = false'), true);
+  assert.equal(topNavSource.includes('panel.hidden = !isOpen'), true);
+  assert.equal(topNavSource.includes("window.addEventListener('pageshow'"), true);
+  assert.equal(topNavSource.includes("window.addEventListener('popstate'"), true);
+  assert.equal(topNavSource.includes("document.addEventListener('pointerdown'"), true);
+  assert.equal(topNavSource.includes("link.addEventListener('click', () => menu.close())"), true);
+  assert.equal(topNavSource.includes('uploadAction?.addEventListener'), true);
 });
 
 test('home remains default landing view and does not render redundant heading copy', () => {
   assert.equal(indexHtml.includes('data-page="index"'), true);
   assert.equal(entrySource.includes('OURA DASHBOARD'), false);
-  assert.equal(entrySource.includes("PAGE_META ="), true);
+  assert.equal(entrySource.includes('PAGE_META ='), true);
 });
 
 test('home summary cards include navigation links to detail pages', () => {
@@ -33,6 +44,17 @@ test('home summary cards include navigation links to detail pages', () => {
   assert.equal(entrySource.includes('href="/activity.html"'), true);
   assert.equal(entrySource.includes('href="/heart-rate.html"'), true);
   assert.equal(entrySource.includes('href="/stress.html"'), true);
+  assert.equal(entrySource.includes('href="/strain.html"'), true);
+});
+
+test('home cards use destination accent treatment classes', () => {
+  assert.equal(entrySource.includes('destinationAccentClass'), true);
+  assert.equal(cssSource.includes('.card-accent-readiness'), true);
+  assert.equal(cssSource.includes('.card-accent-sleep'), true);
+  assert.equal(cssSource.includes('.card-accent-activity'), true);
+  assert.equal(cssSource.includes('.card-accent-heart-rate'), true);
+  assert.equal(cssSource.includes('.card-accent-stress'), true);
+  assert.equal(cssSource.includes('.card-accent-strain'), true);
 });
 
 test('settings page is no longer routed as a top-level view', () => {

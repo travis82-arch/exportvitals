@@ -60,6 +60,7 @@ body {
 
 .top-menu-wrap {
   position: relative;
+  isolation: isolate;
 }
 
 .menu-trigger {
@@ -77,6 +78,7 @@ body {
   position: absolute;
   right: 0;
   top: calc(100% + 8px);
+  z-index: 40;
   width: min(260px, 92vw);
   border: 1px solid var(--border);
   border-radius: var(--radius-md);
@@ -116,6 +118,14 @@ body {
 .menu-link.active {
   border-color: var(--accent);
   background: var(--accent-soft);
+}
+
+
+.menu-trigger:focus-visible,
+.menu-link:focus-visible,
+.menu-upload:focus-visible {
+  outline: 2px solid color-mix(in oklab, var(--accent), white 18%);
+  outline-offset: 2px;
 }
 
 .container {
@@ -330,6 +340,63 @@ body[data-page='settings'] {
   font-size: 0.76rem;
   color: #aac2e8;
 }
+
+
+.card-accent-readiness {
+  border-color: rgba(102, 214, 199, 0.46);
+  background:
+    radial-gradient(110% 80% at 12% 0%, rgba(76, 198, 187, 0.22), transparent 65%),
+    linear-gradient(170deg, rgba(20, 49, 51, 0.88), rgba(11, 19, 29, 0.96));
+}
+
+.card-accent-sleep {
+  border-color: rgba(130, 144, 255, 0.44);
+  background:
+    radial-gradient(120% 90% at 20% 0%, rgba(104, 122, 255, 0.24), transparent 68%),
+    linear-gradient(170deg, rgba(24, 33, 63, 0.88), rgba(10, 17, 31, 0.96));
+}
+
+.card-accent-activity {
+  border-color: rgba(214, 190, 108, 0.46);
+  background:
+    radial-gradient(105% 78% at 14% 0%, rgba(193, 171, 92, 0.24), transparent 64%),
+    linear-gradient(170deg, rgba(45, 39, 20, 0.86), rgba(16, 20, 26, 0.96));
+}
+
+.card-accent-heart-rate {
+  border-color: rgba(117, 182, 255, 0.45);
+  background:
+    radial-gradient(115% 84% at 14% 0%, rgba(81, 145, 235, 0.23), transparent 66%),
+    linear-gradient(170deg, rgba(19, 36, 59, 0.88), rgba(10, 18, 30, 0.96));
+}
+
+.card-accent-stress {
+  border-color: rgba(208, 118, 255, 0.45);
+  background:
+    radial-gradient(116% 85% at 15% 0%, rgba(181, 92, 244, 0.24), transparent 66%),
+    linear-gradient(170deg, rgba(44, 20, 55, 0.88), rgba(13, 17, 30, 0.96));
+}
+
+.card-accent-strain {
+  border-color: rgba(208, 190, 113, 0.44);
+  background:
+    radial-gradient(112% 84% at 12% 0%, rgba(177, 167, 90, 0.23), transparent 66%),
+    linear-gradient(170deg, rgba(49, 45, 24, 0.86), rgba(14, 19, 29, 0.96));
+}
+
+.card-accent-readiness .chip-note,
+.card-accent-readiness .metric-label { color: #9ddfd8; }
+.card-accent-sleep .chip-note,
+.card-accent-sleep .metric-label { color: #b2bcff; }
+.card-accent-activity .chip-note,
+.card-accent-activity .metric-label { color: #dacd8b; }
+.card-accent-heart-rate .chip-note,
+.card-accent-heart-rate .metric-label { color: #9bcaff; }
+.card-accent-stress .chip-note,
+.card-accent-stress .metric-label { color: #e4a7ff; }
+.card-accent-strain .chip-note,
+.card-accent-strain .metric-label { color: #d7cd92; }
+
 
 .hero-card h2 {
   margin: 6px 0 0;

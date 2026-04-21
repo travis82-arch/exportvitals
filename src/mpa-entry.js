@@ -15,6 +15,7 @@ import { loadSettings } from './state/settings.js';
 import { loadSelectedRange, persistSelectedRange, resolveSelectedRange, summarizeRange } from './state/selectedRange.js';
 import { runSettingsUploadImport } from './state/importFlow.js';
 import { installRuntimeDiagnostics } from './state/runtimeDiagnostics.js';
+import { destinationAccentClass } from './state/destinationTheme.js';
 import { shouldRenderDateRangeForPage } from './state/pageConfig.js';
 import { hasPurgedReloadFlag, purgeStaleServiceWorkersAndCaches, setPurgedReloadFlag } from './boot/swPurge.js';
 import { renderAxisLineChart } from './charts/AxisLineChart.js';
@@ -37,7 +38,7 @@ const PAGE_META = {
   debug: { title: 'Debug', subtitle: '' }
 };
 
-const DOMAIN_ORDER = ['readiness', 'sleep', 'activity', 'heart-rate', 'stress'];
+const DOMAIN_ORDER = ['readiness', 'sleep', 'activity', 'heart-rate', 'stress', 'strain'];
 
 const SCORE_FIELDS = {
   readiness: ['dailyReadiness', 'score'],
@@ -164,6 +165,16 @@ function metricDomainSummary(domain, range, day, rangeRows) {
       title: 'Stress',
       value: fmt(summary.stressScore),
       sub: range.isSingleDay ? 'Daily stress score' : 'Average stress score'
+    };
+  }
+
+  if (domain === 'strain') {
+    const summary = strainSummary(range, rangeRows, rangeRows);
+    return {
+      domain,
+      title: 'Strain',
+      value: summary.state?.label || '<span class="placeholder">Unavailable</span>',
+      sub: range.isSingleDay ? 'Current state' : 'Range state'
     };
   }
 
@@ -850,9 +861,9 @@ function renderActivityPage(range, day, rangeRows) {
   `;
 }
 
-function renderPreviewCard({ title, subtitle, metrics, footer }) {
+function renderPreviewCard({ title, subtitle, metrics, footer, accentClass = '' }) {
   return `
-    <section class="card section-card">
+    <section class="card section-card ${accentClass}">
       <h3>${title}</h3>
       ${renderMetricGrid(metrics)}
     </section>
@@ -868,12 +879,13 @@ function renderHome(range, day, rangeRows) {
   const homeHeroTrend = buildDailyLine(rangeRows.dailyReadiness, 'score');
 
   const sleepRows = rangeRows.dailySleep || [];
+  const strain = strainSummary(range, rangeRows, rangeRows);
   const pageHrefForDomain = (domain) => (domain === 'home' ? '/index.html' : `/${domain}.html`);
 
   return `
     <section class="summary-strip">
       ${summaries
-        .map((item) => `<a class="chip-card chip-link" href="${pageHrefForDomain(item.domain)}"><div class="chip-title">${item.title}</div><div class="chip-value">${item.value}</div><div class="chip-note">${item.sub}</div></a>`)
+        .map((item) => `<a class="chip-card chip-link ${destinationAccentClass(item.domain)}" href="${pageHrefForDomain(item.domain)}"><div class="chip-title">${item.title}</div><div class="chip-value">${item.value}</div><div class="chip-note">${item.sub}</div></a>`)
         .join('')}
     </section>
 
@@ -886,6 +898,7 @@ function renderHome(range, day, rangeRows) {
     })}
 
     <a class="card-link" href="/sleep.html">${renderPreviewCard({
+      accentClass: destinationAccentClass('sleep'),
       title: 'Sleep',
       subtitle: '',
       metrics: [
@@ -898,6 +911,7 @@ function renderHome(range, day, rangeRows) {
     })}</a>
 
     <a class="card-link" href="/activity.html">${renderPreviewCard({
+      accentClass: destinationAccentClass('activity'),
       title: 'Activity',
       subtitle: '',
       metrics: [
@@ -910,6 +924,7 @@ function renderHome(range, day, rangeRows) {
     })}</a>
 
     <a class="card-link" href="/stress.html">${renderPreviewCard({
+      accentClass: destinationAccentClass('stress'),
       title: 'Stress',
       subtitle: '',
       metrics: [
@@ -922,6 +937,7 @@ function renderHome(range, day, rangeRows) {
     })}</a>
 
     <a class="card-link" href="/heart-rate.html">${renderPreviewCard({
+      accentClass: destinationAccentClass('heart-rate'),
       title: 'Heart Rate',
       subtitle: '',
       metrics: [
@@ -929,6 +945,19 @@ function renderHome(range, day, rangeRows) {
         { label: 'Min overnight', value: fmt(heart.overnightMin, 1, ' bpm') },
         { label: 'Max overnight', value: fmt(heart.overnightMax, 1, ' bpm') },
         { label: 'Points', value: fmt(heart.points, 0) }
+      ],
+      footer: ''
+    })}</a>
+
+    <a class="card-link" href="/strain.html">${renderPreviewCard({
+      accentClass: destinationAccentClass('strain'),
+      title: 'Strain',
+      subtitle: '',
+      metrics: [
+        { label: 'State', value: strain.state?.label || '<span class="placeholder">Unavailable</span>' },
+        { label: 'Signal trend points', value: fmt((strain.trendStates || []).length, 0) },
+        { label: 'Drivers surfaced', value: fmt((strain.drivers || []).length, 0) },
+        { label: 'Meaningful signal', value: strain.hasMeaningfulSignal ? 'Yes' : 'No' }
       ],
       footer: ''
     })}</a>
@@ -1385,7 +1414,7 @@ async function bootstrap() {
     renderPageContent(resolved, day, rangeRows, rerender);
   };
 
-  renderTopNav(document.getElementById('topNav'), {
+  const topNavController = renderTopNav(document.getElementById('topNav'), {
     currentPath: location.pathname,
     onUpload: async (file) => {
       setTopNavUploadStatus('Importing…');
@@ -1405,6 +1434,8 @@ async function bootstrap() {
       }
     }
   });
+
+  window.addEventListener('beforeunload', () => topNavController?.destroy?.(), { once: true });
 
   rerender(initialRange);
   subscribeToStore(() => {

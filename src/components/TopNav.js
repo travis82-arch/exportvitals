@@ -2,16 +2,69 @@ import { navManifest } from '../nav/navManifest.js';
 
 const toPagePath = (href) => (href === '/' ? '/index.html' : `${href}.html`);
 
+function createMenuController({ mount, trigger, panel }) {
+  let isOpen = false;
+
+  const sync = () => {
+    if (!panel || !trigger) return;
+    panel.hidden = !isOpen;
+    trigger.setAttribute('aria-expanded', String(isOpen));
+    trigger.setAttribute('aria-label', isOpen ? 'Close menu' : 'Open menu');
+  };
+
+  const setOpen = (next) => {
+    isOpen = Boolean(next);
+    sync();
+  };
+
+  const onDocumentPointerDown = (event) => {
+    if (!isOpen) return;
+    if (!mount?.contains(event.target)) setOpen(false);
+  };
+
+  const onEscape = (event) => {
+    if (event.key !== 'Escape') return;
+    if (!isOpen) return;
+    setOpen(false);
+    trigger?.focus();
+  };
+
+  const onPageTransition = () => setOpen(false);
+
+  document.addEventListener('pointerdown', onDocumentPointerDown);
+  document.addEventListener('keydown', onEscape);
+  window.addEventListener('popstate', onPageTransition);
+  window.addEventListener('pageshow', onPageTransition);
+
+  sync();
+
+  return {
+    isOpen: () => isOpen,
+    toggle() {
+      setOpen(!isOpen);
+    },
+    close() {
+      setOpen(false);
+    },
+    destroy() {
+      document.removeEventListener('pointerdown', onDocumentPointerDown);
+      document.removeEventListener('keydown', onEscape);
+      window.removeEventListener('popstate', onPageTransition);
+      window.removeEventListener('pageshow', onPageTransition);
+    }
+  };
+}
+
 export function renderTopNav(target, { currentPath = window.location.pathname, onUpload = null } = {}) {
   const mount = target || document.getElementById('topNav');
-  if (!mount) return;
+  if (!mount) return null;
 
   const path = currentPath || '/';
   const links = navManifest
     .map((item) => {
       const pagePath = toPagePath(item.href);
       const active = path === item.href || path === pagePath;
-      return `<a class="menu-link ${active ? 'active' : ''}" href="${pagePath}">${item.label}</a>`;
+      return `<a class="menu-link ${active ? 'active' : ''}" href="${pagePath}" data-destination="${item.key}">${item.label}</a>`;
     })
     .join('');
 
@@ -29,38 +82,28 @@ export function renderTopNav(target, { currentPath = window.location.pathname, o
   const panel = mount.querySelector('#appMenuPanel');
   const uploadAction = mount.querySelector('#menuUploadAction');
   const uploadInput = mount.querySelector('#menuUploadInput');
+  const menu = createMenuController({ mount, trigger, panel });
 
-  const closeMenu = () => {
-    if (!panel || !trigger) return;
-    panel.hidden = true;
-    trigger.setAttribute('aria-expanded', 'false');
-  };
-
-  trigger?.addEventListener('click', () => {
-    if (!panel || !trigger) return;
-    const nextHidden = !panel.hidden;
-    panel.hidden = nextHidden;
-    trigger.setAttribute('aria-expanded', String(!nextHidden));
-  });
-
-  document.addEventListener('click', (event) => {
-    if (!panel || panel.hidden) return;
-    if (mount.contains(event.target)) return;
-    closeMenu();
-  });
+  trigger?.addEventListener('click', () => menu.toggle());
 
   mount.querySelectorAll('.menu-link').forEach((link) => {
-    link.addEventListener('click', () => closeMenu());
+    link.addEventListener('click', () => menu.close());
   });
 
-  uploadAction?.addEventListener('click', () => uploadInput?.click());
+  uploadAction?.addEventListener('click', () => {
+    menu.close();
+    uploadInput?.click();
+  });
+
   uploadInput?.addEventListener('change', async (event) => {
     const file = event.target.files?.[0];
     event.target.value = '';
     if (!file || !onUpload) return;
-    closeMenu();
+    menu.close();
     await onUpload(file);
   });
+
+  return menu;
 }
 
 export function setTopNavUploadStatus(text = '') {
