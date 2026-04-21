@@ -20,24 +20,21 @@ import { hasPurgedReloadFlag, purgeStaleServiceWorkersAndCaches, setPurgedReload
 import { renderAxisLineChart } from './charts/AxisLineChart.js';
 import { renderAxisBarChart } from './charts/AxisBarChart.js';
 import { renderSleepStageChart } from './charts/SleepStageChart.js';
-import { activitySummary, heartRateSummary, stressSummary, stressDailyBreakdownRows, stressDayTimelineRows, stressCategorySeries } from './state/pageSummaries.js';
+import { activitySummary, heartRateSummary, stressSummary, stressDailyBreakdownRows, stressDayTimelineRows, stressCategorySeries, strainSummary } from './state/pageSummaries.js';
 import { computeBodyClockOffset, computeSleepDebtEstimate } from './domain/sleepRecoveryModel.js';
 
 const page = document.body.dataset.page || 'index';
 const settings = loadSettings();
 
 const PAGE_META = {
-  index: {
-    title: 'Home',
-    subtitle: 'Daily and multi-day snapshot across Readiness, Sleep, Activity, Heart Rate, and Stress.'
-  },
-  readiness: { title: 'Readiness', subtitle: 'Recovery readiness summary for the selected period.' },
-  sleep: { title: 'Sleep', subtitle: 'Sleep quality and overnight recovery signals.' },
-  activity: { title: 'Activity', subtitle: 'Movement load and consistency across the selected period.' },
-  'heart-rate': { title: 'Heart Rate', subtitle: 'Overnight heart rate and variability trends.' },
-  stress: { title: 'Stress', subtitle: 'Daily stress and recovery balance across the selected period.' },
-  insights: { title: 'Insights', subtitle: 'Signs of Strain across stress, sleep, readiness, and heart rate.' },
-  settings: { title: 'Settings', subtitle: 'Import data, review My Health, and use diagnostics.' }
+  index: { title: 'Home', subtitle: '' },
+  readiness: { title: 'Readiness', subtitle: '' },
+  sleep: { title: 'Sleep', subtitle: '' },
+  activity: { title: 'Activity', subtitle: '' },
+  'heart-rate': { title: 'Heart Rate', subtitle: '' },
+  stress: { title: 'Stress', subtitle: '' },
+  strain: { title: 'Strain', subtitle: '' },
+  settings: { title: 'Settings', subtitle: '' }
 };
 
 const DOMAIN_ORDER = ['readiness', 'sleep', 'activity', 'heart-rate', 'stress'];
@@ -229,12 +226,12 @@ function renderHeroCard({ eyebrow = '', title = '', value = '', status = '', det
   return `
     <section class="card hero-card">
       <div class="hero-top">
-        <p class="eyebrow">${eyebrow}</p>
-        <span class="status-pill">${status}</span>
+        ${eyebrow ? `<p class="eyebrow">${eyebrow}</p>` : ''}
+        ${status ? `<span class="status-pill">${status}</span>` : ''}
       </div>
-      <h2>${title}</h2>
+      ${title ? `<h2>${title}</h2>` : ''}
       <div class="hero-value">${value}</div>
-      <p class="muted">${detail}</p>
+      ${detail ? `<p class="muted">${detail}</p>` : ''}
       ${trend ? `<div class="hero-trend-wrap">${trend}</div>` : ''}
       ${extra ? `<div class="hero-extra">${extra}</div>` : ''}
     </section>
@@ -469,7 +466,6 @@ function renderReadinessPage(range, day, rangeRows) {
 
   return `
     ${renderHeroCard({
-      eyebrow: 'Readiness',
       title: range.isSingleDay ? 'Readiness score' : 'Average Readiness',
       value: fmt(score),
       status: scoreStatus(score),
@@ -679,7 +675,6 @@ function renderSleepPage(range, day, rangeRows) {
   return `
     <section class="sleep-surface">
     ${renderHeroCard({
-      eyebrow: 'Sleep',
       title: range.isSingleDay ? 'Sleep score' : 'Average Sleep Score',
       value: fmt(score),
       status: scoreStatus(score, 'sleep'),
@@ -799,7 +794,6 @@ function renderActivityPage(range, day, rangeRows) {
 
   return `
     ${renderHeroCard({
-      eyebrow: 'Activity',
       title: range.isSingleDay ? 'Activity score' : 'Average Activity',
       value: fmt(summary.score),
       status: scoreStatus(summary.score),
@@ -890,10 +884,8 @@ function renderHome(range, day, rangeRows) {
     </section>
 
     ${renderHeroCard({
-      eyebrow: 'Home hero',
-      title: 'Readiness-led daily summary',
+      title: 'Readiness',
       value: readiness?.value || '<span class="placeholder">No readiness data</span>',
-      status: '',
       detail: heroDetail,
       trend: !range.isSingleDay ? renderHeroRangeChart({ title: 'Daily readiness score', series: homeHeroTrend }) : '',
       extra: ''
@@ -958,11 +950,9 @@ function renderDomainPage(pageKey, range, day, rangeRows) {
 
   return `
     ${renderHeroCard({
-      eyebrow: `${title} hero`,
-      title: `${title} summary`,
+      title: `${title}`,
       value: fmt(range.isSingleDay ? dayValue : rangeValue),
-      status: '',
-      detail: range.isSingleDay ? 'Current day summary.' : 'Selected range summary.'
+      detail: ''
     })}
 
     <section class="card section-card">
@@ -1002,10 +992,8 @@ function renderHeartRatePage(range, day, rangeRows) {
 
   return `
     ${renderHeroCard({
-      eyebrow: 'Heart Rate',
       title: range.isSingleDay ? 'Overnight average HR' : 'Average Overnight HR',
       value: fmt(summary.overnightAvg, 1, ' bpm'),
-      status: '',
       detail: range.isSingleDay
         ? `Overnight heart-rate summary with ${fmt(summary.points, 0)} points.`
         : 'Overnight heart-rate average across selected days.',
@@ -1082,10 +1070,8 @@ function renderStressPage(range, day, rangeRows) {
 
   return `
     ${renderHeroCard({
-      eyebrow: 'Stress',
       title: range.isSingleDay ? (stressState ? 'Stress state' : 'High stress') : 'Average high stress',
       value: range.isSingleDay ? (stressState || fmtMinutes(stressValue)) : fmtMinutes(stressValue),
-      status: '',
       detail: heroCopy,
       trend: !range.isSingleDay ? renderHeroRangeChart({ title: 'Daily high stress minutes', series: highStressTrend, tone: 'stress' }) : ''
     })}
@@ -1147,74 +1133,61 @@ function renderStressPage(range, day, rangeRows) {
   `;
 }
 
-function renderInsightsPage(range, day, rangeRows) {
-  const stress = stressSummary(range, day, rangeRows);
-  const readinessScore = range.isSingleDay ? day?.dailyReadiness?.score : average(rangeRows.dailyReadiness, 'score');
-  const sleepScore = range.isSingleDay ? day?.dailySleep?.score : average(rangeRows.dailySleep, 'score');
-  const nightlyHrv = range.isSingleDay ? day?.derivedNightlyVitals?.hrv_rmssd_proxy_ms : average(rangeRows.derivedNightlyVitals, 'hrv_rmssd_proxy_ms');
-  const nightlyRhr = range.isSingleDay ? day?.derivedNightlyVitals?.rhr_night_bpm : average(rangeRows.derivedNightlyVitals, 'rhr_night_bpm');
-  const highStressTrend = buildDailyLine(rangeRows.dailyStress, 'high');
-  const sleepTrend = buildDailyLine(rangeRows.dailySleep, 'score');
-  const readinessTrend = buildDailyLine(rangeRows.dailyReadiness, 'score');
-
-  const strainSignals = [
-    {
-      label: 'High stress load',
-      value: fmtMinutes(stress.highStress),
-      note: range.isSingleDay ? 'High-stress minutes for this day' : 'Average high-stress minutes across range'
-    },
-    {
-      label: 'Recovery minutes',
-      value: fmtMinutes(stress.recoveryTime),
-      note: range.isSingleDay ? 'Restorative time for this day' : 'Average daily restored minutes'
-    },
-    {
-      label: 'Readiness',
-      value: fmt(readinessScore),
-      note: 'Lower readiness can reinforce strain signals'
-    },
-    {
-      label: 'Sleep score',
-      value: fmt(sleepScore),
-      note: 'Sustained lower sleep can raise strain risk'
-    },
-    {
-      label: 'Night HRV proxy',
-      value: fmt(nightlyHrv, 1, ' ms'),
-      note: 'Lower HRV may indicate reduced recovery capacity'
-    },
-    {
-      label: 'Night resting HR',
-      value: fmt(nightlyRhr, 1, ' bpm'),
-      note: 'Higher resting HR can coincide with elevated strain'
-    }
-  ];
-
-  const stateLabel = range.isSingleDay
-    ? (stress.daySummary ? startCase(stress.daySummary) : 'Signals available')
-    : 'Range signal summary';
+function renderStrainPage(range, day, rangeRows) {
+  const snapshot = getStoreSnapshot();
+  const strain = strainSummary(range, rangeRows, {
+    dailyReadiness: snapshot.datasets?.dailyReadiness || [],
+    dailySleep: snapshot.datasets?.dailySleep || [],
+    dailyStress: snapshot.datasets?.dailyStress || [],
+    sleepModel: snapshot.datasets?.sleepModel || [],
+    derivedNightlyVitals: snapshot.derivedNightlyVitals || []
+  });
+  const trendSeries = (strain.trendStates || [])
+    .filter((row) => Number.isFinite(row?.level))
+    .map((row) => ({ tMs: new Date(`${row.date}T12:00:00`).getTime(), v: row.level }));
+  const legend = ['No signs', 'Minor signs', 'Major signs']
+    .map((label, idx) => `<span class="strain-legend-item"><i class="strain-dot strain-dot-${idx}"></i>${label}</span>`)
+    .join('');
+  const detail = strain.state.key === 'insufficient-history'
+    ? 'Need more history to compare against your baseline.'
+    : strain.state.key === 'no-signs'
+      ? 'No sustained deviations from your recent baseline.'
+      : 'Multiple metrics are deviating from your recent baseline.';
 
   return `
     ${renderHeroCard({
-      eyebrow: 'Insights',
       title: 'Signs of Strain',
-      value: range.isSingleDay ? stateLabel : fmtMinutes(stress.highStress),
+      value: strain.state.label,
       status: '',
-      detail: range.isSingleDay
-        ? `High stress ${fmtMinutes(stress.highStress)} · restored ${fmtMinutes(stress.recoveryTime)}.`
-        : 'Use this tab to spot sustained strain patterns across key systems.',
-      trend: !range.isSingleDay ? renderHeroRangeChart({ title: 'Daily high stress minutes', series: highStressTrend, tone: 'stress' }) : ''
+      detail,
+      trend: !range.isSingleDay ? renderHeroRangeChart({ title: 'Recent strain states', series: trendSeries, tone: 'stress' }) : ''
     })}
-
     <section class="card section-card">
-      <div class="section-head"><h3>Signals</h3></div>
-      ${renderMetricGrid(strainSignals)}
+      <div class="strain-legend">${legend}</div>
     </section>
-
     <section class="card section-card">
-      <div class="section-head"><h3>Cross-system trends</h3></div>
-      ${renderAxisLineChart({ title: 'Daily sleep score', series: sleepTrend, yDomainConfig: { minPadding: 2, maxPadding: 2 } })}
-      ${renderAxisLineChart({ title: 'Daily readiness score', series: readinessTrend, yDomainConfig: { minPadding: 2, maxPadding: 2 } })}
+      <div class="section-head"><h3>Biometrics</h3></div>
+      ${strain.hasMeaningfulSignal
+        ? renderMetricGrid(
+            (strain.drivers || []).map((driver) => ({
+              label: driver.label,
+              value: `${Number(driver.current).toFixed(1)}`,
+              note: `vs baseline ${Number(driver.baseline).toFixed(1)}`
+            }))
+          )
+        : '<div class="muted">No elevated strain drivers for this selection.</div>'}
+    </section>
+    <section class="card section-card">
+      <div class="section-head"><h3>Recent days</h3></div>
+      ${trendSeries.length
+        ? renderAxisBarChart({
+            title: 'Strain states by day',
+            series: trendSeries,
+            yTicks: [0, 1, 2],
+            yLabelFormatter: (value) => ['No signs', 'Minor signs', 'Major signs'][value] || '',
+            height: 170
+          })
+        : '<div class="muted">Not enough baseline history yet.</div>'}
     </section>
   `;
 }
@@ -1298,7 +1271,6 @@ function renderSettingsPage(range, day, rangeRows, rerender) {
     <section class="card section-card">
       <div class="section-head">
         <h3>Upload</h3>
-        <p class="muted">Upload one Oura ZIP file. New uploads replace the cached dataset.</p>
       </div>
       <input id="settingsUploadInput" type="file" accept=".zip,application/zip">
       <div id="uploadStatus" class="small muted top-gap"></div>
@@ -1307,14 +1279,13 @@ function renderSettingsPage(range, day, rangeRows, rerender) {
     <section class="card section-card">
       <div class="section-head">
         <h3>My Health</h3>
-        <p class="muted">Compact rollup of key health signals from the selected range.</p>
       </div>
       ${renderMetricGrid([
-        { label: 'Window', value: summarizeRange(range), note: 'Active analysis range' },
-        { label: 'Sleep score', value: fmt(average(rangeRows.dailySleep, 'score')), note: 'Average sleep score' },
-        { label: 'Readiness score', value: fmt(average(rangeRows.dailyReadiness, 'score')), note: 'Average readiness score' },
-        { label: 'Night HRV proxy', value: fmt(average(rangeRows.derivedNightlyVitals, 'hrv_rmssd_proxy_ms'), 1, ' ms'), note: 'Overnight variability proxy' },
-        { label: 'Night resting HR', value: fmt(average(rangeRows.derivedNightlyVitals, 'rhr_night_bpm'), 1, ' bpm'), note: 'Average overnight resting heart rate' }
+        { label: 'Window', value: summarizeRange(range), note: '' },
+        { label: 'Sleep score', value: fmt(average(rangeRows.dailySleep, 'score')), note: '' },
+        { label: 'Readiness score', value: fmt(average(rangeRows.dailyReadiness, 'score')), note: '' },
+        { label: 'Night HRV proxy', value: fmt(average(rangeRows.derivedNightlyVitals, 'hrv_rmssd_proxy_ms'), 1, ' ms'), note: '' },
+        { label: 'Night resting HR', value: fmt(average(rangeRows.derivedNightlyVitals, 'rhr_night_bpm'), 1, ' bpm'), note: '' }
       ])}
     </section>
 
@@ -1366,14 +1337,15 @@ function renderSettingsPage(range, day, rangeRows, rerender) {
 
 function renderPageShell(app, title, subtitle) {
   const showBanner = shouldRenderIntroBanner(page);
+  const showHeader = showBanner;
   app.innerHTML = `
-    <section class="page-header ${showBanner ? 'card' : ''}">
+    ${showHeader ? `<section class="page-header ${showBanner ? 'card' : ''}">
       <div>
         ${showBanner ? '<p class="eyebrow">Oura dashboard</p>' : ''}
         <h1>${title}</h1>
         ${subtitle ? `<p class="muted">${subtitle}</p>` : ''}
       </div>
-    </section>
+    </section>` : ''}
     <section id="dateRangeMount"></section>
     <section id="pageContent" class="page-stack"></section>
   `;
@@ -1418,8 +1390,8 @@ function renderPageContent(range, day, rangeRows, rerender) {
     return;
   }
 
-  if (page === 'insights') {
-    content.innerHTML = renderInsightsPage(range, day, rangeRows);
+  if (page === 'strain') {
+    content.innerHTML = renderStrainPage(range, day, rangeRows);
     return;
   }
 

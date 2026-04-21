@@ -11,7 +11,6 @@ export function renderDateRangeControl(target, { range, availableDates, onChange
   target.className = 'date-range-control card';
   target.innerHTML = `
     <div class="row split-row range-head">
-      <h3>Date range</h3>
       <div class="small muted">${summarizeRange(range)}</div>
     </div>
     <div class="row compact-range-row">
