@@ -181,3 +181,145 @@ export function stressCategorySeries(timelineRows = []) {
     categories
   };
 }
+
+function mean(values = []) {
+  if (!values.length) return null;
+  return values.reduce((sum, value) => sum + value, 0) / values.length;
+}
+
+function stdDev(values = [], avg = mean(values)) {
+  if (!values.length || !Number.isFinite(avg)) return null;
+  const variance = values.reduce((sum, value) => sum + ((value - avg) ** 2), 0) / values.length;
+  return Math.sqrt(variance);
+}
+
+function zScore(current, baseMean, baseStd) {
+  if (!Number.isFinite(current) || !Number.isFinite(baseMean) || !Number.isFinite(baseStd)) return null;
+  if (baseStd < 0.5) return (current - baseMean) / 0.5;
+  return (current - baseMean) / baseStd;
+}
+
+function uniqueDates(rows = [], key = 'date') {
+  return [...new Set((rows || []).map((row) => row?.[key]).filter(Boolean))].sort();
+}
+
+function lastWindowValues(rows = [], date, pickValue, baselineDays = 28) {
+  return (rows || [])
+    .filter((row) => row?.date && row.date < date)
+    .slice(-baselineDays)
+    .map((row) => Number(pickValue(row)))
+    .filter((value) => Number.isFinite(value));
+}
+
+const STRAIN_STATES = {
+  none: { key: 'no-signs', label: 'No signs', level: 0 },
+  minor: { key: 'minor-signs', label: 'Minor signs', level: 1 },
+  major: { key: 'major-signs', label: 'Major signs', level: 2 },
+  insufficient: { key: 'insufficient-history', label: 'Not enough history yet', level: null }
+};
+
+function strainStateFromScore(totalScore, signalCount, evaluableSignals) {
+  if (evaluableSignals < 3) return STRAIN_STATES.insufficient;
+  if (totalScore >= 5 && signalCount >= 3) return STRAIN_STATES.major;
+  if (totalScore >= 2 && signalCount >= 2) return STRAIN_STATES.minor;
+  return STRAIN_STATES.none;
+}
+
+function buildBaseline(rows = [], date, extractor, baselineDays = 28) {
+  const values = lastWindowValues(rows, date, extractor, baselineDays);
+  if (values.length < 14) return null;
+  const avg = mean(values);
+  const std = stdDev(values, avg);
+  if (!Number.isFinite(avg) || !Number.isFinite(std)) return null;
+  return { avg, std };
+}
+
+function evaluateStrainForDate(date, allRows = {}) {
+  const signals = [];
+  const rows = allRows;
+  const dailyReadinessRow = (rows.dailyReadiness || []).find((row) => row?.date === date) || null;
+  const dailySleepRow = (rows.dailySleep || []).find((row) => row?.date === date) || null;
+  const dailyStressRow = (rows.dailyStress || []).find((row) => row?.date === date) || null;
+  const nightlyRow = (rows.derivedNightlyVitals || []).find((row) => row?.date === date) || null;
+  const sleepModelRow = (rows.sleepModel || []).find((row) => row?.date === date) || null;
+
+  const defs = [
+    { key: 'rhr', label: 'Night resting HR', rows: rows.derivedNightlyVitals, current: Number(nightlyRow?.rhr_night_bpm), extractor: (row) => row?.rhr_night_bpm, direction: 'up' },
+    { key: 'hrv', label: 'Night HRV proxy', rows: rows.derivedNightlyVitals, current: Number(nightlyRow?.hrv_rmssd_proxy_ms), extractor: (row) => row?.hrv_rmssd_proxy_ms, direction: 'down' },
+    { key: 'resp', label: 'Respiratory rate', rows: rows.sleepModel, current: Number(sleepModelRow?.avgBreath), extractor: (row) => row?.avgBreath, direction: 'up' },
+    { key: 'temp', label: 'Temperature deviation', rows: rows.dailyReadiness, current: Math.abs(Number(dailyReadinessRow?.temperatureDeviation)), extractor: (row) => Math.abs(Number(row?.temperatureDeviation)), direction: 'up' },
+    { key: 'sleep', label: 'Sleep score', rows: rows.dailySleep, current: Number(dailySleepRow?.score), extractor: (row) => row?.score, direction: 'down' },
+    { key: 'readiness', label: 'Readiness score', rows: rows.dailyReadiness, current: Number(dailyReadinessRow?.score), extractor: (row) => row?.score, direction: 'down' },
+    { key: 'stressHigh', label: 'High stress time', rows: rows.dailyStress, current: Number(dailyStressRow?.high), extractor: (row) => row?.high, direction: 'up' }
+  ];
+
+  let totalScore = 0;
+  let signalCount = 0;
+  let evaluableSignals = 0;
+
+  for (const def of defs) {
+    const baseline = buildBaseline(def.rows || [], date, def.extractor);
+    if (!baseline || !Number.isFinite(def.current)) continue;
+    evaluableSignals += 1;
+    const z = zScore(def.current, baseline.avg, baseline.std);
+    if (!Number.isFinite(z)) continue;
+    const directional = def.direction === 'down' ? -z : z;
+    let weight = 0;
+    if (directional >= 1.8) weight = 2;
+    else if (directional >= 1.0) weight = 1;
+    if (!weight) continue;
+    totalScore += weight;
+    signalCount += 1;
+    signals.push({
+      label: def.label,
+      current: def.current,
+      baseline: baseline.avg,
+      z: directional
+    });
+  }
+
+  const state = strainStateFromScore(totalScore, signalCount, evaluableSignals);
+  const drivers = signals.sort((a, b) => b.z - a.z).slice(0, 4);
+  return { date, state, drivers, totalScore, signalCount, evaluableSignals };
+}
+
+export function strainSummary(range, rangeRows = {}, allRows = {}) {
+  const combinedRows = {
+    dailyReadiness: allRows.dailyReadiness || rangeRows.dailyReadiness || [],
+    dailySleep: allRows.dailySleep || rangeRows.dailySleep || [],
+    dailyStress: allRows.dailyStress || rangeRows.dailyStress || [],
+    derivedNightlyVitals: allRows.derivedNightlyVitals || rangeRows.derivedNightlyVitals || [],
+    sleepModel: allRows.sleepModel || rangeRows.sleepModel || []
+  };
+  const targetDates = uniqueDates([
+    ...(rangeRows.dailyReadiness || []),
+    ...(rangeRows.dailySleep || []),
+    ...(rangeRows.dailyStress || []),
+    ...(rangeRows.derivedNightlyVitals || []),
+    ...(rangeRows.sleepModel || [])
+  ]);
+  if (range?.start && range?.end && !targetDates.length) targetDates.push(range.end);
+  const days = targetDates.map((date) => evaluateStrainForDate(date, combinedRows));
+  const evaluableDays = days.filter((row) => row.state.level != null);
+  const dominant = (() => {
+    if (!days.length) return STRAIN_STATES.insufficient;
+    if (!evaluableDays.length) return STRAIN_STATES.insufficient;
+    const avgLevel = evaluableDays.reduce((sum, row) => sum + row.state.level, 0) / evaluableDays.length;
+    if (avgLevel >= 1.5) return STRAIN_STATES.major;
+    if (avgLevel >= 0.5) return STRAIN_STATES.minor;
+    return STRAIN_STATES.none;
+  })();
+  const current = range?.isSingleDay
+    ? (days.find((row) => row.date === range.end)?.state || STRAIN_STATES.insufficient)
+    : dominant;
+  const driverSource = range?.isSingleDay
+    ? (days.find((row) => row.date === range.end)?.drivers || [])
+    : days.flatMap((row) => row.drivers || []).sort((a, b) => b.z - a.z).slice(0, 4);
+
+  return {
+    state: current,
+    trendStates: days.map((row) => ({ date: row.date, label: row.state.label, level: row.state.level })),
+    drivers: driverSource,
+    hasMeaningfulSignal: current.level != null && current.level > 0
+  };
+}

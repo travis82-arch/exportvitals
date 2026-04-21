@@ -154,12 +154,12 @@ body[data-page='stress'] {
   --chart-bar: #ef8dcd;
 }
 
-body[data-page='insights'] {
-  --accent: #ff9f72;
-  --accent-2: #ffd27a;
-  --accent-soft: rgba(255, 159, 114, 0.24);
-  --accent-surface: rgba(56, 33, 22, 0.82);
-  --chart-bar: #ffb586;
+body[data-page='strain'] {
+  --accent: #d6bf6a;
+  --accent-2: #c8d47f;
+  --accent-soft: rgba(214, 191, 106, 0.24);
+  --accent-surface: rgba(55, 47, 24, 0.82);
+  --chart-bar: #d8c573;
 }
 
 body[data-page='settings'] {
@@ -221,6 +221,7 @@ body[data-page='settings'] {
 }
 
 .range-head { align-items: baseline; }
+.range-head .small { margin-left: auto; }
 
 .compact-range-row { gap: 10px; }
 
@@ -721,3 +722,27 @@ textarea.debug-text {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
+
+.strain-legend {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.strain-legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.84rem;
+}
+
+.strain-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  display: inline-block;
+}
+
+.strain-dot-0 { background: #6fa38e; }
+.strain-dot-1 { background: #d1b961; }
+.strain-dot-2 { background: #e0925f; }
