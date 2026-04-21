@@ -153,7 +153,7 @@ test('settings page does not render date range controls', () => {
   assert.equal(shouldRenderDateRangeForPage('index'), true);
   assert.equal(shouldRenderDateRangeForPage('readiness'), true);
   assert.equal(shouldRenderDateRangeForPage('sleep'), true);
-  assert.equal(shouldRenderIntroBanner('index'), true);
+  assert.equal(shouldRenderIntroBanner('index'), false);
   assert.equal(shouldRenderIntroBanner('stress'), false);
   assert.equal(shouldRenderIntroBanner('settings'), false);
 });

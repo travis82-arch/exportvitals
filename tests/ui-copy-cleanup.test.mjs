@@ -14,4 +14,6 @@ test('user-facing copy avoids derived-from implementation notes', () => {
   assert.equal(source.includes('Past 14 days'), false);
   assert.equal(source.includes('Page parity for this tab remains intentionally limited in PR3.'), false);
   assert.equal(source.includes('sleep-estimate-chip'), true);
+  assert.equal(source.includes('Key metrics'), false);
+  assert.equal(source.includes('OURA DASHBOARD'), false);
 });

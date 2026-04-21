@@ -211,8 +211,8 @@ body[data-page='settings'] {
 
 .date-range-control {
   display: grid;
-  gap: var(--space-2);
-  padding: var(--space-3) var(--space-4);
+  gap: 8px;
+  padding: 10px 14px;
 }
 
 .date-range-control h3 {
@@ -220,12 +220,11 @@ body[data-page='settings'] {
   font-size: 0.95rem;
 }
 
-.range-head { align-items: baseline; }
-.range-head .small { margin-left: auto; }
-
-.compact-range-row { gap: 10px; }
-
-.range-preset-label { display: grid; gap: 6px; min-width: 168px; }
+.compact-range-row { gap: 8px; }
+.compact-range-top { align-items: center; }
+.compact-range-top .compact-select { min-width: 148px; }
+.range-active-date { margin-left: auto; text-align: right; }
+.compact-range-custom label { display: grid; gap: 4px; flex: 1; min-width: 124px; }
 
 .compact-select {
   appearance: none;
@@ -285,6 +284,13 @@ body[data-page='settings'] {
 .hero-card h2 {
   margin: 6px 0 0;
 }
+.hero-title {
+  margin: 0;
+  font-size: 0.85rem;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
 
 .hero-top {
   display: flex;
@@ -302,10 +308,37 @@ body[data-page='settings'] {
   font-size: 0.74rem;
 }
 
-.hero-value {
+.hero-value-wrap {
+  display: grid;
+  place-items: center;
   margin-top: 8px;
+}
+
+.hero-value-circle {
+  width: 164px;
+  height: 164px;
+  border-radius: 999px;
+  display: grid;
+  place-items: center;
+  border: 1px solid color-mix(in oklab, var(--accent), transparent 55%);
+  background:
+    radial-gradient(circle at 35% 30%, color-mix(in oklab, var(--accent-2), white 18%) 0%, color-mix(in oklab, var(--accent), transparent 46%) 36%, rgba(8, 14, 23, 0.94) 78%),
+    linear-gradient(140deg, color-mix(in oklab, var(--accent), transparent 66%), color-mix(in oklab, var(--accent-2), transparent 75%));
+  box-shadow: inset 0 0 22px rgba(8, 14, 22, 0.56), 0 14px 28px rgba(4, 9, 17, 0.35);
+}
+
+.hero-value {
   font-size: 2rem;
   font-weight: 760;
+  letter-spacing: -0.02em;
+  text-align: center;
+}
+
+.hero-tone-home .hero-value-circle {
+  border-color: rgba(156, 184, 231, 0.36);
+  background:
+    radial-gradient(circle at 32% 28%, rgba(158, 188, 236, 0.34), rgba(92, 116, 156, 0.2) 42%, rgba(8, 14, 23, 0.94) 78%),
+    linear-gradient(140deg, rgba(129, 160, 214, 0.3), rgba(103, 205, 186, 0.22));
 }
 
 .hero-extra {
