@@ -10,22 +10,25 @@ export function renderDateRangeControl(target, { range, availableDates, onChange
 
   target.className = 'date-range-control card';
   target.innerHTML = `
-    <div class="row split-row">
+    <div class="row split-row range-head">
       <h3>Date range</h3>
       <div class="small muted">${summarizeRange(range)}</div>
     </div>
-    <div class="preset-row">
-      ${RANGE_PRESETS.map((preset) => `<button type="button" class="btn ${selectedPreset === preset.key ? 'active' : ''}" data-preset="${preset.key}" ${disabled ? 'disabled' : ''}>${preset.label}</button>`).join('')}
+    <div class="row compact-range-row">
+      <label class="small muted range-preset-label">Preset
+        <select class="compact-select" data-role="preset" ${disabled ? 'disabled' : ''}>
+          ${RANGE_PRESETS.map((preset) => `<option value="${preset.key}" ${selectedPreset === preset.key ? 'selected' : ''}>${preset.label}</option>`).join('')}
+        </select>
+      </label>
     </div>
-    <div class="row">
+    <div class="row compact-range-row">
       <label class="small muted">Start <input type="date" data-role="start" min="${minDate}" max="${maxDate}" value="${range?.start || ''}" ${disabled || selectedPreset !== 'custom' ? 'disabled' : ''}></label>
       <label class="small muted">End <input type="date" data-role="end" min="${minDate}" max="${maxDate}" value="${range?.end || ''}" ${disabled || selectedPreset !== 'custom' ? 'disabled' : ''}></label>
     </div>
   `;
 
-  target.querySelectorAll('[data-preset]').forEach((button) => {
-    button.addEventListener('click', () => onChange?.({ preset: button.dataset.preset }));
-  });
+  const presetSelect = target.querySelector('[data-role="preset"]');
+  presetSelect?.addEventListener('change', () => onChange?.({ preset: presetSelect.value }));
 
   const startInput = target.querySelector('[data-role="start"]');
   const endInput = target.querySelector('[data-role="end"]');

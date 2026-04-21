@@ -154,6 +154,14 @@ body[data-page='stress'] {
   --chart-bar: #ef8dcd;
 }
 
+body[data-page='insights'] {
+  --accent: #ff9f72;
+  --accent-2: #ffd27a;
+  --accent-soft: rgba(255, 159, 114, 0.24);
+  --accent-surface: rgba(56, 33, 22, 0.82);
+  --chart-bar: #ffb586;
+}
+
 body[data-page='settings'] {
   --accent: #9eb4cf;
   --accent-2: #8fd3c6;
@@ -212,11 +220,23 @@ body[data-page='settings'] {
   font-size: 0.95rem;
 }
 
-.preset-row {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 8px;
+.range-head { align-items: baseline; }
+
+.compact-range-row { gap: 10px; }
+
+.range-preset-label { display: grid; gap: 6px; min-width: 168px; }
+
+.compact-select {
+  appearance: none;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--card-soft);
+  color: var(--text);
+  padding: 8px 10px;
+  font-size: 0.82rem;
 }
+
+.compact-select:disabled { opacity: 0.45; }
 
 .row {
   display: flex;
@@ -687,16 +707,10 @@ textarea.debug-text {
     max-width: 920px;
   }
 
-  .tabs {
-    grid-template-columns: repeat(7, minmax(0, 1fr));
-  }
+  .tabs { grid-template-columns: repeat(8, minmax(0, 1fr)); }
 
   .summary-strip {
     grid-template-columns: repeat(5, minmax(0, 1fr));
-  }
-
-  .preset-row {
-    grid-template-columns: repeat(6, minmax(0, 1fr));
   }
 
   .metric-grid {
