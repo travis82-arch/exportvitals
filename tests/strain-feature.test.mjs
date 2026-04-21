@@ -6,14 +6,14 @@ import { strainSummary } from '../src/state/pageSummaries.js';
 
 const entrySource = readFileSync(new URL('../src/mpa-entry.js', import.meta.url), 'utf8');
 
-test('menu destinations include Strain and Debug, without Settings/Insights', () => {
+test('menu destinations include Strain without Debug/Settings/Insights', () => {
   const labels = navManifest.map((item) => item.label);
   assert.equal(labels.includes('Strain'), true);
-  assert.equal(labels.includes('Debug'), true);
+  assert.equal(labels.includes('Debug'), false);
   assert.equal(labels.includes('Insights'), false);
   assert.equal(labels.includes('Settings'), false);
   assert.equal(navManifest.some((item) => item.href === '/strain'), true);
-  assert.equal(navManifest.some((item) => item.href === '/debug'), true);
+  assert.equal(navManifest.some((item) => item.href === '/debug'), false);
 });
 
 test('strain page renderer is wired in app entry', () => {

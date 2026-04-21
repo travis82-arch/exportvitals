@@ -1,7 +1,7 @@
 import { existsSync } from 'node:fs';
 import { navManifest } from '../src/nav/navManifest.js';
 
-const requiredLabels = ['Home', 'Readiness', 'Sleep', 'Activity', 'Heart Rate', 'Stress', 'Strain', 'Debug'];
+const requiredLabels = ['Home', 'Readiness', 'Sleep', 'Activity', 'Heart Rate', 'Stress', 'Strain'];
 const labels = navManifest.map((item) => item.label);
 
 const missingLabels = requiredLabels.filter((label) => !labels.includes(label));
