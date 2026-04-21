@@ -74,6 +74,7 @@ export function renderTopNav(target, { currentPath = window.location.pathname, o
     <button class="menu-trigger" id="menuTrigger" type="button" aria-expanded="false" aria-controls="appMenuPanel" aria-label="Open menu">☰</button>
     <div class="menu-panel" id="appMenuPanel" hidden>
       <button class="menu-upload" id="menuUploadAction" type="button">Upload</button>
+      <div class="small muted">ZIP imports stay on this device.</div>
       <input id="menuUploadInput" type="file" accept=".zip,application/zip" hidden>
       <div class="menu-upload-status small muted" id="menuUploadStatus"></div>
       <nav class="menu-links" aria-label="Primary">${links}</nav>

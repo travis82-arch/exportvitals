@@ -252,7 +252,7 @@ function renderHeroCard({ eyebrow = '', title = '', value = '', status = '', det
 function renderMetricGrid(items) {
   return `<div class="metric-grid">${items
     .map(
-      (item) => `<article class="metric-card"><div class="metric-label">${item.label}</div><div class="metric-value">${item.value}</div>${item.note ? `<div class="metric-note">${item.note}</div>` : ''}</article>`
+      (item) => `<article class="metric-card"><div class="metric-label">${item.label}</div><div class="metric-value">${item.value}</div>${item.keepNote && item.note ? `<div class="metric-note">${item.note}</div>` : ''}</article>`
     )
     .join('')}</div>`;
 }
@@ -266,7 +266,6 @@ function renderContributorRows(rows) {
       const valueText = row.valueText || (Number.isFinite(raw) ? `${Math.round(raw)}` : '<span class="placeholder">Unavailable</span>');
       return `<div class="contributor-row">
         <div class="row split-row"><span>${row.label}</span><strong>${valueText}</strong></div>
-        <div class="small muted">${row.note || ''}</div>
         <div class="progress"><span style="width:${pct}%"></span></div>
       </div>`;
     })
@@ -885,7 +884,7 @@ function renderHome(range, day, rangeRows) {
   return `
     <section class="summary-strip">
       ${summaries
-        .map((item) => `<a class="chip-card chip-link ${destinationAccentClass(item.domain)}" href="${pageHrefForDomain(item.domain)}"><div class="chip-title">${item.title}</div><div class="chip-value">${item.value}</div><div class="chip-note">${item.sub}</div></a>`)
+        .map((item) => `<a class="chip-card chip-link ${destinationAccentClass(item.domain)}" href="${pageHrefForDomain(item.domain)}"><div class="chip-title">${item.title}</div><div class="chip-value">${item.value}</div></a>`)
         .join('')}
     </section>
 

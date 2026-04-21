@@ -99,6 +99,7 @@ export function createImportController({ importZip, onImported, onStateChange })
     }
 
     content.innerHTML = `<p>Import Oura ZIP from any page.</p>
+      <p class="small muted">Import processing stays local in your browser on this device.</p>
       <div class="row"><button class="btn" data-action="pick">Choose ZIP</button></div>`;
   }
 
