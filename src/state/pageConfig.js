@@ -1,5 +1,5 @@
 export function shouldRenderDateRangeForPage(pageKey) {
-  return pageKey !== 'settings';
+  return pageKey !== 'debug';
 }
 
 export function shouldRenderIntroBanner(pageKey) {
