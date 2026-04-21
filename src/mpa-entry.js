@@ -208,25 +208,31 @@ function renderHeroRangeChart({ title = '', series = [], tone = 'accent' }) {
   const values = clean.map((point) => point.v);
   const min = Math.min(...values);
   const max = Math.max(...values);
-  const span = max - min || 1;
+  const yPad = Math.max((max - min) * 0.12, 1);
+  const yMin = min - yPad;
+  const yMax = max + yPad;
+  const span = yMax - yMin || 1;
   const first = clean[0].tMs;
   const last = clean.at(-1).tMs;
 
-  const m = { l: 2, r: 2, t: 3, b: 3 };
+  const m = { l: 34, r: 10, t: 10, b: 24 };
   const w = 320;
-  const h = 70;
+  const h = 108;
   const plotW = w - m.l - m.r;
   const plotH = h - m.t - m.b;
   const xPos = (tMs) => m.l + ((tMs - first) / Math.max(last - first, 1)) * plotW;
-  const yPos = (value) => m.t + (1 - (value - min) / span) * plotH;
+  const yPos = (value) => m.t + (1 - (value - yMin) / span) * plotH;
   const points = clean.map((point) => `${xPos(point.tMs)},${yPos(point.v)}`).join(' ');
+  const dateLabel = (tMs) => new Date(tMs).toLocaleDateString([], { month: 'short', day: 'numeric' });
+  const numberLabel = (value) => (Math.abs(value) >= 100 ? Math.round(value) : Number(value).toFixed(0));
+  const xTicks = [first, first + (last - first) / 2, last];
+  const yTicks = [yMax, yMin + (yMax - yMin) / 2, yMin];
 
   const toneClass = tone === 'stress'
     ? 'hero-trend-stress'
     : tone === 'calm'
       ? 'hero-trend-calm'
       : 'hero-trend-default';
-  const dateLabel = (tMs) => new Date(tMs).toLocaleDateString([], { month: 'short', day: 'numeric' });
 
   return `<div class="hero-trend ${toneClass}" aria-label="${title}">
     <div class="hero-trend-head">
@@ -234,8 +240,13 @@ function renderHeroRangeChart({ title = '', series = [], tone = 'accent' }) {
       <span>${dateLabel(first)} — ${dateLabel(last)}</span>
     </div>
     <svg class="hero-trend-svg" viewBox="0 0 ${w} ${h}" preserveAspectRatio="none" role="img" aria-label="${title}">
+      ${yTicks.map((tick) => `<line class="hero-trend-grid" x1="${m.l}" y1="${yPos(tick)}" x2="${w - m.r}" y2="${yPos(tick)}"></line>`).join('')}
+      <line class="hero-trend-axis" x1="${m.l}" y1="${m.t}" x2="${m.l}" y2="${h - m.b}"></line>
+      <line class="hero-trend-axis" x1="${m.l}" y1="${h - m.b}" x2="${w - m.r}" y2="${h - m.b}"></line>
       <polyline class="hero-trend-line" points="${points}"></polyline>
       ${clean.map((point) => `<circle class="hero-trend-dot" cx="${xPos(point.tMs)}" cy="${yPos(point.v)}" r="1.6"></circle>`).join('')}
+      ${yTicks.map((tick) => `<text class="hero-trend-label hero-trend-label-y" x="${m.l - 4}" y="${yPos(tick)}">${numberLabel(tick)}</text>`).join('')}
+      ${xTicks.map((tick) => `<text class="hero-trend-label hero-trend-label-x" x="${xPos(tick)}" y="${h - 6}">${dateLabel(tick)}</text>`).join('')}
     </svg>
   </div>`;
 }
@@ -1313,9 +1324,26 @@ function renderDebugPage(range, day, rangeRows) {
 
 function renderPageShell(app, title, subtitle) {
   app.innerHTML = `
-    <section id="dateRangeMount"></section>
     <section id="pageContent" class="page-stack"></section>
   `;
+}
+
+function ensureHeaderRangeMount() {
+  const topNavMount = document.getElementById('topNav');
+  if (!topNavMount) return;
+  const topbar = topNavMount.closest('.topbar');
+  if (!topbar) return;
+  const existing = document.getElementById('headerControlRow');
+  if (existing) return;
+  const row = document.createElement('div');
+  row.id = 'headerControlRow';
+  row.className = 'header-control-row';
+  const rangeMount = document.createElement('div');
+  rangeMount.id = 'dateRangeMount';
+  rangeMount.className = 'header-range-mount';
+  topNavMount.parentElement?.removeChild(topNavMount);
+  row.append(rangeMount, topNavMount);
+  topbar.appendChild(row);
 }
 
 function mountDateRangeControl(availableDates, range, rerender) {
@@ -1399,6 +1427,7 @@ async function bootstrap() {
 
   const app = document.getElementById('app');
   if (!app) throw new Error('Missing app mount node');
+  ensureHeaderRangeMount();
 
   const meta = PAGE_META[page] || PAGE_META.index;
   applyPageMetadata();

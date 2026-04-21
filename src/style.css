@@ -52,10 +52,20 @@ body {
 }
 
 #topNav {
+  margin-left: auto;
+}
+
+.header-control-row {
   max-width: 920px;
   margin: 0 auto;
   display: flex;
-  justify-content: flex-end;
+  align-items: center;
+  gap: 8px;
+}
+
+.header-range-mount {
+  flex: 1;
+  min-width: 0;
 }
 
 .top-menu-wrap {
@@ -271,8 +281,8 @@ body[data-page='settings'] {
 
 .date-range-control {
   display: grid;
-  gap: 8px;
-  padding: 10px 14px;
+  gap: 6px;
+  padding: 0;
 }
 
 .date-range-control h3 {
@@ -282,8 +292,14 @@ body[data-page='settings'] {
 
 .compact-range-row { gap: 8px; }
 .compact-range-top { align-items: center; }
-.compact-range-top .compact-select { min-width: 148px; }
-.range-active-date { margin-left: auto; text-align: right; }
+.compact-range-top .compact-select { min-width: 140px; }
+.range-active-date {
+  margin-left: auto;
+  text-align: right;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
 .compact-range-custom label { display: grid; gap: 4px; flex: 1; min-width: 124px; }
 
 .compact-select {
@@ -490,8 +506,18 @@ body[data-page='settings'] {
 
 .hero-trend-svg {
   width: 100%;
-  height: 62px;
+  height: 106px;
   display: block;
+}
+
+.hero-trend-grid {
+  stroke: rgba(150, 166, 193, 0.14);
+  stroke-width: 1;
+}
+
+.hero-trend-axis {
+  stroke: rgba(150, 166, 193, 0.42);
+  stroke-width: 1;
 }
 
 .hero-trend-line {
@@ -502,6 +528,20 @@ body[data-page='settings'] {
 
 .hero-trend-dot {
   fill: color-mix(in oklab, var(--accent), white 20%);
+}
+
+.hero-trend-label {
+  fill: #b5c4de;
+  font-size: 8px;
+}
+
+.hero-trend-label-y {
+  text-anchor: end;
+  dominant-baseline: middle;
+}
+
+.hero-trend-label-x {
+  text-anchor: middle;
 }
 
 .hero-trend-calm .hero-trend-line {
@@ -850,6 +890,13 @@ textarea.debug-text {
   min-height: 220px;
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   font-size: 0.8rem;
+}
+
+@media (max-width: 640px) {
+  .header-control-row { gap: 6px; }
+  .compact-range-top .compact-select { min-width: 118px; }
+  .range-active-date { max-width: 110px; font-size: 0.72rem; }
+  .menu-trigger { width: 34px; height: 34px; }
 }
 
 .boot-shell {

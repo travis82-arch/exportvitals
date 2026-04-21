@@ -73,7 +73,7 @@ export function renderTopNav(target, { currentPath = window.location.pathname, o
     .join('');
 
   mount.innerHTML = `<div class="top-menu-wrap">
-    <button class="menu-trigger" id="menuTrigger" type="button" aria-expanded="false" aria-controls="appMenuPanel" aria-label="Open menu">☰</button>
+    <button class="menu-trigger" id="menuTrigger" type="button" aria-expanded="false" aria-controls="appMenuPanel" aria-label="Open settings menu">⚙️</button>
     <div class="menu-panel" id="appMenuPanel" hidden>
       <button class="menu-upload" id="menuUploadAction" type="button">Upload</button>
       <div class="small muted">Supports Oura export ZIP. Parsing runs locally.</div>

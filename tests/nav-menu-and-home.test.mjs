@@ -41,6 +41,11 @@ test('menu panel uses hidden attribute as the single source of visibility truth'
   assert.equal(cssSource.includes('display: none;'), true);
 });
 
+test('menu trigger uses gear icon and settings-oriented label', () => {
+  assert.equal(topNavSource.includes('aria-label="Open settings menu"'), true);
+  assert.equal(topNavSource.includes('>⚙️</button>'), true);
+});
+
 test('home remains default landing view and does not render redundant heading copy', () => {
   assert.equal(landingHtml.includes('View your Oura export in your browser'), true);
   assert.equal(appIndexHtml.includes('data-page="index"'), true);
