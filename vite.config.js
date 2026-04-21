@@ -8,7 +8,8 @@ const pages = [
   'activity.html',
   'heart-rate.html',
   'stress.html',
-  'settings.html',
+  'strain.html',
+  'debug.html',
   // legacy pages kept in build output for safer PR1 transition
   'vitals.html',
   'trends.html',
@@ -16,7 +17,7 @@ const pages = [
   'data-tools-import.html',
   'data-tools-export.html',
   'glossary.html',
-  'debug.html',
+  'settings.html',
   'my-health.html'
 ];
 

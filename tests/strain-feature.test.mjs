@@ -6,11 +6,14 @@ import { strainSummary } from '../src/state/pageSummaries.js';
 
 const entrySource = readFileSync(new URL('../src/mpa-entry.js', import.meta.url), 'utf8');
 
-test('top-level nav uses Strain tab and no Insights tab', () => {
+test('menu destinations include Strain and Debug, without Settings/Insights', () => {
   const labels = navManifest.map((item) => item.label);
   assert.equal(labels.includes('Strain'), true);
+  assert.equal(labels.includes('Debug'), true);
   assert.equal(labels.includes('Insights'), false);
+  assert.equal(labels.includes('Settings'), false);
   assert.equal(navManifest.some((item) => item.href === '/strain'), true);
+  assert.equal(navManifest.some((item) => item.href === '/debug'), true);
 });
 
 test('strain page renderer is wired in app entry', () => {
@@ -18,6 +21,7 @@ test('strain page renderer is wired in app entry', () => {
   assert.equal(entrySource.includes("if (page === 'strain')"), true);
   assert.equal(entrySource.includes('Biometrics'), true);
   assert.equal(entrySource.includes('Strain states by day'), true);
+  assert.equal(entrySource.includes('not a diagnosis'), true);
   assert.equal(entrySource.includes('byDateInsights'), false);
 });
 

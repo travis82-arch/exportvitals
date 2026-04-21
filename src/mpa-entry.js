@@ -1,4 +1,4 @@
-import { renderTopNav } from './components/TopNav.js';
+import { renderTopNav, setTopNavUploadStatus } from './components/TopNav.js';
 import { renderDateRangeControl } from './components/DateRangeControl.js';
 import {
   hydrateFromPersistence,
@@ -34,7 +34,7 @@ const PAGE_META = {
   'heart-rate': { title: 'Heart Rate', subtitle: '' },
   stress: { title: 'Stress', subtitle: '' },
   strain: { title: 'Strain', subtitle: '' },
-  settings: { title: 'Settings', subtitle: '' }
+  debug: { title: 'Debug', subtitle: '' }
 };
 
 const DOMAIN_ORDER = ['readiness', 'sleep', 'activity', 'heart-rate', 'stress'];
@@ -868,14 +868,12 @@ function renderHome(range, day, rangeRows) {
   const homeHeroTrend = buildDailyLine(rangeRows.dailyReadiness, 'score');
 
   const sleepRows = rangeRows.dailySleep || [];
-  const vitalsRows = rangeRows.derivedNightlyVitals || [];
+  const pageHrefForDomain = (domain) => (domain === 'home' ? '/index.html' : `/${domain}.html`);
 
   return `
     <section class="summary-strip">
       ${summaries
-        .map(
-          (item) => `<article class="chip-card"><div class="chip-title">${item.title}</div><div class="chip-value">${item.value}</div><div class="chip-note">${item.sub}</div></article>`
-        )
+        .map((item) => `<a class="chip-card chip-link" href="${pageHrefForDomain(item.domain)}"><div class="chip-title">${item.title}</div><div class="chip-value">${item.value}</div><div class="chip-note">${item.sub}</div></a>`)
         .join('')}
     </section>
 
@@ -887,7 +885,7 @@ function renderHome(range, day, rangeRows) {
       tone: 'home'
     })}
 
-    ${renderPreviewCard({
+    <a class="card-link" href="/sleep.html">${renderPreviewCard({
       title: 'Sleep',
       subtitle: '',
       metrics: [
@@ -897,9 +895,9 @@ function renderHome(range, day, rangeRows) {
         { label: 'Avg HRV', value: fmt(average(rangeRows.sleepModel, 'avgHrv'), 1, ' ms') }
       ],
       footer: ''
-    })}
+    })}</a>
 
-    ${renderPreviewCard({
+    <a class="card-link" href="/activity.html">${renderPreviewCard({
       title: 'Activity',
       subtitle: '',
       metrics: [
@@ -909,9 +907,9 @@ function renderHome(range, day, rangeRows) {
         { label: 'Inactivity alerts', value: fmt(activity.inactivityAlerts, 1) }
       ],
       footer: ''
-    })}
+    })}</a>
 
-    ${renderPreviewCard({
+    <a class="card-link" href="/stress.html">${renderPreviewCard({
       title: 'Stress',
       subtitle: '',
       metrics: [
@@ -921,9 +919,9 @@ function renderHome(range, day, rangeRows) {
         { label: 'Daytime samples', value: fmt((rangeRows.daytimeStress || []).length, 0) }
       ],
       footer: ''
-    })}
+    })}</a>
 
-    ${renderPreviewCard({
+    <a class="card-link" href="/heart-rate.html">${renderPreviewCard({
       title: 'Heart Rate',
       subtitle: '',
       metrics: [
@@ -933,7 +931,7 @@ function renderHome(range, day, rangeRows) {
         { label: 'Points', value: fmt(heart.points, 0) }
       ],
       footer: ''
-    })}
+    })}</a>
   `;
 }
 
@@ -1145,10 +1143,10 @@ function renderStrainPage(range, day, rangeRows) {
     .map((label, idx) => `<span class="strain-legend-item"><i class="strain-dot strain-dot-${idx}"></i>${label}</span>`)
     .join('');
   const detail = strain.state.key === 'insufficient-history'
-    ? 'Need more history to compare against your baseline.'
+    ? 'Need enough recent nights before baseline comparison is reliable.'
     : strain.state.key === 'no-signs'
-      ? 'No sustained deviations from your recent baseline.'
-      : 'Multiple metrics are deviating from your recent baseline.';
+      ? 'No sustained baseline deviations across key recovery metrics.'
+      : 'Conservative baseline checks found sustained deviations across multiple signals.';
 
   return `
     ${renderHeroCard({
@@ -1167,7 +1165,7 @@ function renderStrainPage(range, day, rangeRows) {
             (strain.drivers || []).map((driver) => ({
               label: driver.label,
               value: `${Number(driver.current).toFixed(1)}`,
-              note: `vs baseline ${Number(driver.baseline).toFixed(1)}`
+              note: `Baseline ${Number(driver.baseline).toFixed(1)}`
             }))
           )
         : '<div class="muted">No elevated strain drivers for this selection.</div>'}
@@ -1183,6 +1181,9 @@ function renderStrainPage(range, day, rangeRows) {
             height: 170
           })
         : '<div class="muted">Not enough baseline history yet.</div>'}
+    </section>
+    <section class="card section-card">
+      <p class="small muted">Signs of Strain is a recovery trend signal, not a diagnosis.</p>
     </section>
   `;
 }
@@ -1258,71 +1259,16 @@ function diagnosticsText(range, day, rangeRows) {
   );
 }
 
-function renderSettingsPage(range, day, rangeRows, rerender) {
+function renderDebugPage(range, day, rangeRows) {
   const content = document.getElementById('pageContent');
   if (!content) return;
 
   content.innerHTML = `
     <section class="card section-card">
-      <div class="section-head">
-        <h3>Upload</h3>
-      </div>
-      <input id="settingsUploadInput" type="file" accept=".zip,application/zip">
-      <div id="uploadStatus" class="small muted top-gap"></div>
-    </section>
-
-    <section class="card section-card">
-      <div class="section-head">
-        <h3>My Health</h3>
-      </div>
-      ${renderMetricGrid([
-        { label: 'Window', value: summarizeRange(range), note: '' },
-        { label: 'Sleep score', value: fmt(average(rangeRows.dailySleep, 'score')), note: '' },
-        { label: 'Readiness score', value: fmt(average(rangeRows.dailyReadiness, 'score')), note: '' },
-        { label: 'Night HRV proxy', value: fmt(average(rangeRows.derivedNightlyVitals, 'hrv_rmssd_proxy_ms'), 1, ' ms'), note: '' },
-        { label: 'Night resting HR', value: fmt(average(rangeRows.derivedNightlyVitals, 'rhr_night_bpm'), 1, ' bpm'), note: '' }
-      ])}
-    </section>
-
-    <section class="card section-card">
       <div class="row split-row"><h3>Debug</h3><button id="copyDebugBtn" class="btn secondary" type="button">Copy</button></div>
       <textarea id="debugText" class="debug-text" readonly>${diagnosticsText(range, day, rangeRows)}</textarea>
     </section>
   `;
-
-  const status = content.querySelector('#uploadStatus');
-  const uploadInput = content.querySelector('#settingsUploadInput');
-  uploadInput?.addEventListener('change', async (event) => {
-    const file = event.target.files?.[0];
-    event.target.value = '';
-    if (!file) return;
-    status.textContent = 'Importing...';
-    try {
-      const next = await runSettingsUploadImport({
-        file,
-        settings,
-        onProgress: (progress) => {
-          const importLabel = progress.status === 'loading' ? 'loading' : progress.status;
-          status.textContent = `${importLabel}: ${progress.phase} (${progress.percent}%)`;
-        }
-      });
-      status.textContent = `Imported ✓ Loaded ${next.start ? `${next.start} → ${next.end}` : 'no date range'}.`;
-      rerender(next);
-    } catch (error) {
-      status.textContent = `Import failed: ${error?.message || String(error)}`;
-      const debugText = content.querySelector('#debugText');
-      if (debugText) debugText.value = diagnosticsText(range, day, rangeRows);
-    }
-  });
-
-  const snapshot = getStoreSnapshot();
-  if (snapshot.importState?.status === 'loading') {
-    status.textContent = `loading: ${snapshot.importState.phase || 'Reading ZIP'} (${snapshot.importState.percent || 0}%)`;
-  } else if (snapshot.importState?.status === 'error' && snapshot.importState?.lastError?.message) {
-    status.textContent = `Import failed: ${snapshot.importState.lastError.message}`;
-  } else if (snapshot.importState?.status === 'success' && snapshot.ingestReport?.dateRange?.end) {
-    status.textContent = `Imported ✓ Loaded ${snapshot.ingestReport.dateRange.start} → ${snapshot.ingestReport.dateRange.end}.`;
-  }
 
   content.querySelector('#copyDebugBtn')?.addEventListener('click', async () => {
     const debugText = content.querySelector('#debugText');
@@ -1361,8 +1307,8 @@ function renderPageContent(range, day, rangeRows, rerender) {
     return;
   }
 
-  if (page === 'settings') {
-    renderSettingsPage(range, day, rangeRows, rerender);
+  if (page === 'debug') {
+    renderDebugPage(range, day, rangeRows);
     return;
   }
 
@@ -1401,7 +1347,6 @@ function renderPageContent(range, day, rangeRows, rerender) {
 
 async function bootstrap() {
   installRuntimeDiagnostics({ showPanel: false });
-  renderTopNav(document.getElementById('topNav'), location.pathname);
 
   const purgeSummary = await purgeStaleServiceWorkersAndCaches();
   const purged = (purgeSummary.unregisteredCount || 0) > 0 || (purgeSummary.deletedCaches || []).length > 0;
@@ -1439,6 +1384,27 @@ async function bootstrap() {
     }
     renderPageContent(resolved, day, rangeRows, rerender);
   };
+
+  renderTopNav(document.getElementById('topNav'), {
+    currentPath: location.pathname,
+    onUpload: async (file) => {
+      setTopNavUploadStatus('Importing…');
+      try {
+        const next = await runSettingsUploadImport({
+          file,
+          settings,
+          onProgress: (progress) => {
+            const importLabel = progress.status === 'loading' ? 'loading' : progress.status;
+            setTopNavUploadStatus(`${importLabel}: ${progress.phase} (${progress.percent}%)`);
+          }
+        });
+        setTopNavUploadStatus(`Imported ✓ ${next.start ? `${next.start} → ${next.end}` : 'No range'}`);
+        rerender(next);
+      } catch (error) {
+        setTopNavUploadStatus(`Import failed: ${error?.message || String(error)}`);
+      }
+    }
+  });
 
   rerender(initialRange);
   subscribeToStore(() => {

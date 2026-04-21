@@ -148,14 +148,14 @@ test('settings upload handler calls import path and resolves latest-day range', 
   assert.equal(next.end, '2026-04-02');
 });
 
-test('settings page does not render date range controls', () => {
-  assert.equal(shouldRenderDateRangeForPage('settings'), false);
+test('debug page does not render date range controls', () => {
+  assert.equal(shouldRenderDateRangeForPage('debug'), false);
   assert.equal(shouldRenderDateRangeForPage('index'), true);
   assert.equal(shouldRenderDateRangeForPage('readiness'), true);
   assert.equal(shouldRenderDateRangeForPage('sleep'), true);
   assert.equal(shouldRenderIntroBanner('index'), false);
   assert.equal(shouldRenderIntroBanner('stress'), false);
-  assert.equal(shouldRenderIntroBanner('settings'), false);
+  assert.equal(shouldRenderIntroBanner('debug'), false);
 });
 
 test('large import persists in indexeddb and not full payload localStorage key', async () => {
