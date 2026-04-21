@@ -3,28 +3,30 @@ import { resolve } from 'node:path';
 
 const pages = [
   'index.html',
-  'readiness.html',
-  'sleep.html',
-  'activity.html',
-  'heart-rate.html',
-  'stress.html',
-  'strain.html',
-  'debug.html',
-  // legacy pages kept in build output for safer PR1 transition
-  'vitals.html',
-  'trends.html',
-  'journal.html',
-  'data-tools-import.html',
-  'data-tools-export.html',
-  'glossary.html',
-  'settings.html',
-  'my-health.html'
+  'about/index.html',
+  'privacy/index.html',
+  'app/index.html',
+  'app/readiness/index.html',
+  'app/sleep/index.html',
+  'app/activity/index.html',
+  'app/heart-rate/index.html',
+  'app/stress/index.html',
+  'app/strain/index.html',
+  'app/debug/index.html',
+  'app/vitals/index.html',
+  'app/trends/index.html',
+  'app/journal/index.html',
+  'app/data-tools-import/index.html',
+  'app/data-tools-export/index.html',
+  'app/glossary/index.html',
+  'app/settings/index.html',
+  'app/my-health/index.html'
 ];
 
 export default defineConfig({
   build: {
     rollupOptions: {
-      input: Object.fromEntries(pages.map((page) => [page.replace('.html', ''), resolve(__dirname, page)]))
+      input: Object.fromEntries(pages.map((page) => [page.replace('/index.html', '').replace('.html', '').replace(/\//g, '-'), resolve(__dirname, page)]))
     }
   }
 });

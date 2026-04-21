@@ -3,21 +3,45 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <meta name="theme-color" content="#0b0f14" />
-  <title>Oura Dashboard - Home</title>
-  <link rel="stylesheet" href="/src/style.css" />
+  <title>Wearable Export Viewer | View Oura export ZIP in your browser</title>
+  <meta name="description" content="Wearable Export Viewer is an open-source, local-first way to view Oura export ZIP data in your browser and analyze wearable trends locally." />
+  <meta property="og:title" content="Wearable Export Viewer" />
+  <meta property="og:description" content="Open-source, local-first wearable export viewer. Supports Oura export ZIP today, with Fitbit support planned." />
+  <link rel="canonical" href="https://example.com/" />
+  <link rel="stylesheet" href="/src/marketing.css" />
 </head>
-<body data-page="index">
-  <div id="bootShell" class="boot-shell">
-    <div class="boot-splash card"><div class="title">Loading&hellip;</div></div>
-  </div>
-  <noscript><div class="container"><div class="card">JavaScript is required.</div></div></noscript>
-  <header class="topbar">
-    <div id="topNav"></div>
-  </header>
-  <main class="container" id="app"></main>
-  <script type="module" src="/src/mpa-entry.js"></script>
+<body>
+  <main class="marketing-wrap">
+    <nav class="smallnav"><a href="/about">About</a><a href="/privacy">Privacy</a><a href="/app">App</a></nav>
+    <section class="hero">
+      <h1>Wearable Export Viewer</h1>
+      <p>A calm, local-first way to view and explore your wearable export ZIP files in the browser.</p>
+      <div class="actions">
+        <a class="btn primary" href="/app">Open the dashboard</a>
+        <a class="btn secondary" href="https://github.com/example/wearable-export-viewer">View source</a>
+      </div>
+      <p class="trust">When you import an Oura export ZIP, parsing and metric generation run in your browser. Imported files and derived health data are stored locally on your device and are not sent to app server endpoints.</p>
+    </section>
+
+    <section class="section"><h2>Why people use it</h2><div class="grid"><article class="card"><h3>View your export locally</h3><p>Open your ZIP on-device without sending files to a backend.</p></article><article class="card"><h3>No account required</h3><p>Import and explore data directly in your browser.</p></article><article class="card"><h3>Open source and transparent</h3><p>You can inspect the code and verify how data is handled.</p></article></div></section>
+
+    <section class="section"><h2>How it works</h2><div class="grid"><article class="card"><strong>1.</strong> Export your data.</article><article class="card"><strong>2.</strong> Import the ZIP in your browser.</article><article class="card"><strong>3.</strong> Explore trends and metrics locally.</article></div></section>
+
+    <section class="section"><h2>Supported data</h2><p><strong>Available now:</strong> Oura export ZIP.</p><p><strong>Planned later:</strong> Fitbit export.</p></section>
+
+    <section class="section"><h2>Trust and privacy</h2><ul><li>Open source</li><li>Local-first</li><li>Unofficial and not affiliated with Oura</li><li>No account required</li></ul><div class="highlight">When you import an Oura export ZIP, parsing and metric generation run in your browser. Imported files and derived health data are stored locally on your device and are not sent to app server endpoints.</div></section>
+
+    <section class="section faq"><h2>FAQ</h2>
+      <details><summary>Can I export my Oura data?</summary><p>Yes. Export from your Oura account, then open the ZIP here.</p></details>
+      <details><summary>How can I view my Oura export locally?</summary><p>Open the dashboard and import your ZIP directly in-browser.</p></details>
+      <details><summary>Does this upload my files to a server?</summary><p>No. Import and metric generation happen locally on your device.</p></details>
+      <details><summary>Is this affiliated with Oura?</summary><p>No. This is an independent, unofficial open-source project.</p></details>
+      <details><summary>Do I need an account to use it?</summary><p>No account is required to use the viewer.</p></details>
+      <details><summary>Is Fitbit support planned?</summary><p>Yes, Fitbit export support is planned for a future release.</p></details>
+    </section>
+
+    <section class="section"><h2>Open the dashboard in your browser</h2><a class="btn primary" href="/app">Open the dashboard</a></section>
+    <section class="footer"><p>If this project helped you, support development.</p><p>If this saved you money, leave a tip.</p><a class="btn secondary" href="https://paypal.me/placeholder">Leave a tip</a></section>
+  </main>
 </body>
 </html>
-
-

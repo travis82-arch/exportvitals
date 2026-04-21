@@ -1,6 +1,7 @@
 import { navManifest } from '../nav/navManifest.js';
 
-const toPagePath = (href) => (href === '/' ? '/index.html' : `${href}.html`);
+const toPagePath = (href) => `${href}/index.html`;
+const normalizePath = (path) => String(path || '').replace(/\/$/, '') || '/';
 
 function createMenuController({ mount, trigger, panel }) {
   let isOpen = false;
@@ -65,7 +66,8 @@ export function renderTopNav(target, { currentPath = window.location.pathname, o
   const links = navManifest
     .map((item) => {
       const pagePath = toPagePath(item.href);
-      const active = path === item.href || path === pagePath;
+      const normalizedPath = normalizePath(path);
+      const active = normalizedPath === normalizePath(item.href) || normalizedPath === normalizePath(pagePath);
       return `<a class="menu-link ${active ? 'active' : ''}" href="${pagePath}" data-destination="${item.key}">${item.label}</a>`;
     })
     .join('');
@@ -74,7 +76,7 @@ export function renderTopNav(target, { currentPath = window.location.pathname, o
     <button class="menu-trigger" id="menuTrigger" type="button" aria-expanded="false" aria-controls="appMenuPanel" aria-label="Open menu">☰</button>
     <div class="menu-panel" id="appMenuPanel" hidden>
       <button class="menu-upload" id="menuUploadAction" type="button">Upload</button>
-      <div class="small muted">ZIP imports stay on this device.</div>
+      <div class="small muted">Supports Oura export ZIP. Parsing runs locally.</div>
       <input id="menuUploadInput" type="file" accept=".zip,application/zip" hidden>
       <div class="menu-upload-status small muted" id="menuUploadStatus"></div>
       <nav class="menu-links" aria-label="Primary">${links}</nav>
