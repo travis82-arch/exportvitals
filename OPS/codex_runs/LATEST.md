@@ -1,33 +1,27 @@
 # Codex Run (LATEST)
 
 ## Summary
-- Hardened top-right menu behavior with a single open/close controller so it is closed by default, toggles reliably, closes on outside tap/Escape, closes after destination click, and closes before upload starts.
-- Removed Debug from user-facing menu destinations while preserving the internal Debug route/page implementation.
-- Strengthened Home card ambience by introducing shared destination accent classes and applying them consistently to summary chips and Home preview cards.
-- Added a small hardening refactor by centralizing destination accent mapping into a shared helper used by Home rendering.
-- Added Strain as a Home preview card to align Home destination foreshadowing with the locked destination set.
+- Fixed the top-right menu visibility source-of-truth issue by adding an explicit `.menu-panel[hidden] { display: none; }` rule so closed state is actually rendered closed on first load and after every close action.
+- Kept the existing single boolean menu controller (`isOpen`) and strengthened route transition cleanup by closing menu state on `pagehide` in addition to existing `pageshow`/`popstate` handling.
+- Extended focused regression tests for menu behavior contracts (toggle, hidden-state CSS enforcement, route cleanup hooks, and no persistence coupling).
 
 ## Key files changed
-- `src/components/TopNav.js`
-- `src/nav/navManifest.js`
-- `src/state/destinationTheme.js`
-- `src/mpa-entry.js`
 - `src/style.css`
-- `scripts/check-nav-manifest.mjs`
+- `src/components/TopNav.js`
 - `tests/nav-menu-and-home.test.mjs`
-- `tests/strain-feature.test.mjs`
 
 ## Tests / commands run
-- `npm run build` ❌ (attempt 1: `vite` permission denied)
-- `chmod +x node_modules/.bin/vite && npm run build` ❌ (attempt 2: missing optional Rollup native module)
+- `npm run build` ❌ (attempt 1: `vite` permission denied because `node_modules/.bin/vite` was not executable)
+- `chmod +x node_modules/.bin/vite && npm run build` ❌ (attempt 2: missing optional Rollup native module `@rollup/rollup-linux-x64-gnu`)
 - `npm i` ✅
 - `npm run build` ❌ (attempt 3: same missing optional Rollup native module)
+- `npm i @rollup/rollup-linux-x64-gnu` ❌ (registry access forbidden in this environment: HTTP 403)
 - `npm run check:mpa` ✅
 - `npm test` ✅
 
 ## Smoke import local
 - `node scripts/smoke-import-local.mjs` was skipped because `OPS/_local/data3.zip` is absent.
 
-## Known follow-ups for final wrap-up pass
-- Resolve environment-specific optional Rollup native binary issue so `npm run build` can run cleanly in this container.
-- Perform a browser-based visual/manual sanity pass once build/runtime environment is unblocked.
+## Known follow-ups
+- Build remains blocked by missing optional Rollup native binary package in this environment; once registry policy permits fetching `@rollup/rollup-linux-x64-gnu` (or a compatible alternative), rerun `npm run build`.
+- Browser manual sanity validation is still pending because build is currently blocked in this container.

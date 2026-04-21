@@ -24,11 +24,20 @@ test('persistent tab strip is replaced by upper-right menu navigation', () => {
 test('menu controller defaults closed and closes safely on navigation interactions', () => {
   assert.equal(topNavSource.includes('let isOpen = false'), true);
   assert.equal(topNavSource.includes('panel.hidden = !isOpen'), true);
+  assert.equal(topNavSource.includes('setOpen(!isOpen)'), true);
   assert.equal(topNavSource.includes("window.addEventListener('pageshow'"), true);
   assert.equal(topNavSource.includes("window.addEventListener('popstate'"), true);
+  assert.equal(topNavSource.includes("window.addEventListener('pagehide'"), true);
   assert.equal(topNavSource.includes("document.addEventListener('pointerdown'"), true);
   assert.equal(topNavSource.includes("link.addEventListener('click', () => menu.close())"), true);
   assert.equal(topNavSource.includes('uploadAction?.addEventListener'), true);
+  assert.equal(topNavSource.includes('localStorage'), false);
+});
+
+test('menu panel uses hidden attribute as the single source of visibility truth', () => {
+  assert.equal(topNavSource.includes('id="appMenuPanel" hidden'), true);
+  assert.equal(cssSource.includes('.menu-panel[hidden]'), true);
+  assert.equal(cssSource.includes('display: none;'), true);
 });
 
 test('home remains default landing view and does not render redundant heading copy', () => {
