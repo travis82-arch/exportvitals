@@ -42,7 +42,7 @@ test('menu panel uses hidden attribute as the single source of visibility truth'
 });
 
 test('home remains default landing view and does not render redundant heading copy', () => {
-  assert.equal(landingHtml.includes('Wearable Export Viewer'), true);
+  assert.equal(landingHtml.includes('View your Oura export in your browser'), true);
   assert.equal(appIndexHtml.includes('data-page="index"'), true);
   assert.equal(entrySource.includes('OURA DASHBOARD'), false);
   assert.equal(entrySource.includes('PAGE_META ='), true);

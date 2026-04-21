@@ -1,6 +1,6 @@
 {
-  "name": "Wearable Export Viewer",
-  "short_name": "ExportViewer",
+  "name": "Local Health Export Viewer",
+  "short_name": "Health Viewer",
   "start_url": "/app",
   "display": "standalone",
   "background_color": "#0b1220",
