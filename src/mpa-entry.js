@@ -24,6 +24,7 @@ import { renderSleepStageChart } from './charts/SleepStageChart.js';
 import { activitySummary, heartRateSummary, stressSummary, stressDailyBreakdownRows, stressDayTimelineRows, stressCategorySeries, strainSummary } from './state/pageSummaries.js';
 import { computeBodyClockOffset, computeSleepDebtEstimate } from './domain/sleepRecoveryModel.js';
 import { SITE_COPY } from './config/siteCopy.js';
+import { applyTheme, initTheme } from './state/theme.js';
 
 const page = document.body.dataset.page || 'index';
 const settings = loadSettings();
@@ -892,7 +893,6 @@ function renderHome(range, day, rangeRows) {
   const activity = activitySummary(range, day, rangeRows);
   const heart = heartRateSummary(range, day, rangeRows);
   const readiness = summaries.find((item) => item.domain === 'readiness');
-  const heroDetail = range.isSingleDay ? 'Latest readiness score.' : 'Average readiness across selected days.';
   const homeHeroTrend = buildDailyLine(rangeRows.dailyReadiness, 'score');
 
   const sleepRows = rangeRows.dailySleep || [];
@@ -906,13 +906,18 @@ function renderHome(range, day, rangeRows) {
         .join('')}
     </section>
 
-    ${renderHeroCard({
-      value: readiness?.value || '<span class="placeholder">No readiness data</span>',
-      detail: heroDetail,
-      trend: !range.isSingleDay ? renderHeroRangeChart({ title: 'Daily readiness score', series: homeHeroTrend }) : '',
-      extra: '',
-      tone: 'home'
-    })}
+    <a class="card-link" href="/app/readiness/index.html">
+      <section class="card section-card ${destinationAccentClass('readiness')}">
+        <div class="section-head"><h3>Readiness</h3></div>
+        ${renderMetricGrid([
+          { label: 'Readiness score', value: readiness?.value || '<span class="placeholder">No readiness data</span>' },
+          { label: 'Resting HR', value: fmt(range.isSingleDay ? day?.sleepModel?.lowestHeartRate : average(rangeRows.sleepModel, 'lowestHeartRate'), 1, ' bpm') },
+          { label: 'HRV', value: fmt(range.isSingleDay ? day?.sleepModel?.avgHrv : average(rangeRows.sleepModel, 'avgHrv'), 1, ' ms') },
+          { label: 'Body temp', value: fmtSigned(range.isSingleDay ? day?.dailyReadiness?.temperatureDeviation : average(rangeRows.dailyReadiness, 'temperatureDeviation'), 2, '°C') }
+        ])}
+        ${!range.isSingleDay ? renderHeroRangeChart({ title: 'Daily readiness score', series: homeHeroTrend }) : ''}
+      </section>
+    </a>
 
     <a class="card-link" href="/app/sleep/index.html">${renderPreviewCard({
       accentClass: destinationAccentClass('sleep'),
@@ -1410,6 +1415,7 @@ function renderPageContent(range, day, rangeRows, rerender) {
 
 async function bootstrap() {
   installRuntimeDiagnostics({ showPanel: false });
+  const themeState = initTheme();
 
   const purgeSummary = await purgeStaleServiceWorkersAndCaches();
   const purged = (purgeSummary.unregisteredCount || 0) > 0 || (purgeSummary.deletedCaches || []).length > 0;
@@ -1452,21 +1458,36 @@ async function bootstrap() {
 
   const topNavController = renderTopNav(document.getElementById('topNav'), {
     currentPath: location.pathname,
+    preferredTheme: themeState.preferred,
+    onThemeChange: (nextTheme) => {
+      applyTheme(nextTheme);
+    },
     onUpload: async (file) => {
-      setTopNavUploadStatus('Importing…');
+      setTopNavUploadStatus({ status: 'loading', phase: 'Reading ZIP' });
       try {
-        const next = await runSettingsUploadImport({
+        await runSettingsUploadImport({
           file,
           settings,
           onProgress: (progress) => {
-            const importLabel = progress.status === 'loading' ? 'loading' : progress.status;
-            setTopNavUploadStatus(`${importLabel}: ${progress.phase} (${progress.percent}%)`);
+            const phaseMap = {
+              'Reading ZIP': 'Reading ZIP',
+              'Decompressing files': 'Reading ZIP',
+              'Parsing JSON/CSV': 'Parsing files',
+              'Normalizing daily tables': 'Parsing files',
+              'Deriving nightly vitals': 'Computing metrics',
+              'Saving + indexing dates': 'Loading dashboard'
+            };
+            setTopNavUploadStatus({
+              status: progress.status,
+              phase: phaseMap[progress.phase] || progress.phase,
+              message: progress?.lastError?.message || ''
+            });
           }
         });
-        setTopNavUploadStatus(`Imported ✓ ${next.start ? `${next.start} → ${next.end}` : 'No range'}`);
-        rerender(next);
+        setTopNavUploadStatus('Imported. Opening Home…');
+        window.location.href = '/app/index.html';
       } catch (error) {
-        setTopNavUploadStatus(`Import failed: ${error?.message || String(error)}`);
+        setTopNavUploadStatus({ status: 'error', message: error?.message || String(error) });
       }
     }
   });

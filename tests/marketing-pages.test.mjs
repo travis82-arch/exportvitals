@@ -13,12 +13,12 @@ const sitemap = readFileSync(new URL('../public/sitemap.xml', import.meta.url), 
 const trustStatement = 'When you import an Oura export ZIP, parsing and metric generation run in your browser. Imported files and derived health data are stored locally on your device and are not sent to app server endpoints.';
 
 test('homepage follows conversion copy structure and points CTA to /app', () => {
-  assert.equal(homeHtml.includes('<h1>View your Oura export in your browser</h1>'), true);
+  assert.equal(homeHtml.includes('<h1>Your data, in your browser</h1>'), true);
   assert.equal(homeHtml.includes('Free and open source'), true);
   assert.equal(homeHtml.includes('No data leaves your browser'), true);
   assert.equal(homeHtml.includes('No account required'), true);
   assert.equal(homeHtml.includes('href="/app">Open the dashboard</a>'), true);
-  assert.equal(homeHtml.includes('https://github.com/travis82-arch/oura-pwa-dashboard'), true);
+  assert.equal(homeHtml.includes('Public repo coming soon'), true);
 });
 
 test('exact trust statement is present on both home and privacy pages', () => {

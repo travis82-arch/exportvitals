@@ -5,8 +5,8 @@
   --text: #ecf2ff;
   --muted: #96a6c1;
   --border: #25364b;
-  --accent: #7db0ff;
-  --accent-2: #67d9ba;
+  --accent: #8bb6ff;
+  --accent-2: #70e2c3;
 }
 
 * { box-sizing: border-box; }
@@ -36,6 +36,11 @@ body {
   border-radius: 16px;
   background: linear-gradient(180deg, rgba(19, 30, 46, .96), rgba(12, 20, 32, .94));
   padding: 24px;
+}
+
+.hero {
+  padding-top: 30px;
+  padding-bottom: 30px;
 }
 
 h1 {
@@ -94,9 +99,10 @@ p {
 }
 
 .btn.primary {
-  background: var(--accent);
+  background: linear-gradient(135deg, var(--accent), color-mix(in oklab, var(--accent-2), var(--accent) 40%));
   color: #08111f;
   border-color: transparent;
+  box-shadow: 0 10px 24px rgba(46, 112, 234, 0.28);
 }
 
 .trust-bullets,

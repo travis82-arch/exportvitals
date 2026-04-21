@@ -28,7 +28,7 @@ test('multi-day hero charts are wired across all health tabs', () => {
   const heartRate = section('function renderHeartRatePage(', 'function renderStressPage(');
   const stress = section('function renderStressPage(', 'function buildPageWarnings(');
 
-  assert.equal(home.includes("trend: !range.isSingleDay ? renderHeroRangeChart({ title: 'Daily readiness score', series: homeHeroTrend }) : ''"), true);
+  assert.equal(home.includes("!range.isSingleDay ? renderHeroRangeChart({ title: 'Daily readiness score', series: homeHeroTrend }) : ''"), true);
   assert.equal(readiness.includes("trend: !range.isSingleDay ? renderHeroRangeChart({ title: 'Daily readiness score', series: readinessRangeSeries }) : ''"), true);
   assert.equal(sleep.includes("trend: !range.isSingleDay ? renderHeroRangeChart({ title: 'Daily sleep score', series: sleepScoreTrend, tone: 'calm' }) : ''"), true);
   assert.equal(activity.includes("trend: !range.isSingleDay ? renderHeroRangeChart({ title: 'Daily activity score', series: activityScoreTrend }) : ''"), true);
@@ -38,5 +38,5 @@ test('multi-day hero charts are wired across all health tabs', () => {
 
 test('single-day mode remains chart-free in heroes via explicit range guard', () => {
   const guardCount = (source.match(/trend: !range\.isSingleDay \? renderHeroRangeChart/g) || []).length;
-  assert.equal(guardCount >= 6, true);
+  assert.equal(guardCount >= 5, true);
 });
