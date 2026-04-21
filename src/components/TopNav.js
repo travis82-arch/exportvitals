@@ -1,4 +1,5 @@
 import { navManifest } from '../nav/navManifest.js';
+import { SITE_COPY } from '../config/siteCopy.js';
 
 const toPagePath = (href) => `${href}/index.html`;
 const normalizePath = (path) => String(path || '').replace(/\/$/, '') || '/';
@@ -10,7 +11,7 @@ function createMenuController({ mount, trigger, panel }) {
     if (!panel || !trigger) return;
     panel.hidden = !isOpen;
     trigger.setAttribute('aria-expanded', String(isOpen));
-    trigger.setAttribute('aria-label', isOpen ? 'Close menu' : 'Open menu');
+    trigger.setAttribute('aria-label', isOpen ? 'Close utility menu' : 'Open utility menu');
   };
 
   const setOpen = (next) => {
@@ -63,31 +64,46 @@ export function renderTopNav(target, { currentPath = window.location.pathname, o
   if (!mount) return null;
 
   const path = currentPath || '/';
-  const links = navManifest
+  const tabOptions = navManifest
     .map((item) => {
       const pagePath = toPagePath(item.href);
       const normalizedPath = normalizePath(path);
       const active = normalizedPath === normalizePath(item.href) || normalizedPath === normalizePath(pagePath);
-      return `<a class="menu-link ${active ? 'active' : ''}" href="${pagePath}" data-destination="${item.key}">${item.label}</a>`;
+      return `<option value="${pagePath}" data-destination="${item.key}" ${active ? 'selected' : ''}>${item.label}</option>`;
     })
     .join('');
 
   mount.innerHTML = `<div class="top-menu-wrap">
-    <button class="menu-trigger" id="menuTrigger" type="button" aria-expanded="false" aria-controls="appMenuPanel" aria-label="Open settings menu">⚙️</button>
+    <label class="sr-only" for="primaryTabSelect">Choose section</label>
+    <select class="compact-select tab-select" id="primaryTabSelect" aria-label="Choose section">
+      ${tabOptions}
+    </select>
+    <button class="menu-trigger" id="menuTrigger" type="button" aria-expanded="false" aria-controls="appMenuPanel" aria-label="Open utility menu">☰</button>
     <div class="menu-panel" id="appMenuPanel" hidden>
-      <button class="menu-upload" id="menuUploadAction" type="button">Upload</button>
+      <button class="menu-upload" id="menuUploadAction" type="button">Upload / Import data</button>
+      <a class="menu-link" href="/index.html#how-it-works">About / Read me</a>
+      ${SITE_COPY.support.repoPublic
+        ? `<a class="menu-link" href="${SITE_COPY.support.sourceUrl}" target="_blank" rel="noreferrer">View source / GitHub</a>`
+        : '<div class="small muted">Public repo coming soon</div>'}
+      <a class="menu-link" href="/app/settings/index.html">Theme controls</a>
       <div class="small muted">Supports Oura export ZIP. Parsing runs locally.</div>
       <input id="menuUploadInput" type="file" accept=".zip,application/zip" hidden>
       <div class="menu-upload-status small muted" id="menuUploadStatus"></div>
-      <nav class="menu-links" aria-label="Primary">${links}</nav>
     </div>
   </div>`;
 
+  const tabSelect = mount.querySelector('#primaryTabSelect');
   const trigger = mount.querySelector('#menuTrigger');
   const panel = mount.querySelector('#appMenuPanel');
   const uploadAction = mount.querySelector('#menuUploadAction');
   const uploadInput = mount.querySelector('#menuUploadInput');
   const menu = createMenuController({ mount, trigger, panel });
+
+  tabSelect?.addEventListener('change', () => {
+    const next = tabSelect.value;
+    if (!next) return;
+    window.location.href = next;
+  });
 
   trigger?.addEventListener('click', () => menu.toggle());
 

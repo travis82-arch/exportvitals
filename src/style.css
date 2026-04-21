@@ -71,6 +71,14 @@ body {
 .top-menu-wrap {
   position: relative;
   isolation: isolate;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.tab-select {
+  min-width: 132px;
+  max-width: 44vw;
 }
 
 .menu-trigger {
@@ -137,9 +145,21 @@ body {
 
 .menu-trigger:focus-visible,
 .menu-link:focus-visible,
-.menu-upload:focus-visible {
+.menu-upload:focus-visible,
+.tab-select:focus-visible {
   outline: 2px solid color-mix(in oklab, var(--accent), white 18%);
   outline-offset: 2px;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  border: 0;
 }
 
 .container {
@@ -896,6 +916,8 @@ textarea.debug-text {
   .header-control-row { gap: 6px; }
   .compact-range-top .compact-select { min-width: 118px; }
   .range-active-date { max-width: 110px; font-size: 0.72rem; }
+  .top-menu-wrap { gap: 6px; }
+  .tab-select { min-width: 110px; max-width: 38vw; }
   .menu-trigger { width: 34px; height: 34px; }
 }
 
