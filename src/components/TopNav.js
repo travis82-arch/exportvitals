@@ -1,5 +1,5 @@
-import { navManifest } from '../nav/navManifest.js';
 import { SITE_COPY } from '../config/siteCopy.js';
+import { navManifest } from '../nav/navManifest.js';
 
 const toPagePath = (href) => `${href}/index.html`;
 const normalizePath = (path) => String(path || '').replace(/\/$/, '') || '/';
@@ -59,7 +59,12 @@ function createMenuController({ mount, trigger, panel }) {
   };
 }
 
-export function renderTopNav(target, { currentPath = window.location.pathname, onUpload = null } = {}) {
+export function renderTopNav(target, {
+  currentPath = window.location.pathname,
+  onUpload = null,
+  preferredTheme = 'dark',
+  onThemeChange = null
+} = {}) {
   const mount = target || document.getElementById('topNav');
   if (!mount) return null;
 
@@ -85,9 +90,15 @@ export function renderTopNav(target, { currentPath = window.location.pathname, o
       ${SITE_COPY.support.repoPublic
         ? `<a class="menu-link" href="${SITE_COPY.support.sourceUrl}" target="_blank" rel="noreferrer">View source / GitHub</a>`
         : '<div class="small muted">Public repo coming soon</div>'}
-      <a class="menu-link" href="/app/settings/index.html">Theme controls</a>
+      <fieldset class="theme-choices">
+        <legend>Theme</legend>
+        <label><input type="radio" name="themeChoice" value="dark" ${preferredTheme === 'dark' ? 'checked' : ''}> Dark</label>
+        <label><input type="radio" name="themeChoice" value="light" ${preferredTheme === 'light' ? 'checked' : ''}> Light</label>
+        <label><input type="radio" name="themeChoice" value="system" ${preferredTheme === 'system' ? 'checked' : ''}> System</label>
+      </fieldset>
       <div class="small muted">Supports Oura export ZIP. Parsing runs locally.</div>
       <input id="menuUploadInput" type="file" accept=".zip,application/zip" hidden>
+      <progress id="menuUploadProgress" class="menu-upload-progress" value="0" max="4" hidden></progress>
       <div class="menu-upload-status small muted" id="menuUploadStatus"></div>
     </div>
   </div>`;
@@ -110,6 +121,11 @@ export function renderTopNav(target, { currentPath = window.location.pathname, o
   mount.querySelectorAll('.menu-link').forEach((link) => {
     link.addEventListener('click', () => menu.close());
   });
+  mount.querySelectorAll('input[name="themeChoice"]').forEach((input) => {
+    input.addEventListener('change', () => {
+      if (input.checked) onThemeChange?.(input.value);
+    });
+  });
 
   uploadAction?.addEventListener('click', () => {
     menu.close();
@@ -129,5 +145,25 @@ export function renderTopNav(target, { currentPath = window.location.pathname, o
 
 export function setTopNavUploadStatus(text = '') {
   const status = document.getElementById('menuUploadStatus');
-  if (status) status.textContent = text;
+  const progress = document.getElementById('menuUploadProgress');
+  if (typeof text === 'string') {
+    if (status) status.textContent = text;
+    if (progress) progress.hidden = true;
+    return;
+  }
+  const phaseOrder = ['Reading ZIP', 'Parsing files', 'Computing metrics', 'Loading dashboard'];
+  const phase = text?.phase || '';
+  const phaseIndex = phaseOrder.indexOf(phase);
+  if (status) {
+    status.textContent = text?.status === 'error'
+      ? `Import failed: ${text?.message || 'Unknown error'}`
+      : text?.status === 'success'
+        ? 'Import complete.'
+        : phase;
+  }
+  if (progress) {
+    progress.hidden = !(text?.status === 'loading');
+    progress.max = phaseOrder.length;
+    progress.value = phaseIndex >= 0 ? phaseIndex + 1 : 1;
+  }
 }

@@ -14,7 +14,8 @@ test('date range control uses compact single-row preset + active date', () => {
   assert.equal(entrySource.includes("row.className = 'header-control-row'"), true);
 });
 
-test('global shell removes large intro banner and hero uses centered circle treatment', () => {
+test('global shell removes large intro banner and home readiness uses section-card treatment', () => {
   assert.equal(entrySource.includes('Oura dashboard'), false);
-  assert.equal(entrySource.includes('hero-value-circle'), true);
+  assert.equal(entrySource.includes('href="/app/readiness/index.html"'), true);
+  assert.equal(entrySource.includes("title: 'Readiness'"), true);
 });
