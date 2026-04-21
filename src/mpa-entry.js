@@ -36,7 +36,8 @@ const PAGE_META = {
   activity: { title: 'Activity', subtitle: 'Movement load and consistency across the selected period.' },
   'heart-rate': { title: 'Heart Rate', subtitle: 'Overnight heart rate and variability trends.' },
   stress: { title: 'Stress', subtitle: 'Daily stress and recovery balance across the selected period.' },
-  settings: { title: 'Settings', subtitle: 'Upload, My Health overview, and debug tools.' }
+  insights: { title: 'Insights', subtitle: 'Signs of Strain across stress, sleep, readiness, and heart rate.' },
+  settings: { title: 'Settings', subtitle: 'Import data, review My Health, and use diagnostics.' }
 };
 
 const DOMAIN_ORDER = ['readiness', 'sleep', 'activity', 'heart-rate', 'stress'];
@@ -899,7 +900,7 @@ function renderHome(range, day, rangeRows) {
     })}
 
     ${renderPreviewCard({
-      title: 'Sleep preview',
+      title: 'Sleep',
       subtitle: '',
       metrics: [
         { label: 'Sleep score', value: fmt(range.isSingleDay ? day?.dailySleep?.score : average(sleepRows, 'score')) },
@@ -911,7 +912,7 @@ function renderHome(range, day, rangeRows) {
     })}
 
     ${renderPreviewCard({
-      title: 'Activity preview',
+      title: 'Activity',
       subtitle: '',
       metrics: [
         { label: 'Activity score', value: fmt(activity.score) },
@@ -923,7 +924,7 @@ function renderHome(range, day, rangeRows) {
     })}
 
     ${renderPreviewCard({
-      title: 'Stress preview',
+      title: 'Stress',
       subtitle: '',
       metrics: [
         { label: 'Stress score', value: fmt(range.isSingleDay ? day?.dailyStress?.score : average(rangeRows.dailyStress, 'score')) },
@@ -935,7 +936,7 @@ function renderHome(range, day, rangeRows) {
     })}
 
     ${renderPreviewCard({
-      title: 'Heart Rate preview',
+      title: 'Heart Rate',
       subtitle: '',
       metrics: [
         { label: 'Overnight avg', value: fmt(heart.overnightAvg, 1, ' bpm') },
@@ -1146,6 +1147,78 @@ function renderStressPage(range, day, rangeRows) {
   `;
 }
 
+function renderInsightsPage(range, day, rangeRows) {
+  const stress = stressSummary(range, day, rangeRows);
+  const readinessScore = range.isSingleDay ? day?.dailyReadiness?.score : average(rangeRows.dailyReadiness, 'score');
+  const sleepScore = range.isSingleDay ? day?.dailySleep?.score : average(rangeRows.dailySleep, 'score');
+  const nightlyHrv = range.isSingleDay ? day?.derivedNightlyVitals?.hrv_rmssd_proxy_ms : average(rangeRows.derivedNightlyVitals, 'hrv_rmssd_proxy_ms');
+  const nightlyRhr = range.isSingleDay ? day?.derivedNightlyVitals?.rhr_night_bpm : average(rangeRows.derivedNightlyVitals, 'rhr_night_bpm');
+  const highStressTrend = buildDailyLine(rangeRows.dailyStress, 'high');
+  const sleepTrend = buildDailyLine(rangeRows.dailySleep, 'score');
+  const readinessTrend = buildDailyLine(rangeRows.dailyReadiness, 'score');
+
+  const strainSignals = [
+    {
+      label: 'High stress load',
+      value: fmtMinutes(stress.highStress),
+      note: range.isSingleDay ? 'High-stress minutes for this day' : 'Average high-stress minutes across range'
+    },
+    {
+      label: 'Recovery minutes',
+      value: fmtMinutes(stress.recoveryTime),
+      note: range.isSingleDay ? 'Restorative time for this day' : 'Average daily restored minutes'
+    },
+    {
+      label: 'Readiness',
+      value: fmt(readinessScore),
+      note: 'Lower readiness can reinforce strain signals'
+    },
+    {
+      label: 'Sleep score',
+      value: fmt(sleepScore),
+      note: 'Sustained lower sleep can raise strain risk'
+    },
+    {
+      label: 'Night HRV proxy',
+      value: fmt(nightlyHrv, 1, ' ms'),
+      note: 'Lower HRV may indicate reduced recovery capacity'
+    },
+    {
+      label: 'Night resting HR',
+      value: fmt(nightlyRhr, 1, ' bpm'),
+      note: 'Higher resting HR can coincide with elevated strain'
+    }
+  ];
+
+  const stateLabel = range.isSingleDay
+    ? (stress.daySummary ? startCase(stress.daySummary) : 'Signals available')
+    : 'Range signal summary';
+
+  return `
+    ${renderHeroCard({
+      eyebrow: 'Insights',
+      title: 'Signs of Strain',
+      value: range.isSingleDay ? stateLabel : fmtMinutes(stress.highStress),
+      status: '',
+      detail: range.isSingleDay
+        ? `High stress ${fmtMinutes(stress.highStress)} · restored ${fmtMinutes(stress.recoveryTime)}.`
+        : 'Use this tab to spot sustained strain patterns across key systems.',
+      trend: !range.isSingleDay ? renderHeroRangeChart({ title: 'Daily high stress minutes', series: highStressTrend, tone: 'stress' }) : ''
+    })}
+
+    <section class="card section-card">
+      <div class="section-head"><h3>Signals</h3></div>
+      ${renderMetricGrid(strainSignals)}
+    </section>
+
+    <section class="card section-card">
+      <div class="section-head"><h3>Cross-system trends</h3></div>
+      ${renderAxisLineChart({ title: 'Daily sleep score', series: sleepTrend, yDomainConfig: { minPadding: 2, maxPadding: 2 } })}
+      ${renderAxisLineChart({ title: 'Daily readiness score', series: readinessTrend, yDomainConfig: { minPadding: 2, maxPadding: 2 } })}
+    </section>
+  `;
+}
+
 function buildPageWarnings(range, day, rangeRows) {
   const warnings = [];
   if (!range?.start || !range?.end) warnings.push('No valid selected range is active.');
@@ -1234,14 +1307,14 @@ function renderSettingsPage(range, day, rangeRows, rerender) {
     <section class="card section-card">
       <div class="section-head">
         <h3>My Health</h3>
-        <p class="muted">Long-term overview shells using available data with graceful placeholders.</p>
+        <p class="muted">Compact rollup of key health signals from the selected range.</p>
       </div>
       ${renderMetricGrid([
-        { label: 'Long-term overview', value: summarizeRange(range), note: 'Selected analysis window' },
-        { label: 'Sleep Health', value: fmt(average(rangeRows.dailySleep, 'score')), note: 'Range avg score' },
-        { label: 'Stress Management', value: fmt(average(rangeRows.derivedNightlyVitals, 'hrv_rmssd_proxy_ms'), 1, ' ms'), note: 'Derived proxy' },
-        { label: 'Heart Health', value: fmt(average(rangeRows.derivedNightlyVitals, 'rhr_night_bpm'), 1, ' bpm'), note: 'Overnight resting HR' },
-        { label: 'Habits and routines', value: '<span class="placeholder">More coming in PR3+</span>', note: 'Section shell in place' }
+        { label: 'Window', value: summarizeRange(range), note: 'Active analysis range' },
+        { label: 'Sleep score', value: fmt(average(rangeRows.dailySleep, 'score')), note: 'Average sleep score' },
+        { label: 'Readiness score', value: fmt(average(rangeRows.dailyReadiness, 'score')), note: 'Average readiness score' },
+        { label: 'Night HRV proxy', value: fmt(average(rangeRows.derivedNightlyVitals, 'hrv_rmssd_proxy_ms'), 1, ' ms'), note: 'Overnight variability proxy' },
+        { label: 'Night resting HR', value: fmt(average(rangeRows.derivedNightlyVitals, 'rhr_night_bpm'), 1, ' bpm'), note: 'Average overnight resting heart rate' }
       ])}
     </section>
 
@@ -1342,6 +1415,11 @@ function renderPageContent(range, day, rangeRows, rerender) {
 
   if (page === 'stress') {
     content.innerHTML = renderStressPage(range, day, rangeRows);
+    return;
+  }
+
+  if (page === 'insights') {
+    content.innerHTML = renderInsightsPage(range, day, rangeRows);
     return;
   }
 
