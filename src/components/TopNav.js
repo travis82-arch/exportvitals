@@ -35,6 +35,7 @@ function createMenuController({ mount, trigger, panel }) {
   document.addEventListener('keydown', onEscape);
   window.addEventListener('popstate', onPageTransition);
   window.addEventListener('pageshow', onPageTransition);
+  window.addEventListener('pagehide', onPageTransition);
 
   sync();
 
@@ -51,6 +52,7 @@ function createMenuController({ mount, trigger, panel }) {
       document.removeEventListener('keydown', onEscape);
       window.removeEventListener('popstate', onPageTransition);
       window.removeEventListener('pageshow', onPageTransition);
+      window.removeEventListener('pagehide', onPageTransition);
     }
   };
 }

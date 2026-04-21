@@ -89,6 +89,10 @@ body {
   gap: 8px;
 }
 
+.menu-panel[hidden] {
+  display: none;
+}
+
 .menu-upload {
   border: 1px solid color-mix(in oklab, var(--accent), transparent 45%);
   background: color-mix(in oklab, var(--accent-soft), transparent 35%);
