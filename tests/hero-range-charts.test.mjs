@@ -15,6 +15,9 @@ function section(start, end) {
 test('shared hero range chart helper exists', () => {
   assert.equal(source.includes('function renderHeroRangeChart'), true);
   assert.equal(source.includes('trend: !range.isSingleDay ? renderHeroRangeChart'), true);
+  assert.equal(source.includes('hero-trend-axis'), true);
+  assert.equal(source.includes('hero-trend-label-x'), true);
+  assert.equal(source.includes('hero-trend-label-y'), true);
 });
 
 test('multi-day hero charts are wired across all health tabs', () => {

@@ -10,6 +10,8 @@ test('date range control uses compact single-row preset + active date', () => {
   assert.equal(dateControlSource.includes('compact-range-top'), true);
   assert.equal(dateControlSource.includes('range-active-date'), true);
   assert.equal(dateControlSource.includes('selectedPreset === \'custom\''), true);
+  assert.equal(entrySource.includes('ensureHeaderRangeMount'), true);
+  assert.equal(entrySource.includes("row.className = 'header-control-row'"), true);
 });
 
 test('global shell removes large intro banner and hero uses centered circle treatment', () => {

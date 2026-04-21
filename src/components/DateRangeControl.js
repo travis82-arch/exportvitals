@@ -8,7 +8,7 @@ export function renderDateRangeControl(target, { range, availableDates, onChange
   const minDate = availableDates[0] || '';
   const maxDate = availableDates.at(-1) || '';
 
-  target.className = 'date-range-control card';
+  target.className = 'date-range-control';
   target.innerHTML = `
     <div class="row split-row compact-range-row compact-range-top">
       <select class="compact-select" data-role="preset" aria-label="Date range preset" ${disabled ? 'disabled' : ''}>
