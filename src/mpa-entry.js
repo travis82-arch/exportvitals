@@ -910,6 +910,41 @@ function renderActivityPage(range, day, rangeRows) {
     })}
 
     <section class="card section-card">
+      <div class="section-head"><h3>Steps</h3></div>
+      ${renderMetricGrid([
+        {
+          label: range.isSingleDay ? 'Steps today' : 'Average daily steps',
+          value: fmt(summary.steps, 0),
+          note: range.isSingleDay ? 'Selected day total from daily activity' : 'Across selected range'
+        },
+        {
+          label: range.isSingleDay ? 'Goal progress' : 'Range total steps',
+          value: range.isSingleDay ? fmt(goalProgress, 0, '%') : fmt(summary.totalRangeSteps, 0),
+          note: range.isSingleDay ? 'Total burn ÷ target calories' : 'Sum across all selected days'
+        },
+        {
+          label: range.isSingleDay ? 'Total burn' : 'Average total burn',
+          value: fmt(summary.totalBurn, 0, ' cal'),
+          note: range.isSingleDay ? 'Same-day context' : 'Per-day average in selected range'
+        }
+      ])}
+      ${range.isSingleDay
+        ? renderAxisBarChart({
+            title: 'Intraday movement intensity',
+            series: movementSeries,
+            yTicks: [0, 1, 2, 3],
+            yLabelFormatter: (value) => ['Rest', 'Low', 'Med', 'High'][value] || String(value)
+          })
+        : renderAxisLineChart({
+            title: 'Daily steps trend',
+            series: stepsTrend,
+            yUnit: 'steps',
+            yDomainConfig: { minPadding: 250, maxPadding: 250 },
+            xTickFormatter: (ms) => new Date(ms).toLocaleDateString([], { month: 'short', day: 'numeric' })
+          })}
+    </section>
+
+    <section class="card section-card">
       <div class="section-head"><h3>Contributors</h3></div>
       ${renderContributorRows(contributorRows)}
     </section>
@@ -920,7 +955,7 @@ function renderActivityPage(range, day, rangeRows) {
         { label: range.isSingleDay ? 'Goal progress' : 'Average goal progress', value: fmt(goalProgress, 0, '%'), note: 'Total burn ÷ target calories' },
         { label: range.isSingleDay ? 'Total burn' : 'Average total burn', value: fmt(summary.totalBurn, 0, ' cal'), note: 'Daily total calories' },
         { label: range.isSingleDay ? 'Activity time' : 'Average activity time', value: fmtDurationSeconds(summary.activitySeconds, true), note: 'Medium + high activity duration' },
-        { label: range.isSingleDay ? 'Steps' : 'Average steps', value: fmt(summary.steps, 0), note: 'Daily step count' }
+        { label: range.isSingleDay ? 'Active burn' : 'Average active burn', value: fmt(summary.activeBurn, 0, ' cal'), note: 'Active calories from daily activity' }
       ])}
     </section>
 
@@ -936,7 +971,13 @@ function renderActivityPage(range, day, rangeRows) {
       <div class="section-head"><h3>Daily movement</h3></div>
       ${range.isSingleDay
         ? renderAxisBarChart({ title: 'Intraday movement intensity', series: movementSeries, yTicks: [0, 1, 2, 3], yLabelFormatter: (value) => ['Rest', 'Low', 'Med', 'High'][value] || String(value) })
-        : renderAxisLineChart({ title: 'Daily activity minutes trend', series: movementSeries, yUnit: 'min', yDomainConfig: { minPadding: 10, maxPadding: 10 } })}
+        : renderAxisLineChart({
+            title: 'Daily activity minutes trend',
+            series: movementSeries,
+            yUnit: 'min',
+            yDomainConfig: { minPadding: 10, maxPadding: 10 },
+            xTickFormatter: (ms) => new Date(ms).toLocaleDateString([], { month: 'short', day: 'numeric' })
+          })}
     </section>
 
     <section class="card section-card">
@@ -947,7 +988,6 @@ function renderActivityPage(range, day, rangeRows) {
         { label: 'Total range steps', value: fmt(summary.totalRangeSteps, 0), note: 'Sum across selected daily activity rows' },
         { label: 'Inactivity alerts', value: fmt(summary.inactivityAlerts, 1), note: range.isSingleDay ? 'Selected day' : 'Average per day' }
       ])}
-      ${renderAxisLineChart({ title: 'Daily steps trend', series: stepsTrend, yUnit: 'steps', yDomainConfig: { minPadding: 250, maxPadding: 250 } })}
     </section>
 
     <section class="card section-card">
@@ -1309,7 +1349,13 @@ function renderStrainPage(range, day, rangeRows) {
   });
   const trendSeries = (strain.trendStates || [])
     .filter((row) => Number.isFinite(row?.level))
-    .map((row) => ({ tMs: new Date(`${row.date}T12:00:00`).getTime(), v: row.level }));
+    .map((row) => ({
+      tMs: new Date(`${row.date}T12:00:00`).getTime(),
+      v: row.level,
+      label: row.label,
+      date: row.date
+    }));
+  const strainColorByLevel = ['#6fa38e', '#d1b961', '#e0925f'];
   const legend = ['No signs', 'Minor signs', 'Major signs']
     .map((label, idx) => `<span class="strain-legend-item"><i class="strain-dot strain-dot-${idx}"></i>${label}</span>`)
     .join('');
@@ -1326,6 +1372,14 @@ function renderStrainPage(range, day, rangeRows) {
       trend: !range.isSingleDay ? renderHeroRangeChart({ title: 'Recent strain states', series: trendSeries, tone: 'stress' }) : '',
       tone: 'strain'
     })}
+    <section class="card section-card">
+      <div class="section-head"><h3>Range status</h3><span class="small muted">${summarizeRange(range)}</span></div>
+      ${renderMetricGrid([
+        { label: 'Evaluated days', value: fmt(trendSeries.length, 0), note: 'Days with enough baseline context' },
+        { label: 'Current state', value: strain.state.label, note: range.isSingleDay ? 'Selected day' : 'Dominant state in selected range' },
+        { label: 'Recent days chart', value: trendSeries.length ? `${trendSeries[0].date} → ${trendSeries.at(-1).date}` : '<span class="placeholder">Unavailable</span>', note: 'Exact window represented in chart' }
+      ])}
+    </section>
     <section class="card section-card">
       <div class="strain-legend">${legend}</div>
     </section>
@@ -1349,7 +1403,9 @@ function renderStrainPage(range, day, rangeRows) {
             series: trendSeries,
             yTicks: [0, 1, 2],
             yLabelFormatter: (value) => ['No signs', 'Minor signs', 'Major signs'][value] || '',
-            height: 170
+            height: 170,
+            barColorResolver: (point) => strainColorByLevel[Number(point?.v)] || 'var(--chart-bar)',
+            xTickFormatter: (ms) => new Date(ms).toLocaleDateString([], { month: 'short', day: 'numeric' })
           })
         : '<div class="muted">Not enough baseline history yet.</div>'}
     </section>
