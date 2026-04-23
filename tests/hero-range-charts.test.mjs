@@ -29,6 +29,11 @@ test('multi-day hero charts are wired across all health tabs', () => {
   const stress = section('function renderStressPage(', 'function buildPageWarnings(');
 
   assert.equal(home.includes("!range.isSingleDay ? renderHeroRangeChart({ title: 'Daily readiness score', series: homeHeroTrend }) : ''"), true);
+  assert.equal(home.includes("renderHeroRangeChart({ title: 'Daily sleep score', series: sleepTrend, tone: 'calm' })"), true);
+  assert.equal(home.includes("renderHeroRangeChart({ title: 'Daily activity score', series: activityTrend })"), true);
+  assert.equal(home.includes("renderHeroRangeChart({ title: 'Daily high stress minutes', series: stressTrend, tone: 'stress' })"), true);
+  assert.equal(home.includes("renderHeroRangeChart({ title: 'Daily overnight average HR', series: heartRateTrend })"), true);
+  assert.equal(home.includes("renderHeroRangeChart({ title: 'Recent strain states', series: strainTrend, tone: 'stress' })"), true);
   assert.equal(readiness.includes("trend: !range.isSingleDay ? renderHeroRangeChart({ title: 'Daily readiness score', series: readinessRangeSeries }) : ''"), true);
   assert.equal(sleep.includes("trend: !range.isSingleDay ? renderHeroRangeChart({ title: 'Daily sleep score', series: sleepScoreTrend, tone: 'calm' }) : ''"), true);
   assert.equal(activity.includes("trend: !range.isSingleDay ? renderHeroRangeChart({ title: 'Daily activity score', series: activityScoreTrend }) : ''"), true);

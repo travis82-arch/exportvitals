@@ -216,9 +216,9 @@ function renderHeroRangeChart({ title = '', series = [], tone = 'accent' }) {
   const first = clean[0].tMs;
   const last = clean.at(-1).tMs;
 
-  const m = { l: 34, r: 10, t: 10, b: 24 };
-  const w = 320;
-  const h = 108;
+  const m = { l: 46, r: 14, t: 12, b: 28 };
+  const w = 344;
+  const h = 122;
   const plotW = w - m.l - m.r;
   const plotH = h - m.t - m.b;
   const xPos = (tMs) => m.l + ((tMs - first) / Math.max(last - first, 1)) * plotW;
@@ -246,7 +246,7 @@ function renderHeroRangeChart({ title = '', series = [], tone = 'accent' }) {
       <line class="hero-trend-axis" x1="${m.l}" y1="${h - m.b}" x2="${w - m.r}" y2="${h - m.b}"></line>
       <polyline class="hero-trend-line" points="${points}"></polyline>
       ${clean.map((point) => `<circle class="hero-trend-dot" cx="${xPos(point.tMs)}" cy="${yPos(point.v)}" r="1.6"></circle>`).join('')}
-      ${yTicks.map((tick) => `<text class="hero-trend-label hero-trend-label-y" x="${m.l - 4}" y="${yPos(tick)}">${numberLabel(tick)}</text>`).join('')}
+      ${yTicks.map((tick) => `<text class="hero-trend-label hero-trend-label-y" x="${m.l - 6}" y="${yPos(tick)}">${numberLabel(tick)}</text>`).join('')}
       ${xTicks.map((tick) => `<text class="hero-trend-label hero-trend-label-x" x="${xPos(tick)}" y="${h - 6}">${dateLabel(tick)}</text>`).join('')}
     </svg>
   </div>`;
@@ -342,9 +342,9 @@ function renderDualStressDailyChart({ title, stressSeries = [], recoverySeries =
   const allValues = [...stressByTime.values(), ...recoveryByTime.values()].filter((v) => Number.isFinite(v));
   if (!allValues.length) return '<div class="placeholder">No daily stress trend is available for this range.</div>';
 
-  const m = { l: 34, r: 8, t: 12, b: 20 };
-  const w = 360;
-  const h = 120;
+  const m = { l: 46, r: 14, t: 12, b: 28 };
+  const w = 384;
+  const h = 136;
   const plotW = w - m.l - m.r;
   const plotH = h - m.t - m.b;
   const xPos = (t) => m.l + ((t - allTimes[0]) / Math.max(allTimes.at(-1) - allTimes[0], 1)) * plotW;
@@ -879,11 +879,13 @@ function renderActivityPage(range, day, rangeRows) {
   `;
 }
 
-function renderPreviewCard({ title, subtitle, metrics, footer, accentClass = '' }) {
+function renderPreviewCard({ title, subtitle, metrics, footer, accentClass = '', trend = '', rangeHint = '' }) {
   return `
     <section class="card section-card ${accentClass}">
-      <h3>${title}</h3>
+      <div class="section-head"><h3>${title}</h3>${rangeHint ? `<span class="small muted">${rangeHint}</span>` : ''}</div>
       ${renderMetricGrid(metrics)}
+      ${trend ? `<div class="top-gap">${trend}</div>` : ''}
+      ${footer ? `<div class="small muted">${footer}</div>` : ''}
     </section>
   `;
 }
@@ -897,6 +899,14 @@ function renderHome(range, day, rangeRows) {
 
   const sleepRows = rangeRows.dailySleep || [];
   const strain = strainSummary(range, rangeRows, rangeRows);
+  const sleepTrend = buildDailyLine(sleepRows, 'score');
+  const activityTrend = buildDailyLine(rangeRows.dailyActivity, 'score');
+  const stressTrend = buildDailyLine(rangeRows.dailyStress, 'high');
+  const heartRateTrend = buildDailyLine(rangeRows.sleepModel, 'avgHeartRate');
+  const strainTrend = (strain.trendStates || [])
+    .filter((row) => Number.isFinite(row?.level))
+    .map((row) => ({ tMs: new Date(`${row.date}T12:00:00`).getTime(), v: Number(row.level) }))
+    .filter((point) => Number.isFinite(point.tMs) && Number.isFinite(point.v));
   const pageHrefForDomain = (domain) => (domain === 'home' ? '/index.html' : `/app/${domain}/index.html`);
 
   return `
@@ -929,7 +939,13 @@ function renderHome(range, day, rangeRows) {
         { label: 'Avg HR', value: fmt(average(rangeRows.sleepModel, 'avgHeartRate'), 1, ' bpm') },
         { label: 'Avg HRV', value: fmt(average(rangeRows.sleepModel, 'avgHrv'), 1, ' ms') }
       ],
-      footer: ''
+      trend: !range.isSingleDay
+        ? (sleepTrend.length
+            ? renderHeroRangeChart({ title: 'Daily sleep score', series: sleepTrend, tone: 'calm' })
+            : '<div class="small muted">Range chart unavailable: no daily sleep score data in this window.</div>')
+        : '',
+      footer: '',
+      rangeHint: !range.isSingleDay ? summarizeRange(range) : ''
     })}</a>
 
     <a class="card-link" href="/app/activity/index.html">${renderPreviewCard({
@@ -942,7 +958,13 @@ function renderHome(range, day, rangeRows) {
         { label: 'Active calories', value: fmt(activity.activeBurn, 0, ' cal') },
         { label: 'Inactivity alerts', value: fmt(activity.inactivityAlerts, 1) }
       ],
-      footer: ''
+      trend: !range.isSingleDay
+        ? (activityTrend.length
+            ? renderHeroRangeChart({ title: 'Daily activity score', series: activityTrend })
+            : '<div class="small muted">Range chart unavailable: no daily activity score data in this window.</div>')
+        : '',
+      footer: '',
+      rangeHint: !range.isSingleDay ? summarizeRange(range) : ''
     })}</a>
 
     <a class="card-link" href="/app/stress/index.html">${renderPreviewCard({
@@ -955,7 +977,13 @@ function renderHome(range, day, rangeRows) {
         { label: 'Restored', value: fmtMinutes(range.isSingleDay ? day?.dailyStress?.recovery : average(rangeRows.dailyStress, 'recovery')) },
         { label: 'Daytime samples', value: fmt((rangeRows.daytimeStress || []).length, 0) }
       ],
-      footer: ''
+      trend: !range.isSingleDay
+        ? (stressTrend.length
+            ? renderHeroRangeChart({ title: 'Daily high stress minutes', series: stressTrend, tone: 'stress' })
+            : '<div class="small muted">Range chart unavailable: no daily stress breakdown data in this window.</div>')
+        : '',
+      footer: '',
+      rangeHint: !range.isSingleDay ? summarizeRange(range) : ''
     })}</a>
 
     <a class="card-link" href="/app/heart-rate/index.html">${renderPreviewCard({
@@ -968,7 +996,13 @@ function renderHome(range, day, rangeRows) {
         { label: 'Max overnight', value: fmt(heart.overnightMax, 1, ' bpm') },
         { label: 'Points', value: fmt(heart.points, 0) }
       ],
-      footer: ''
+      trend: !range.isSingleDay
+        ? (heartRateTrend.length
+            ? renderHeroRangeChart({ title: 'Daily overnight average HR', series: heartRateTrend })
+            : '<div class="small muted">Range chart unavailable: no overnight heart-rate trend data in this window.</div>')
+        : '',
+      footer: '',
+      rangeHint: !range.isSingleDay ? summarizeRange(range) : ''
     })}</a>
 
     <a class="card-link" href="/app/strain/index.html">${renderPreviewCard({
@@ -981,7 +1015,13 @@ function renderHome(range, day, rangeRows) {
         { label: 'Drivers surfaced', value: fmt((strain.drivers || []).length, 0) },
         { label: 'Meaningful signal', value: strain.hasMeaningfulSignal ? 'Yes' : 'No' }
       ],
-      footer: ''
+      trend: !range.isSingleDay
+        ? (strainTrend.length
+            ? renderHeroRangeChart({ title: 'Recent strain states', series: strainTrend, tone: 'stress' })
+            : '<div class="small muted">Range chart unavailable: not enough baseline history in this window.</div>')
+        : '',
+      footer: '',
+      rangeHint: !range.isSingleDay ? summarizeRange(range) : ''
     })}</a>
   `;
 }

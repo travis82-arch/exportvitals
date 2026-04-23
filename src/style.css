@@ -27,22 +27,22 @@
 }
 
 :root[data-theme='light'] {
-  --bg: #edf3fc;
-  --bg-glow-a: rgba(65, 120, 255, 0.14);
-  --bg-glow-b: rgba(36, 209, 177, 0.1);
+  --bg: #f3f7ff;
+  --bg-glow-a: rgba(69, 124, 236, 0.16);
+  --bg-glow-b: rgba(68, 183, 160, 0.1);
   --panel: #ffffff;
-  --card: #f7faff;
-  --card-soft: #eef4ff;
-  --text: #16253a;
-  --muted: #556c88;
-  --border: #c8d7ea;
-  --accent: #3f7ff4;
-  --accent-2: #1ea88d;
-  --accent-soft: rgba(63, 127, 244, 0.22);
-  --accent-surface: rgba(226, 237, 255, 0.86);
-  --chart-bar: #4ba8ff;
-  --chart-bar-soft: rgba(75, 168, 255, 0.26);
-  --shadow: 0 14px 30px rgba(25, 48, 77, 0.16);
+  --card: #ffffff;
+  --card-soft: #eef3ff;
+  --text: #10243f;
+  --muted: #415d80;
+  --border: #bfd0e9;
+  --accent: #2f67df;
+  --accent-2: #118a78;
+  --accent-soft: rgba(47, 103, 223, 0.2);
+  --accent-surface: rgba(231, 240, 255, 0.98);
+  --chart-bar: #3f89ed;
+  --chart-bar-soft: rgba(63, 137, 237, 0.24);
+  --shadow: 0 14px 30px rgba(20, 46, 84, 0.14);
   color-scheme: light;
 }
 
@@ -72,8 +72,8 @@ body {
 }
 
 :root[data-theme='light'] .topbar {
-  background: rgba(240, 246, 255, 0.88);
-  border-bottom-color: rgba(63, 127, 244, 0.2);
+  background: rgba(249, 252, 255, 0.94);
+  border-bottom-color: rgba(47, 103, 223, 0.18);
 }
 
 #topNav {
@@ -130,6 +130,11 @@ body {
   padding: 10px;
   display: grid;
   gap: 8px;
+}
+:root[data-theme='light'] .menu-panel {
+  background: #ffffff;
+  border-color: #c4d4ea;
+  box-shadow: 0 16px 30px rgba(24, 54, 95, 0.18);
 }
 
 .menu-panel[hidden] {
@@ -188,6 +193,9 @@ body {
   gap: 6px;
   font-size: 0.82rem;
 }
+.theme-choices input[type='radio'] {
+  accent-color: var(--accent);
+}
 
 .menu-upload-progress {
   width: 100%;
@@ -231,7 +239,8 @@ body {
 }
 
 :root[data-theme='light'] .card {
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(239, 246, 255, 0.96));
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.99), rgba(241, 247, 255, 0.96));
+  border-color: #c6d6ee;
 }
 
 .page-stack {
@@ -369,14 +378,6 @@ body[data-page='settings'] {
 .compact-range-row { gap: 8px; }
 .compact-range-top { align-items: center; }
 .compact-range-top .compact-select { min-width: 140px; }
-.range-active-date {
-  margin-left: auto;
-  text-align: right;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.compact-range-custom label { display: grid; gap: 4px; flex: 1; min-width: 124px; }
 
 .compact-select {
   appearance: none;
@@ -436,6 +437,7 @@ body[data-page='settings'] {
   font-size: 0.76rem;
   color: #aac2e8;
 }
+:root[data-theme='light'] .chip-note { color: #496a92; }
 
 
 .card-accent-readiness {
@@ -493,6 +495,32 @@ body[data-page='settings'] {
 .card-accent-strain .chip-note,
 .card-accent-strain .metric-label { color: #d7cd92; }
 
+:root[data-theme='light'] .card-accent-readiness,
+:root[data-theme='light'] .card-accent-sleep,
+:root[data-theme='light'] .card-accent-activity,
+:root[data-theme='light'] .card-accent-heart-rate,
+:root[data-theme='light'] .card-accent-stress,
+:root[data-theme='light'] .card-accent-strain {
+  background: linear-gradient(175deg, rgba(255, 255, 255, 0.98), rgba(237, 245, 255, 0.96));
+}
+:root[data-theme='light'] .card-accent-readiness { border-color: rgba(32, 157, 146, 0.34); }
+:root[data-theme='light'] .card-accent-sleep { border-color: rgba(80, 104, 214, 0.34); }
+:root[data-theme='light'] .card-accent-activity { border-color: rgba(163, 133, 49, 0.34); }
+:root[data-theme='light'] .card-accent-heart-rate { border-color: rgba(52, 121, 198, 0.34); }
+:root[data-theme='light'] .card-accent-stress { border-color: rgba(151, 84, 203, 0.34); }
+:root[data-theme='light'] .card-accent-strain { border-color: rgba(149, 130, 63, 0.34); }
+:root[data-theme='light'] .card-accent-readiness .chip-note,
+:root[data-theme='light'] .card-accent-sleep .chip-note,
+:root[data-theme='light'] .card-accent-activity .chip-note,
+:root[data-theme='light'] .card-accent-heart-rate .chip-note,
+:root[data-theme='light'] .card-accent-stress .chip-note,
+:root[data-theme='light'] .card-accent-strain .chip-note,
+:root[data-theme='light'] .card-accent-readiness .metric-label,
+:root[data-theme='light'] .card-accent-sleep .metric-label,
+:root[data-theme='light'] .card-accent-activity .metric-label,
+:root[data-theme='light'] .card-accent-heart-rate .metric-label,
+:root[data-theme='light'] .card-accent-stress .metric-label,
+:root[data-theme='light'] .card-accent-strain .metric-label { color: #425f84; }
 
 .hero-card h2 {
   margin: 6px 0 0;
@@ -539,6 +567,12 @@ body[data-page='settings'] {
     linear-gradient(140deg, color-mix(in oklab, var(--accent), transparent 66%), color-mix(in oklab, var(--accent-2), transparent 75%));
   box-shadow: inset 0 0 22px rgba(8, 14, 22, 0.56), 0 14px 28px rgba(4, 9, 17, 0.35);
 }
+:root[data-theme='light'] .hero-value-circle {
+  background:
+    radial-gradient(circle at 35% 30%, color-mix(in oklab, var(--accent-2), white 38%) 0%, color-mix(in oklab, var(--accent), transparent 68%) 42%, rgba(237, 245, 255, 0.9) 78%),
+    linear-gradient(140deg, color-mix(in oklab, var(--accent), transparent 72%), color-mix(in oklab, var(--accent-2), transparent 80%));
+  box-shadow: inset 0 0 14px rgba(134, 167, 210, 0.34), 0 12px 24px rgba(29, 59, 98, 0.18);
+}
 
 .hero-value {
   font-size: 2rem;
@@ -569,6 +603,10 @@ body[data-page='settings'] {
   border-radius: var(--radius-md);
   padding: 8px;
   background: rgba(14, 24, 35, 0.88);
+}
+:root[data-theme='light'] .hero-trend {
+  background: rgba(249, 252, 255, 0.94);
+  border-color: rgba(47, 103, 223, 0.26);
 }
 
 .hero-trend-head {
@@ -610,6 +648,7 @@ body[data-page='settings'] {
   fill: #b5c4de;
   font-size: 8px;
 }
+:root[data-theme='light'] .hero-trend-label { fill: #486184; }
 
 .hero-trend-label-y {
   text-anchor: end;
@@ -925,6 +964,10 @@ body[data-page='sleep'] .status-pill {
   background: color-mix(in oklab, var(--accent-surface), rgba(10, 18, 29, 0.92) 74%);
   padding: 10px;
 }
+:root[data-theme='light'] .chart-card {
+  background: linear-gradient(180deg, rgba(252, 255, 255, 0.96), rgba(235, 244, 255, 0.94));
+  border-color: rgba(47, 103, 223, 0.24);
+}
 
 .axis-chart {
   width: 100%;
@@ -935,17 +978,20 @@ body[data-page='sleep'] .status-pill {
   stroke: rgba(150, 166, 193, 0.22);
   stroke-width: 0.8;
 }
+:root[data-theme='light'] .grid-line { stroke: rgba(80, 108, 146, 0.2); }
 
 .axis-line {
   stroke: rgba(163, 195, 244, 0.5);
   stroke-width: 1;
 }
+:root[data-theme='light'] .axis-line { stroke: rgba(63, 98, 146, 0.52); }
 
 .tick {
   fill: #aac2e8;
   font-size: 9px;
   letter-spacing: 0.01em;
 }
+:root[data-theme='light'] .tick { fill: #3f5f87; }
 
 .top-gap {
   margin-top: 8px;
@@ -971,7 +1017,6 @@ textarea.debug-text {
 @media (max-width: 640px) {
   .header-control-row { gap: 6px; }
   .compact-range-top .compact-select { min-width: 118px; }
-  .range-active-date { max-width: 110px; font-size: 0.72rem; }
   .top-menu-wrap { gap: 6px; }
   .tab-select { min-width: 110px; max-width: 34vw; }
   .menu-trigger { width: 34px; height: 34px; }

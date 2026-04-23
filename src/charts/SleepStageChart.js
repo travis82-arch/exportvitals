@@ -7,9 +7,9 @@ export function renderSleepStageChart({ title = 'Sleep stages', stages = [], hei
   if (!stages.length) return `<div class="kpi"><div class="kpi-label">${title}</div><div class="placeholder">No data in selected range</div></div>`;
   const start = stages[0].startMs;
   const end = stages.at(-1).endMs;
-  const m = { l: 44, r: 10, t: 8, b: 20 };
-  const w = 360;
-  const h = 120;
+  const m = { l: 58, r: 14, t: 12, b: 28 };
+  const w = 384;
+  const h = 136;
   const plotW = w - m.l - m.r;
   const xPos = (t) => m.l + ((t - start) / Math.max(end - start, 1)) * plotW;
   return `<section class="chart-card"><div class="kpi-label">${title}</div><svg class="axis-chart" viewBox="0 0 ${w} ${h}" style="height:${height}px">

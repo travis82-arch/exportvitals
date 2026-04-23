@@ -10,9 +10,9 @@ export function renderAxisLineChart({ title, series = [], yUnit = '', yDomainCon
   const xMin = clean[0].tMs;
   const xMax = clean.at(-1).tMs;
   const y = niceDomain(Math.min(...vals), Math.max(...vals), yDomainConfig);
-  const m = { l: 44, r: 10, t: 8, b: 22 };
-  const w = 360;
-  const h = 120;
+  const m = { l: 58, r: 14, t: 12, b: 28 };
+  const w = 384;
+  const h = 136;
   const plotW = w - m.l - m.r;
   const plotH = h - m.t - m.b;
   const xPos = (t) => m.l + ((t - xMin) / Math.max(xMax - xMin, 1)) * plotW;

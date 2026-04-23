@@ -4,9 +4,7 @@ export const RANGE_PRESETS = [
   { key: 'latest-day', label: 'Latest day', days: 1 },
   { key: 'last-7', label: 'Last 7 days', days: 7 },
   { key: 'last-14', label: 'Last 14 days', days: 14 },
-  { key: 'last-30', label: 'Last 30 days', days: 30 },
-  { key: 'last-90', label: 'Last 90 days', days: 90 },
-  { key: 'custom', label: 'Custom range', days: null }
+  { key: 'last-30', label: 'Last 30 days', days: 30 }
 ];
 
 const PRESET_MAP = Object.fromEntries(RANGE_PRESETS.map((preset) => [preset.key, preset]));
@@ -53,31 +51,13 @@ export function resolveSelectedRange(availableDates, preferred = null) {
 
   const chosenPreset = coercePreset(preferred?.preset);
   const latest = sorted.at(-1);
-  if (chosenPreset !== 'custom') {
-    const days = PRESET_MAP[chosenPreset]?.days || 1;
-    const startIndex = Math.max(0, sorted.length - days);
-    const start = sorted[startIndex] || latest;
-    return {
-      preset: chosenPreset,
-      start,
-      end: latest,
-      disabled: false,
-      isSingleDay: start === latest
-    };
-  }
-
-  let start = preferred?.start;
-  let end = preferred?.end;
-  if (!start || !sorted.includes(start)) start = sorted[0];
-  if (!end || !sorted.includes(end)) end = latest;
-  if (start > end) [start, end] = [end, start];
-
-  const first = sorted[0];
-  if (start < first) start = first;
-  if (end > latest) end = latest;
+  const days = PRESET_MAP[chosenPreset]?.days || 1;
+  const startIndex = Math.max(0, sorted.length - days);
+  const start = sorted[startIndex] || latest;
+  const end = latest;
 
   return {
-    preset: 'custom',
+    preset: chosenPreset,
     start,
     end,
     disabled: false,
