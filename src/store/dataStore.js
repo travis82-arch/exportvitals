@@ -211,6 +211,8 @@ function normalizeRows(dataset, rows) {
           endTime: endTs || null,
           durationSec: toNumber(r.duration) ?? toNumber(r.duration_seconds),
           calories: toNumber(r.calories) ?? toNumber(r.active_kilocalories),
+          activeCalories: toNumber(r.active_kilocalories) ?? toNumber(r.active_calories) ?? toNumber(r.calories),
+          steps: toNumber(r.steps),
           avgHr: toNumber(r.average_heart_rate) ?? toNumber(r.avg_hr)
         };
       })
@@ -230,6 +232,8 @@ function normalizeRows(dataset, rows) {
           endTime: endTs,
           durationSec: toNumber(r.duration) ?? toNumber(r.duration_seconds),
           calories: toNumber(r.calories),
+          activeCalories: toNumber(r.active_calories) ?? toNumber(r.calories),
+          steps: toNumber(r.steps),
           avgHr: toNumber(r.average_heart_rate) ?? toNumber(r.avg_hr)
         };
       })
