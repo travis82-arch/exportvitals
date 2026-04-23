@@ -21,6 +21,8 @@ test('strain page renderer is wired in app entry', () => {
   assert.equal(entrySource.includes("if (page === 'strain')"), true);
   assert.equal(entrySource.includes('Biometrics'), true);
   assert.equal(entrySource.includes('Strain states by day'), true);
+  assert.equal(entrySource.includes('Range status'), true);
+  assert.equal(entrySource.includes('barColorResolver'), true);
   assert.equal(entrySource.includes('not a diagnosis'), true);
   assert.equal(entrySource.includes('byDateInsights'), false);
 });

@@ -2,7 +2,16 @@ import { niceDomain } from './scale.js';
 
 const fmtTime = (ms) => new Date(ms).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
 
-export function renderAxisBarChart({ title, series = [], yTicks = null, yDomainConfig = {}, height = 150, yLabelFormatter = (v) => String(v) }) {
+export function renderAxisBarChart({
+  title,
+  series = [],
+  yTicks = null,
+  yDomainConfig = {},
+  height = 150,
+  yLabelFormatter = (v) => String(v),
+  xTickFormatter = fmtTime,
+  barColorResolver = null
+}) {
   const clean = (series || []).filter((p) => Number.isFinite(p?.tMs));
   const vals = clean.map((p) => p?.v ?? p?.level).filter((v) => Number.isFinite(Number(v))).map(Number);
   if (!clean.length || !vals.length) return `<div class="kpi"><div class="kpi-label">${title}</div><div class="placeholder">No data in selected range</div></div>`;
@@ -24,11 +33,12 @@ export function renderAxisBarChart({ title, series = [], yTicks = null, yDomainC
       <line x1="${m.l}" y1="${h - m.b}" x2="${w - m.r}" y2="${h - m.b}" class="axis-line"></line>
       ${clean.map((p) => {
         const v = Number(p?.v ?? p?.level);
-        return `<rect x="${xPos(p.tMs) - barW / 2}" y="${yPos(v)}" width="${barW}" height="${Math.max(1, h - m.b - yPos(v))}" fill="var(--chart-bar)"></rect>`;
+        const fill = typeof barColorResolver === 'function' ? (barColorResolver(p, v) || 'var(--chart-bar)') : 'var(--chart-bar)';
+        return `<rect x="${xPos(p.tMs) - barW / 2}" y="${yPos(v)}" width="${barW}" height="${Math.max(1, h - m.b - yPos(v))}" fill="${fill}"></rect>`;
       }).join('')}
-      <text x="${m.l}" y="${h - 6}" class="tick">${fmtTime(xMin)}</text>
-      <text x="${m.l + plotW / 2}" y="${h - 6}" text-anchor="middle" class="tick">${fmtTime((xMin + xMax) / 2)}</text>
-      <text x="${w - m.r}" y="${h - 6}" text-anchor="end" class="tick">${fmtTime(xMax)}</text>
+      <text x="${m.l}" y="${h - 6}" class="tick">${xTickFormatter(xMin, 0, clean)}</text>
+      <text x="${m.l + plotW / 2}" y="${h - 6}" text-anchor="middle" class="tick">${xTickFormatter((xMin + xMax) / 2, 1, clean)}</text>
+      <text x="${w - m.r}" y="${h - 6}" text-anchor="end" class="tick">${xTickFormatter(xMax, 2, clean)}</text>
     </svg>
   </section>`;
 }

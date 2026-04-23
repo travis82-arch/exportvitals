@@ -378,6 +378,26 @@ body[data-page='settings'] {
 .compact-range-row { gap: 8px; }
 .compact-range-top { align-items: center; }
 .compact-range-top .compact-select { min-width: 140px; }
+.compact-custom-trigger { padding: 7px 10px; font-size: 0.77rem; }
+.compact-custom-trigger.is-hidden { display: none; }
+.range-picker-input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+  width: 1px;
+  height: 1px;
+}
+.range-pill {
+  max-width: 52vw;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  padding: 6px 9px;
+  border: 1px solid color-mix(in oklab, var(--accent), transparent 55%);
+  border-radius: 999px;
+  font-size: 0.76rem;
+  background: color-mix(in oklab, var(--accent-soft), transparent 25%);
+}
 
 .compact-select {
   appearance: none;
@@ -390,6 +410,65 @@ body[data-page='settings'] {
 }
 
 .compact-select:disabled { opacity: 0.45; }
+
+.custom-range-panel {
+  margin-top: 6px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: linear-gradient(180deg, rgba(19, 30, 46, 0.97), rgba(12, 20, 32, 0.96));
+  padding: 8px;
+}
+.custom-range-panel.is-hidden {
+  display: none;
+}
+.range-picker-mode {
+  display: inline-flex;
+  gap: 6px;
+  margin: 0 0 8px;
+  padding: 4px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: color-mix(in oklab, var(--card-soft), transparent 25%);
+}
+.range-picker-mode button {
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  font-size: 0.74rem;
+  border-radius: 999px;
+  padding: 4px 9px;
+}
+.range-picker-mode button.active {
+  background: color-mix(in oklab, var(--accent-soft), transparent 20%);
+  color: var(--text);
+}
+.custom-range-fields {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  margin-bottom: 8px;
+}
+.custom-range-fields label {
+  font-size: 0.74rem;
+  color: var(--muted);
+  display: grid;
+  gap: 4px;
+}
+.custom-range-fields input[type='date'] {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--card-soft);
+  color: var(--text);
+  padding: 8px 9px;
+  font-size: 0.8rem;
+}
+.custom-range-fields [data-role='end-wrap'].is-hidden {
+  display: none;
+}
+:root[data-theme='light'] .custom-range-panel {
+  background: #fff;
+  border-color: #cfdbeb;
+}
 
 .row {
   display: flex;
@@ -1103,6 +1182,8 @@ textarea.debug-text {
 @media (max-width: 640px) {
   .header-control-row { gap: 6px; }
   .compact-range-top .compact-select { min-width: 118px; }
+  .range-pill { max-width: 40vw; }
+  .custom-range-fields { grid-template-columns: 1fr; }
   .top-menu-wrap { gap: 6px; }
   .tab-select { min-width: 110px; max-width: 34vw; }
   .menu-trigger { width: 34px; height: 34px; }
