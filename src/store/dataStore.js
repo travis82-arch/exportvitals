@@ -50,6 +50,13 @@ const toLocalDateKey = (timestamp) => {
   return `${yyyy}-${mm}-${dd}`;
 };
 
+function durationFromTimestamps(startTs, endTs) {
+  const startMs = new Date(startTs || '').getTime();
+  const endMs = new Date(endTs || '').getTime();
+  if (!Number.isFinite(startMs) || !Number.isFinite(endMs) || endMs <= startMs) return null;
+  return Math.round((endMs - startMs) / 1000);
+}
+
 function pickRowValue(row, aliases = []) {
   if (!row || typeof row !== 'object') return null;
   const direct = aliases.map((key) => row[key]).find((value) => value != null && String(value).trim() !== '');
@@ -168,7 +175,15 @@ function normalizeRows(dataset, rows) {
 
   if (dataset === 'heartRate')
     return rows
-      .map((r) => ({ timestamp: r.timestamp, bpm: toNumber(r.bpm) }))
+      .map((r) => ({
+        timestamp: pickRowValue(r, ['timestamp', 'datetime', 'time', 'measured_at']),
+        bpm: toNumber(pickRowValue(r, ['bpm', 'heart_rate', 'hr'])),
+        source: pickRowValue(r, ['source', 'origin', 'sample_source']),
+        activityType: pickRowValue(r, ['activity', 'activity_type', 'workout_activity']),
+        workoutId: pickRowValue(r, ['workout_id', 'workoutid', 'session_id', 'sessionid']),
+        linkedStartTime: pickRowValue(r, ['workout_start_datetime', 'workout_start_time', 'activity_start_datetime']),
+        linkedEndTime: pickRowValue(r, ['workout_end_datetime', 'workout_end_time', 'activity_end_datetime'])
+      }))
       .filter((r) => r.timestamp && r.bpm != null);
 
   if (dataset === 'sleepModel')
@@ -203,16 +218,22 @@ function normalizeRows(dataset, rows) {
         const startTs = r.start_datetime || r.start_time || r.start || r.timestamp;
         const endTs = r.end_datetime || r.end_time || r.end;
         const date = r.day ?? r.date ?? (startTs ? new Date(startTs).toISOString().slice(0, 10) : null);
+        const rowDurationSec = toNumber(r.duration) ?? toNumber(r.duration_seconds);
+        const computedDurationSec = durationFromTimestamps(startTs, endTs);
+        const activityLabel = pickRowValue(r, ['activity', 'activity_type', 'workout_activity', 'workout_type', 'type', 'label']);
         return {
           date,
           source: 'workout',
-          type: r.activity || r.workout_type || r.type || 'Workout',
+          id: pickRowValue(r, ['id', 'workout_id', 'uuid']),
+          type: activityLabel || 'Workout',
           startTime: startTs || null,
           endTime: endTs || null,
-          durationSec: toNumber(r.duration) ?? toNumber(r.duration_seconds),
+          durationSec: computedDurationSec ?? rowDurationSec,
           calories: toNumber(r.calories) ?? toNumber(r.active_kilocalories),
           activeCalories: toNumber(r.active_kilocalories) ?? toNumber(r.active_calories) ?? toNumber(r.calories),
           steps: toNumber(r.steps),
+          intensity: pickRowValue(r, ['intensity']),
+          sourceName: pickRowValue(r, ['source']),
           avgHr: toNumber(r.average_heart_rate) ?? toNumber(r.avg_hr)
         };
       })
@@ -224,13 +245,16 @@ function normalizeRows(dataset, rows) {
         const startTs = r.start_datetime || r.start_time || r.timestamp || null;
         const endTs = r.end_datetime || r.end_time || null;
         const date = r.day ?? r.date ?? (startTs ? new Date(startTs).toISOString().slice(0, 10) : null);
+        const rowDurationSec = toNumber(r.duration) ?? toNumber(r.duration_seconds);
+        const computedDurationSec = durationFromTimestamps(startTs, endTs);
         return {
           date,
           source: 'session',
-          type: r.type || r.session_type || 'Session',
+          id: pickRowValue(r, ['id', 'session_id', 'uuid']),
+          type: pickRowValue(r, ['type', 'session_type', 'activity', 'label']) || 'Session',
           startTime: startTs,
           endTime: endTs,
-          durationSec: toNumber(r.duration) ?? toNumber(r.duration_seconds),
+          durationSec: computedDurationSec ?? rowDurationSec,
           calories: toNumber(r.calories),
           activeCalories: toNumber(r.active_calories) ?? toNumber(r.calories),
           steps: toNumber(r.steps),
