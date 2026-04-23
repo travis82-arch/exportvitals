@@ -31,6 +31,57 @@ function findZone(bpm, zoneScheme) {
   return zoneScheme.find((zone) => bpm >= zone.min && bpm <= zone.max) || null;
 }
 
+function normalizeString(value) {
+  return String(value || '').trim().toLowerCase();
+}
+
+function isWorkoutSample(row) {
+  const source = normalizeString(row?.source);
+  if (source.includes('workout')) return true;
+  if (source.includes('activity')) return true;
+  return false;
+}
+
+function sampleMatchesActivity(row, activity) {
+  const rowWorkoutId = normalizeString(row?.workoutId);
+  const activityId = normalizeString(activity?.id);
+  if (rowWorkoutId && activityId && rowWorkoutId === activityId) return true;
+
+  const rowActivity = normalizeString(row?.activityType);
+  const activityType = normalizeString(activity?.type);
+  if (rowActivity && activityType && rowActivity === activityType) return true;
+
+  const rowStart = toMs(row?.linkedStartTime);
+  const rowEnd = toMs(row?.linkedEndTime);
+  const activityStart = toMs(activity?.startTime);
+  const activityEnd = toMs(activity?.endTime);
+  if (Number.isFinite(rowStart) && Number.isFinite(activityStart) && Math.abs(rowStart - activityStart) <= 60_000) return true;
+  if (Number.isFinite(rowEnd) && Number.isFinite(activityEnd) && Math.abs(rowEnd - activityEnd) <= 60_000) return true;
+
+  return false;
+}
+
+export function selectActivityHeartRateSamples(activity, heartRateRows = [], window) {
+  const inWindowSamples = (heartRateRows || [])
+    .map((row) => ({
+      ...row,
+      tMs: toMs(row?.timestamp),
+      bpm: Number(row?.bpm)
+    }))
+    .filter((row) => Number.isFinite(row.tMs) && Number.isFinite(row.bpm))
+    .filter((row) => row.tMs >= window.startMs && row.tMs <= window.endMs)
+    .sort((a, b) => a.tMs - b.tMs);
+
+  const workoutTagged = inWindowSamples.filter((row) => isWorkoutSample(row) || sampleMatchesActivity(row, activity));
+  const activityMatched = workoutTagged.filter((row) => sampleMatchesActivity(row, activity));
+  const preferred = activityMatched.length ? activityMatched : workoutTagged.length ? workoutTagged : inWindowSamples;
+
+  return {
+    samples: preferred.map((row) => ({ tMs: row.tMs, bpm: row.bpm })),
+    associationMode: activityMatched.length ? 'activity-linked' : workoutTagged.length ? 'workout-tagged' : 'window-only'
+  };
+}
+
 export function buildActivityHeartRateBreakdown(activity, heartRateRows, options = {}) {
   const zoneScheme = options.zoneScheme || DEFAULT_ZONE_SCHEME;
   const window = computeWindow(activity);
@@ -39,21 +90,20 @@ export function buildActivityHeartRateBreakdown(activity, heartRateRows, options
       supported: false,
       reason: 'Activity timing is missing in this export.',
       samples: [],
+      associationMode: 'none',
       zones: zoneScheme.map((zone) => ({ ...zone, seconds: 0, minutes: 0 }))
     };
   }
 
-  const samples = (heartRateRows || [])
-    .map((row) => ({ tMs: toMs(row?.timestamp), bpm: Number(row?.bpm) }))
-    .filter((row) => Number.isFinite(row.tMs) && Number.isFinite(row.bpm))
-    .filter((row) => row.tMs >= window.startMs && row.tMs <= window.endMs)
-    .sort((a, b) => a.tMs - b.tMs);
+  const selection = selectActivityHeartRateSamples(activity, heartRateRows, window);
+  const samples = selection.samples;
 
   if (samples.length < MIN_SAMPLE_COUNT) {
     return {
       supported: false,
       reason: 'Detailed heart-rate samples are too sparse for this activity.',
       samples,
+      associationMode: selection.associationMode,
       zones: zoneScheme.map((zone) => ({ ...zone, seconds: 0, minutes: 0 })),
       avgHr: null,
       peakHr: samples.length ? Math.max(...samples.map((sample) => sample.bpm)) : null
@@ -87,6 +137,7 @@ export function buildActivityHeartRateBreakdown(activity, heartRateRows, options
       supported: false,
       reason: 'Detailed heart-rate samples do not cover enough of this activity.',
       samples,
+      associationMode: selection.associationMode,
       coverageRatio,
       avgHr: null,
       peakHr: Math.max(...samples.map((sample) => sample.bpm)),
@@ -101,6 +152,7 @@ export function buildActivityHeartRateBreakdown(activity, heartRateRows, options
     supported: true,
     reason: '',
     samples,
+    associationMode: selection.associationMode,
     coverageRatio,
     avgHr,
     peakHr,

@@ -107,7 +107,7 @@ function fmtDurationSeconds(sec, compact = false) {
   const totalMin = Math.round(Number(sec) / 60);
   const hours = Math.floor(totalMin / 60);
   const minutes = totalMin % 60;
-  if (compact) return `${hours}h ${minutes}m`;
+  if (compact) return hours > 0 ? `${hours}h ${minutes}m` : `${minutes}m`;
   if (!hours) return `${minutes} min`;
   return `${hours} h ${minutes} min`;
 }
@@ -396,6 +396,16 @@ function buildDailyActivitySeconds(rows) {
     .filter((point) => Number.isFinite(point.tMs));
 }
 
+function deriveActivityDurationSec(activity) {
+  const startMs = new Date(activity?.startTime || '').getTime();
+  const endMs = new Date(activity?.endTime || '').getTime();
+  if (Number.isFinite(startMs) && Number.isFinite(endMs) && endMs > startMs) {
+    return Math.round((endMs - startMs) / 1000);
+  }
+  const duration = Number(activity?.durationSec);
+  return Number.isFinite(duration) && duration > 0 ? duration : null;
+}
+
 function aggregateActivities(day, rangeRows, limit = 18) {
   const raw = day?.activities?.length
     ? day.activities
@@ -403,6 +413,7 @@ function aggregateActivities(day, rangeRows, limit = 18) {
   return raw
     .map((item) => ({
       ...item,
+      durationSec: deriveActivityDurationSec(item),
       sortMs: new Date(item.startTime || `${item.date}T00:00:00`).getTime(),
       activityKey: [item.source || 'activity', item.type || 'unknown', item.startTime || item.date || '', item.durationSec || ''].join('|')
     }))
@@ -452,6 +463,7 @@ function renderActivityDetail(activity, heartRateRows) {
   const hrSeries = breakdown.samples.map((sample) => ({ tMs: sample.tMs, v: sample.bpm }));
   const avgHr = Number.isFinite(breakdown.avgHr) ? breakdown.avgHr : activity.avgHr;
   const peakHr = Number.isFinite(breakdown.peakHr) ? breakdown.peakHr : null;
+  const durationSec = deriveActivityDurationSec(activity);
 
   return `
     <section class="card section-card activity-detail-shell">
@@ -464,7 +476,7 @@ function renderActivityDetail(activity, heartRateRows) {
         <button type="button" class="btn secondary" data-activity-close>Back</button>
       </div>
       ${renderMetricGrid([
-        { label: 'Duration', value: Number.isFinite(Number(activity.durationSec)) ? fmtDurationSeconds(activity.durationSec, true) : '<span class="placeholder">Unavailable</span>', note: 'From activity record' },
+        { label: 'Duration', value: Number.isFinite(Number(durationSec)) ? fmtDurationSeconds(durationSec, true) : '<span class="placeholder">Unavailable</span>', note: Number.isFinite(Number(durationSec)) ? 'Computed from activity timestamps when available' : 'Activity timing unavailable in this export' },
         { label: 'Active calories', value: Number.isFinite(Number(activity.activeCalories ?? activity.calories)) ? `${Math.round(Number(activity.activeCalories ?? activity.calories))} cal` : '<span class="placeholder">Unavailable</span>', note: 'Activity export field' },
         { label: 'Steps', value: Number.isFinite(Number(activity.steps)) ? fmt(activity.steps, 0) : '<span class="placeholder">Unavailable</span>', note: 'When present in export' },
         { label: 'Average HR', value: Number.isFinite(Number(avgHr)) ? `${Math.round(Number(avgHr))} bpm` : '<span class="placeholder">Unavailable</span>', note: Number.isFinite(Number(breakdown.avgHr)) ? 'Computed from activity-linked samples' : 'From activity summary field when available' },

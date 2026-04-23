@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { buildActivityHeartRateBreakdown } from '../src/domain/activityHeartRate.js';
+import { buildActivityHeartRateBreakdown, selectActivityHeartRateSamples } from '../src/domain/activityHeartRate.js';
 
 function buildSamples({ startIso, count, stepSec, bpmStart = 120 }) {
   const startMs = new Date(startIso).getTime();
@@ -46,4 +46,27 @@ test('buildActivityHeartRateBreakdown gracefully returns unsupported for sparse 
   assert.match(result.reason, /sparse/i);
   assert.equal(result.samples.length, 2);
   assert.equal(result.peakHr, 150);
+});
+
+test('selectActivityHeartRateSamples prefers workout/activity-linked samples when present', () => {
+  const activity = {
+    id: 'wk-123',
+    type: 'Running',
+    startTime: '2026-02-14T10:00:00Z',
+    endTime: '2026-02-14T10:10:00Z'
+  };
+  const window = {
+    startMs: new Date(activity.startTime).getTime(),
+    endMs: new Date(activity.endTime).getTime()
+  };
+  const samples = [
+    { timestamp: '2026-02-14T10:01:00Z', bpm: 120, source: 'daytime' },
+    { timestamp: '2026-02-14T10:02:00Z', bpm: 130, source: 'workout', workoutId: 'wk-123' },
+    { timestamp: '2026-02-14T10:03:00Z', bpm: 131, source: 'workout', workoutId: 'wk-123' },
+    { timestamp: '2026-02-14T10:04:00Z', bpm: 122, source: 'workout', workoutId: 'other' }
+  ];
+
+  const result = selectActivityHeartRateSamples(activity, samples, window);
+  assert.equal(result.associationMode, 'activity-linked');
+  assert.deepEqual(result.samples.map((row) => row.bpm), [130, 131]);
 });
