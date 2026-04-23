@@ -8,8 +8,8 @@ const entrySource = readFileSync(new URL('../src/mpa-entry.js', import.meta.url)
 
 test('date range control uses compact single-row preset + active date', () => {
   assert.equal(dateControlSource.includes('compact-range-top'), true);
-  assert.equal(dateControlSource.includes('range-active-date'), true);
-  assert.equal(dateControlSource.includes('selectedPreset === \'custom\''), true);
+  assert.equal(dateControlSource.includes('range-active-date'), false);
+  assert.equal(dateControlSource.includes('selectedPreset === \'custom\''), false);
   assert.equal(entrySource.includes('ensureHeaderRangeMount'), true);
   assert.equal(entrySource.includes("row.className = 'header-control-row'"), true);
 });

@@ -92,9 +92,8 @@ export function renderTopNav(target, {
         : '<div class="small muted">Public repo coming soon</div>'}
       <fieldset class="theme-choices">
         <legend>Theme</legend>
-        <label><input type="radio" name="themeChoice" value="dark" ${preferredTheme === 'dark' ? 'checked' : ''}> Dark</label>
-        <label><input type="radio" name="themeChoice" value="light" ${preferredTheme === 'light' ? 'checked' : ''}> Light</label>
-        <label><input type="radio" name="themeChoice" value="system" ${preferredTheme === 'system' ? 'checked' : ''}> System</label>
+        <label><input type="radio" name="themeChoice" value="dark" ${preferredTheme === 'dark' ? 'checked' : ''}> <span>Dark</span></label>
+        <label><input type="radio" name="themeChoice" value="light" ${preferredTheme === 'light' ? 'checked' : ''}> <span>Light</span></label>
       </fieldset>
       <div class="small muted">Supports Oura export ZIP. Parsing runs locally.</div>
       <input id="menuUploadInput" type="file" accept=".zip,application/zip" hidden>

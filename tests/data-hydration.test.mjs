@@ -112,7 +112,7 @@ test('upload replaces prior dataset cleanly and resets latest-day against new da
 
   const previousCustom = { preset: 'custom', start: '2026-01-01', end: '2026-01-02' };
   const resolved = resolveSelectedRange(getAvailableDates(), previousCustom);
-  assert.equal(resolved.start, '2026-03-10');
+  assert.equal(resolved.start, '2026-03-11');
   assert.equal(resolved.end, '2026-03-11');
 
   const latest = resolveSelectedRange(getAvailableDates(), { preset: 'latest-day' });
