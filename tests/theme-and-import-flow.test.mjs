@@ -28,7 +28,7 @@ test('import menu shows staged progress and returns users to home after success'
 
 test('light theme variables are present for major surfaces', () => {
   assert.equal(styleSource.includes(":root[data-theme='light']"), true);
-  assert.equal(styleSource.includes('--bg: #f3f7ff;'), true);
+  assert.equal(styleSource.includes('--bg: #edf2f8;'), true);
   assert.equal(styleSource.includes('--card: #ffffff;'), true);
-  assert.equal(styleSource.includes('--text: #10243f;'), true);
+  assert.equal(styleSource.includes('--text: #132238;'), true);
 });

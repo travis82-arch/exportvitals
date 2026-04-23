@@ -23,6 +23,7 @@ import { renderAxisBarChart } from './charts/AxisBarChart.js';
 import { renderSleepStageChart } from './charts/SleepStageChart.js';
 import { activitySummary, heartRateSummary, stressSummary, stressDailyBreakdownRows, stressDayTimelineRows, stressCategorySeries, strainSummary } from './state/pageSummaries.js';
 import { computeBodyClockOffset, computeSleepDebtEstimate } from './domain/sleepRecoveryModel.js';
+import { buildActivityHeartRateBreakdown, DEFAULT_ZONE_SCHEME } from './domain/activityHeartRate.js';
 import { SITE_COPY } from './config/siteCopy.js';
 import { applyTheme, initTheme } from './state/theme.js';
 
@@ -71,6 +72,7 @@ const CONTRIBUTOR_LABELS = {
     timing: 'Timing'
   }
 };
+let selectedActivityKey = null;
 
 function average(rows, key) {
   const values = (rows || []).map((row) => row?.[key]).filter((value) => Number.isFinite(Number(value))).map(Number);
@@ -401,7 +403,8 @@ function aggregateActivities(day, rangeRows, limit = 18) {
   return raw
     .map((item) => ({
       ...item,
-      sortMs: new Date(item.startTime || `${item.date}T00:00:00`).getTime()
+      sortMs: new Date(item.startTime || `${item.date}T00:00:00`).getTime(),
+      activityKey: [item.source || 'activity', item.type || 'unknown', item.startTime || item.date || '', item.durationSec || ''].join('|')
     }))
     .sort((a, b) => b.sortMs - a.sortMs)
     .slice(0, limit);
@@ -410,10 +413,10 @@ function aggregateActivities(day, rangeRows, limit = 18) {
 function renderActivitiesList(activities, isSingleDay) {
   if (!activities.length) return '<div class="placeholder">No activity sessions are available for the selected range.</div>';
   return `<div class="activity-list">${activities
-    .map((activity) => `<article class="activity-item">
+    .map((activity) => `<button class="activity-item ${selectedActivityKey === activity.activityKey ? 'is-selected' : ''}" type="button" data-activity-open="${activity.activityKey}">
       <div class="row split-row">
         <strong>${activity.type || 'Activity'}</strong>
-        <span class="small muted">${activity.source || 'dataset'}</span>
+        <span class="small muted">${activity.source || 'dataset'} · Open</span>
       </div>
       <div class="small muted">
         ${activity.startTime ? new Date(activity.startTime).toLocaleString([], { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) : activity.date}
@@ -424,8 +427,66 @@ function renderActivitiesList(activities, isSingleDay) {
         <span class="small">Calories: ${Number.isFinite(Number(activity.calories)) ? `${Math.round(Number(activity.calories))} cal` : '<span class="placeholder">Unavailable</span>'}</span>
         <span class="small">Avg HR: ${Number.isFinite(Number(activity.avgHr)) ? `${Math.round(Number(activity.avgHr))} bpm` : '<span class="placeholder">Unavailable</span>'}</span>
       </div>
-    </article>`)
+    </button>`)
     .join('')}</div>`;
+}
+
+function renderActivityZoneRows(breakdown) {
+  if (!breakdown.supported) {
+    return `<div class="placeholder">Zone breakdown unavailable. ${breakdown.reason || ''}</div>`;
+  }
+  const maxZoneMinutes = Math.max(...breakdown.zones.map((zone) => zone.minutes), 1);
+  return `<div class="zone-list">${breakdown.zones
+    .map((zone) => {
+      const pct = Math.max(6, Math.round((zone.minutes / maxZoneMinutes) * 100));
+      return `<div class="zone-row">
+          <div class="row split-row"><span>${zone.label}</span><strong>${fmt(zone.minutes, 1, ' min')}</strong></div>
+          <div class="zone-bar"><span style="width:${pct}%;background:${zone.color}"></span></div>
+        </div>`;
+    })
+    .join('')}</div>`;
+}
+
+function renderActivityDetail(activity, heartRateRows) {
+  const breakdown = buildActivityHeartRateBreakdown(activity, heartRateRows, { zoneScheme: DEFAULT_ZONE_SCHEME });
+  const hrSeries = breakdown.samples.map((sample) => ({ tMs: sample.tMs, v: sample.bpm }));
+  const avgHr = Number.isFinite(breakdown.avgHr) ? breakdown.avgHr : activity.avgHr;
+  const peakHr = Number.isFinite(breakdown.peakHr) ? breakdown.peakHr : null;
+
+  return `
+    <section class="card section-card activity-detail-shell">
+      <div class="row split-row activity-detail-head">
+        <div>
+          <p class="eyebrow">Activity detail</p>
+          <h3>${activity.type || 'Activity'}</h3>
+          <p class="small muted">${activity.date || 'Date unavailable'}${activity.startTime ? ` · ${new Date(activity.startTime).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}` : ''}</p>
+        </div>
+        <button type="button" class="btn secondary" data-activity-close>Back</button>
+      </div>
+      ${renderMetricGrid([
+        { label: 'Duration', value: Number.isFinite(Number(activity.durationSec)) ? fmtDurationSeconds(activity.durationSec, true) : '<span class="placeholder">Unavailable</span>', note: 'From activity record' },
+        { label: 'Active calories', value: Number.isFinite(Number(activity.activeCalories ?? activity.calories)) ? `${Math.round(Number(activity.activeCalories ?? activity.calories))} cal` : '<span class="placeholder">Unavailable</span>', note: 'Activity export field' },
+        { label: 'Steps', value: Number.isFinite(Number(activity.steps)) ? fmt(activity.steps, 0) : '<span class="placeholder">Unavailable</span>', note: 'When present in export' },
+        { label: 'Average HR', value: Number.isFinite(Number(avgHr)) ? `${Math.round(Number(avgHr))} bpm` : '<span class="placeholder">Unavailable</span>', note: Number.isFinite(Number(breakdown.avgHr)) ? 'Computed from activity-linked samples' : 'From activity summary field when available' },
+        { label: 'Peak HR', value: Number.isFinite(Number(peakHr)) ? `${Math.round(Number(peakHr))} bpm` : '<span class="placeholder">Unavailable</span>', note: Number.isFinite(Number(peakHr)) ? 'Highest activity-linked sample' : 'Detailed samples unavailable' }
+      ])}
+      <section class="card chart-card activity-route-card">
+        <div class="kpi-label">Route</div>
+        <div class="small muted">Route not available in this export.</div>
+      </section>
+      <section class="card section-card">
+        <div class="section-head"><h3>Heart rate detail</h3></div>
+        ${hrSeries.length
+          ? renderAxisLineChart({ title: 'Activity heart rate', series: hrSeries, yUnit: 'bpm', yDomainConfig: { minPadding: 4, maxPadding: 4 }, height: 186 })
+          : `<div class="placeholder">Detailed heart-rate chart unavailable. ${breakdown.reason || ''}</div>`}
+      </section>
+      <section class="card section-card">
+        <div class="section-head"><h3>Heart-rate zones</h3></div>
+        <div class="small muted">Default zone scheme uses fixed bpm bands (Z1 &lt; 110 bpm up to Z5 ≥ 170 bpm).</div>
+        ${renderActivityZoneRows(breakdown)}
+      </section>
+    </section>
+  `;
 }
 
 function contributorFromRange(rangeRows, singleRow, keys, { label, formatter = (value) => `${Math.round(value)}`, note = '' }) {
@@ -768,6 +829,10 @@ function renderActivityPage(range, day, rangeRows) {
       progress: Number(row?.targetCalories) > 0 ? (Number(row.totalCalories) / Number(row.targetCalories)) * 100 : null
     })), 'progress');
   const activities = aggregateActivities(day, rangeRows);
+  const selectedActivity = activities.find((activity) => activity.activityKey === selectedActivityKey) || null;
+  if (!selectedActivity && selectedActivityKey) selectedActivityKey = null;
+  const snapshot = getStoreSnapshot();
+  const heartRateRows = snapshot.datasets?.heartRate || [];
   const movementSeries = range.isSingleDay
     ? (day?.activityClassSeries || []).map((point) => ({ tMs: point.tMs, v: point.level }))
     : buildDailyActivitySeconds(rangeRows.dailyActivity);
@@ -849,7 +914,10 @@ function renderActivityPage(range, day, rangeRows) {
 
     <section class="card section-card">
       <div class="section-head"><h3>Activities</h3></div>
+      ${activities.length ? '<p class="small muted">Tap any activity to open detailed metrics, heart-rate chart, and zone breakdown when samples support it.</p>' : ''}
+      ${selectedActivity ? renderActivityDetail(selectedActivity, heartRateRows) : ''}
       ${renderActivitiesList(activities, range.isSingleDay)}
+      ${!activities.length ? '<p class="small muted">This export does not include workout/session activity rows for the selected range.</p>' : ''}
     </section>
 
     <section class="card section-card">
@@ -874,7 +942,7 @@ function renderActivityPage(range, day, rangeRows) {
       <div class="section-head"><h3>Weekly zone minutes</h3></div>
       ${zoneSupport
         ? renderMetricGrid(zoneRows)
-        : '<div class="placeholder">Zone minutes unavailable.</div>'}
+        : '<div class="placeholder">Zone minutes unavailable for this export.</div>'}
     </section>
   `;
 }
@@ -1447,6 +1515,16 @@ function renderPageContent(range, day, rangeRows, rerender) {
 
   if (page === 'activity') {
     content.innerHTML = renderActivityPage(range, day, rangeRows);
+    content.querySelectorAll('[data-activity-open]').forEach((node) => {
+      node.addEventListener('click', () => {
+        selectedActivityKey = node.getAttribute('data-activity-open') || null;
+        rerender(range);
+      });
+    });
+    content.querySelector('[data-activity-close]')?.addEventListener('click', () => {
+      selectedActivityKey = null;
+      rerender(range);
+    });
     return;
   }
 
