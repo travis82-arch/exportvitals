@@ -2,12 +2,12 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { navManifest } from '../src/nav/navManifest.js';
-import { SITE_COPY, getPublicRepoUrl } from '../src/config/siteCopy.js';
 
 const topNavSource = readFileSync(new URL('../src/components/TopNav.js', import.meta.url), 'utf8');
 const entrySource = readFileSync(new URL('../src/mpa-entry.js', import.meta.url), 'utf8');
 const landingHtml = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
 const appIndexHtml = readFileSync(new URL('../app/index.html', import.meta.url), 'utf8');
+const appAboutHtml = readFileSync(new URL('../app/about/index.html', import.meta.url), 'utf8');
 const cssSource = readFileSync(new URL('../src/style.css', import.meta.url), 'utf8');
 
 const requiredMenuLabels = ['Home', 'Readiness', 'Sleep', 'Activity', 'Heart Rate', 'Stress', 'Strain'];
@@ -17,7 +17,7 @@ test('persistent tab strip is replaced by upper-right menu navigation', () => {
   assert.equal(topNavSource.includes('menu-panel'), true);
   assert.equal(topNavSource.includes('Upload / Import data'), true);
   assert.equal(topNavSource.includes('About'), true);
-  assert.equal(topNavSource.includes('Landing page'), true);
+  assert.equal(topNavSource.includes('Landing page'), false);
   const labels = navManifest.map((item) => item.label);
   requiredMenuLabels.forEach((label) => {
     assert.equal(labels.includes(label), true);
@@ -46,10 +46,13 @@ test('utility menu exposes a single dark mode toggle and no theme submenu', () =
   assert.equal(topNavSource.includes('data-theme-option="light"'), false);
 });
 
-test('public repo link comes from centralized config and gracefully handles placeholder values', () => {
-  assert.equal(topNavSource.includes('getPublicRepoUrl'), true);
-  assert.equal(SITE_COPY.support.publicRepoUrl.length > 0, true);
-  assert.equal(getPublicRepoUrl(), '');
+test('utility menu keeps only upload, about, and dark mode actions', () => {
+  assert.equal(topNavSource.includes('Upload / Import data'), true);
+  assert.equal(topNavSource.includes('href="/app/about/index.html"'), true);
+  assert.equal(topNavSource.includes('Dark Mode'), true);
+  assert.equal(topNavSource.includes('Public repo'), false);
+  assert.equal(topNavSource.includes('menu-upload-status'), false);
+  assert.equal(topNavSource.includes('menu-upload-progress'), false);
 });
 
 test('menu panel uses hidden attribute as the single source of visibility truth', () => {
@@ -61,6 +64,14 @@ test('menu panel uses hidden attribute as the single source of visibility truth'
 test('menu trigger uses hamburger icon and utility label', () => {
   assert.equal(topNavSource.includes('aria-label="Open utility menu"'), true);
   assert.equal(topNavSource.includes('>☰</button>'), true);
+});
+
+
+test('about opens inside app shell with top controls still present', () => {
+  assert.equal(appAboutHtml.includes('data-page="about"'), true);
+  assert.equal(appAboutHtml.includes('<header class="topbar">'), true);
+  assert.equal(appAboutHtml.includes('<div id="topNav"></div>'), true);
+  assert.equal(entrySource.includes("if (page === 'about')"), true);
 });
 
 test('home remains default landing view and does not render redundant heading copy', () => {
@@ -95,4 +106,11 @@ test('home cards use destination accent treatment classes', () => {
 test('settings page is no longer routed as a top-level view', () => {
   assert.equal(entrySource.includes("if (page === 'settings')"), false);
   assert.equal(entrySource.includes("if (page === 'debug')"), true);
+});
+
+
+test('home stress summaries use range-aware total high stress minutes', () => {
+  assert.equal(entrySource.includes("title: range.isSingleDay ? 'Stress' : 'High stress'"), true);
+  assert.equal(entrySource.includes('summary.totalHighStress'), true);
+  assert.equal(entrySource.includes("label: range.isSingleDay ? 'High stress' : 'Total high stress'"), true);
 });
