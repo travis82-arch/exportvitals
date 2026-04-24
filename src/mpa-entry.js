@@ -382,7 +382,7 @@ function renderDualStressDailyChart({ title, stressSeries = [], recoverySeries =
       <text x="${m.l + plotW / 2}" y="${h - 6}" text-anchor="middle" class="tick">${dateLabel(allTimes[Math.floor(allTimes.length / 2)])}</text>
       <text x="${w - m.r}" y="${h - 6}" text-anchor="end" class="tick">${dateLabel(allTimes.at(-1))}</text>
     </svg>
-    <div class="small muted">Line: high stress minutes · Bars: restored minutes.</div>
+    <div class="small muted">Line: high stress minutes · Blue bars: restored minutes.</div>
   </section>`;
 }
 

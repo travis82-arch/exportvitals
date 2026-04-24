@@ -13,7 +13,9 @@ test('theme mode has a single source of truth with persistence and document-leve
   assert.equal(themeSource.includes("storage.setItem(THEME_KEY, preferred)"), true);
   assert.equal(themeSource.includes("'system'"), false);
   assert.equal(entrySource.includes('initTheme()'), true);
-  assert.equal(topNavSource.includes('name="themeChoice"'), true);
+  assert.equal(topNavSource.includes('menuThemeTrigger'), true);
+  assert.equal(topNavSource.includes('data-theme-option="dark"'), true);
+  assert.equal(topNavSource.includes('data-theme-option="light"'), true);
   assert.equal(topNavSource.includes('value="system"'), false);
 });
 

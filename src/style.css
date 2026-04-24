@@ -122,14 +122,14 @@ body {
   right: 0;
   top: calc(100% + 8px);
   z-index: 40;
-  width: min(260px, 92vw);
+  width: min(248px, 92vw);
   border: 1px solid var(--border);
-  border-radius: var(--radius-md);
+  border-radius: 14px;
   background: rgba(11, 18, 29, 0.98);
   box-shadow: var(--shadow);
-  padding: 10px;
+  padding: 8px;
   display: grid;
-  gap: 8px;
+  gap: 6px;
 }
 :root[data-theme='light'] .menu-panel {
   background: #ffffff;
@@ -142,59 +142,58 @@ body {
 }
 
 .menu-upload {
-  border: 1px solid color-mix(in oklab, var(--accent), transparent 45%);
-  background: color-mix(in oklab, var(--accent-soft), transparent 35%);
-  color: var(--text);
-  border-radius: var(--radius-sm);
-  padding: 8px 10px;
-  text-align: left;
   font-weight: 650;
-  cursor: pointer;
 }
 
-.menu-links {
-  display: grid;
-  gap: 6px;
-}
-
-.menu-link {
+.menu-item {
+  min-height: 38px;
   border: 1px solid var(--border);
   background: var(--card-soft);
   color: var(--text);
-  border-radius: var(--radius-sm);
+  border-radius: 10px;
   padding: 8px 10px;
   font-size: 0.82rem;
+  text-align: left;
   text-decoration: none;
-}
-
-.menu-link.active {
-  border-color: var(--accent);
-  background: var(--accent-soft);
-}
-
-.theme-choices {
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  margin: 0;
-  padding: 8px;
-  display: grid;
-  gap: 4px;
-}
-
-.theme-choices legend {
-  font-size: 0.72rem;
-  color: var(--muted);
-  padding: 0 4px;
-}
-
-.theme-choices label {
+  cursor: pointer;
   display: flex;
   align-items: center;
-  gap: 6px;
-  font-size: 0.82rem;
+  justify-content: space-between;
+  gap: 8px;
 }
-.theme-choices input[type='radio'] {
-  accent-color: var(--accent);
+
+.menu-link {
+  font-weight: 550;
+}
+
+.menu-item:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
+}
+
+.menu-theme-group {
+  display: grid;
+  gap: 6px;
+}
+
+.menu-theme-trigger {
+  font-weight: 550;
+}
+
+.menu-theme-value {
+  color: var(--muted);
+  font-size: 0.76rem;
+}
+
+.menu-theme-options {
+  display: grid;
+  gap: 4px;
+  padding: 0 0 2px 12px;
+}
+
+.menu-theme-option.active {
+  border-color: color-mix(in oklab, var(--accent), transparent 30%);
+  background: color-mix(in oklab, var(--accent-soft), transparent 18%);
 }
 
 .menu-upload-progress {
@@ -206,6 +205,7 @@ body {
 .menu-trigger:focus-visible,
 .menu-link:focus-visible,
 .menu-upload:focus-visible,
+.menu-item:focus-visible,
 .tab-select:focus-visible {
   outline: 2px solid color-mix(in oklab, var(--accent), white 18%);
   outline-offset: 2px;
@@ -306,7 +306,7 @@ body[data-page='stress'] {
   --accent-2: #ff9cb0;
   --accent-soft: rgba(207, 120, 255, 0.25);
   --accent-surface: rgba(49, 25, 57, 0.82);
-  --chart-bar: #ef8dcd;
+  --chart-bar: #68b7ff;
 }
 
 body[data-page='strain'] {
