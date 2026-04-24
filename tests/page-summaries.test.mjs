@@ -101,12 +101,13 @@ test('stressSummary uses real selected-day stress and daytime rows', () => {
   assert.equal(result.daySummary, 'normal');
 });
 
-test('stressSummary averages multi-day stress rows in range mode', () => {
+test('stressSummary aggregates multi-day stress rows in range mode without coercing missing values to zero', () => {
   const range = { isSingleDay: false };
   const result = stressSummary(range, {}, {
     dailyStress: [
       { date: '2026-08-20', score: 65, high: 95, recovery: 60, daySummary: 'normal' },
-      { date: '2026-08-21', score: 75, high: 125, recovery: 42, daySummary: 'normal' }
+      { date: '2026-08-21', score: 75, high: 125, recovery: 42, daySummary: 'normal' },
+      { date: '2026-08-22', score: null, high: null, recovery: null, daySummary: '' }
     ],
     daytimeStress: [{ date: '2026-08-20', score: 52, recoveryValue: 40 }, { date: '2026-08-21', score: 68, recoveryValue: 32 }],
     derivedNightlyVitals: [{ hrv_rmssd_proxy_ms: 20, rhr_night_bpm: 53 }, { hrv_rmssd_proxy_ms: 28, rhr_night_bpm: 49 }]
@@ -117,6 +118,9 @@ test('stressSummary averages multi-day stress rows in range mode', () => {
   assert.equal(result.daytimePeak, 60);
   assert.equal(result.restingHr, 51);
   assert.equal(result.recoveryDaytimeAvg, 36);
+  assert.equal(result.totalHighStress, 220);
+  assert.equal(result.totalRecoveryTime, 102);
+  assert.equal(result.stressDays, 2);
   assert.deepEqual(result.summaryDistribution, [{ summary: 'normal', count: 2 }]);
 });
 

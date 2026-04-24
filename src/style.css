@@ -171,29 +171,42 @@ body {
   cursor: not-allowed;
 }
 
-.menu-theme-group {
-  display: grid;
-  gap: 6px;
-}
-
-.menu-theme-trigger {
+.menu-toggle-item {
   font-weight: 550;
 }
 
-.menu-theme-value {
-  color: var(--muted);
-  font-size: 0.76rem;
+.menu-toggle {
+  appearance: none;
+  width: 42px;
+  height: 24px;
+  border-radius: 999px;
+  background: color-mix(in oklab, var(--muted), transparent 45%);
+  border: 1px solid color-mix(in oklab, var(--border), white 6%);
+  position: relative;
+  cursor: pointer;
+  transition: background 140ms ease, border-color 140ms ease;
 }
 
-.menu-theme-options {
-  display: grid;
-  gap: 4px;
-  padding: 0 0 2px 12px;
+.menu-toggle::after {
+  content: '';
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #ffffff;
+  box-shadow: 0 2px 5px rgba(7, 15, 28, 0.34);
+  transition: transform 140ms ease;
 }
 
-.menu-theme-option.active {
-  border-color: color-mix(in oklab, var(--accent), transparent 30%);
-  background: color-mix(in oklab, var(--accent-soft), transparent 18%);
+.menu-toggle:checked {
+  background: color-mix(in oklab, var(--accent), var(--accent-2) 25%);
+  border-color: color-mix(in oklab, var(--accent), transparent 35%);
+}
+
+.menu-toggle:checked::after {
+  transform: translateX(18px);
 }
 
 .menu-upload-progress {
@@ -1095,7 +1108,6 @@ body[data-page='sleep'] .status-pill {
 
 :root[data-theme='light'] .menu-link,
 :root[data-theme='light'] .menu-upload,
-:root[data-theme='light'] .theme-choices,
 :root[data-theme='light'] .compact-select,
 :root[data-theme='light'] .tab-link,
 :root[data-theme='light'] .btn {

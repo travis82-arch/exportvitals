@@ -1,6 +1,7 @@
 function average(rows, key) {
   const values = (rows || [])
-    .map((row) => Number(row?.[key]))
+    .map((row) => row?.[key])
+    .map((value) => (value == null || value === '' ? null : Number(value)))
     .filter((value) => Number.isFinite(value));
   if (!values.length) return null;
   return values.reduce((sum, value) => sum + value, 0) / values.length;
@@ -8,9 +9,17 @@ function average(rows, key) {
 
 function sumRows(rows, key) {
   return (rows || [])
-    .map((row) => Number(row?.[key]))
+    .map((row) => row?.[key])
+    .map((value) => (value == null || value === '' ? null : Number(value)))
     .filter((value) => Number.isFinite(value))
     .reduce((sum, value) => sum + value, 0);
+}
+
+
+function toFiniteOrNull(value) {
+  if (value == null || value === '') return null;
+  const numeric = Number(value);
+  return Number.isFinite(numeric) ? numeric : null;
 }
 
 export function activitySummary(range, day, rangeRows = {}) {
@@ -76,25 +85,30 @@ export function stressSummary(range, day, rangeRows = {}) {
 
   const daytimeForSelectedDay = (daytimeRows || []).filter((row) => row?.date === range?.end);
   const stressDaytimeValues = daytimeForSelectedDay
-    .map((row) => Number(row?.score))
+    .map((row) => toFiniteOrNull(row?.score))
     .filter((value) => Number.isFinite(value));
   const recoveryDaytimeValues = daytimeForSelectedDay
-    .map((row) => Number(row?.recoveryValue))
+    .map((row) => toFiniteOrNull(row?.recoveryValue))
     .filter((value) => Number.isFinite(value));
   const daytimePeak = stressDaytimeValues.length ? Math.max(...stressDaytimeValues) : null;
   const daytimeAvg = stressDaytimeValues.length ? stressDaytimeValues.reduce((sum, value) => sum + value, 0) / stressDaytimeValues.length : null;
   const daytimePeakByDate = new Map();
   for (const row of daytimeRows || []) {
     const date = row?.date;
-    const value = Number(row?.score);
+    const value = toFiniteOrNull(row?.score);
     if (!date || !Number.isFinite(value)) continue;
     daytimePeakByDate.set(date, Math.max(daytimePeakByDate.get(date) ?? Number.NEGATIVE_INFINITY, value));
   }
   const daytimeDailyPeaks = [...daytimePeakByDate.values()].filter((value) => Number.isFinite(value));
 
+  const rowsWithHighStress = stressRows.filter((row) => row?.high != null && row?.high !== '' && Number.isFinite(Number(row.high)));
+  const rowsWithRecovery = stressRows.filter((row) => row?.recovery != null && row?.recovery !== '' && Number.isFinite(Number(row.recovery)));
+  const totalHighStress = sumRows(rowsWithHighStress, 'high');
+  const totalRecoveryTime = sumRows(rowsWithRecovery, 'recovery');
+
   const stressScore = isSingleDay ? (day?.dailyStress?.score ?? selectedDailyRow?.score ?? daytimeAvg) : average(stressRows, 'score');
-  const highStress = isSingleDay ? (day?.dailyStress?.high ?? selectedDailyRow?.high) : average(stressRows, 'high');
-  const recoveryTime = isSingleDay ? (day?.dailyStress?.recovery ?? selectedDailyRow?.recovery) : average(stressRows, 'recovery');
+  const highStress = isSingleDay ? (day?.dailyStress?.high ?? selectedDailyRow?.high) : average(rowsWithHighStress, 'high');
+  const recoveryTime = isSingleDay ? (day?.dailyStress?.recovery ?? selectedDailyRow?.recovery) : average(rowsWithRecovery, 'recovery');
   const daySummaryCounts = new Map();
   for (const row of stressRows) {
     const key = String(row?.daySummary || '').trim().toLowerCase();
@@ -117,9 +131,11 @@ export function stressSummary(range, day, rangeRows = {}) {
     overnightProxy: isSingleDay ? day?.derivedNightlyVitals?.hrv_rmssd_proxy_ms : average(vitalsRows, 'hrv_rmssd_proxy_ms'),
     restingHr: isSingleDay ? day?.derivedNightlyVitals?.rhr_night_bpm : average(vitalsRows, 'rhr_night_bpm'),
     daytimePoints: isSingleDay ? Math.max(stressDaytimeValues.length, recoveryDaytimeValues.length) : (daytimeRows || []).length,
-    stressDays: isSingleDay ? (selectedDailyRow ? 1 : 0) : stressRows.length,
+    stressDays: isSingleDay ? (selectedDailyRow ? 1 : 0) : Math.max(rowsWithHighStress.length, rowsWithRecovery.length),
     daySummary: day?.dailyStress?.daySummary || selectedDailyRow?.daySummary || null,
-    summaryDistribution
+    summaryDistribution,
+    totalHighStress: isSingleDay ? highStress : (rowsWithHighStress.length ? totalHighStress : null),
+    totalRecoveryTime: isSingleDay ? recoveryTime : (rowsWithRecovery.length ? totalRecoveryTime : null)
   };
 }
 
@@ -152,8 +168,8 @@ export function stressDayTimelineRows(range, rangeRows = {}) {
         : (selectedDate ? new Date(`${selectedDate}T00:00:00`).getTime() + index * 15 * 60 * 1000 : NaN);
       return {
         tMs,
-        score: Number(row?.score),
-        recoveryValue: Number(row?.recoveryValue),
+        score: toFiniteOrNull(row?.score),
+        recoveryValue: toFiniteOrNull(row?.recoveryValue),
         category: row?.category ? String(row.category) : null
       };
     })

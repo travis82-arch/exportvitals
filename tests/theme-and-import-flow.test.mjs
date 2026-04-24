@@ -11,12 +11,12 @@ test('theme mode has a single source of truth with persistence and document-leve
   assert.equal(themeSource.includes("const THEME_KEY = 'ouraDashboardThemeV1'"), true);
   assert.equal(themeSource.includes("document.documentElement.setAttribute('data-theme'"), true);
   assert.equal(themeSource.includes("storage.setItem(THEME_KEY, preferred)"), true);
-  assert.equal(themeSource.includes("'system'"), false);
+  assert.equal(themeSource.includes("return raw === 'dark' ? 'dark' : 'light';"), true);
   assert.equal(entrySource.includes('initTheme()'), true);
-  assert.equal(topNavSource.includes('menuThemeTrigger'), true);
-  assert.equal(topNavSource.includes('data-theme-option="dark"'), true);
-  assert.equal(topNavSource.includes('data-theme-option="light"'), true);
-  assert.equal(topNavSource.includes('value="system"'), false);
+  assert.equal(topNavSource.includes('menuDarkModeToggle'), true);
+  assert.equal(topNavSource.includes('data-theme-option="dark"'), false);
+  assert.equal(topNavSource.includes('data-theme-option="light"'), false);
+  assert.equal(themeSource.includes("'system'"), false);
 });
 
 test('import menu shows staged progress and returns users to home after success', () => {
@@ -33,4 +33,5 @@ test('light theme variables are present for major surfaces', () => {
   assert.equal(styleSource.includes('--bg: #edf2f8;'), true);
   assert.equal(styleSource.includes('--card: #ffffff;'), true);
   assert.equal(styleSource.includes('--text: #132238;'), true);
+  assert.equal(styleSource.includes('.menu-toggle'), true);
 });
