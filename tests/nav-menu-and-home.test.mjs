@@ -10,7 +10,7 @@ const appIndexHtml = readFileSync(new URL('../app/index.html', import.meta.url),
 const appAboutHtml = readFileSync(new URL('../app/about/index.html', import.meta.url), 'utf8');
 const cssSource = readFileSync(new URL('../src/style.css', import.meta.url), 'utf8');
 
-const requiredMenuLabels = ['Home', 'Readiness', 'Sleep', 'Activity', 'Heart Rate', 'Stress', 'Strain', 'About'];
+const requiredMenuLabels = ['Home', 'Readiness', 'Sleep', 'Activity', 'Heart Rate', 'Stress', 'Strain'];
 
 test('persistent tab strip is replaced by upper-right menu navigation', () => {
   assert.equal(topNavSource.includes('menu-trigger'), true);
@@ -22,6 +22,7 @@ test('persistent tab strip is replaced by upper-right menu navigation', () => {
   requiredMenuLabels.forEach((label) => {
     assert.equal(labels.includes(label), true);
   });
+  assert.equal(labels.includes('About'), false);
   assert.equal(labels.includes('Debug'), false);
 });
 
@@ -68,10 +69,15 @@ test('menu trigger uses hamburger icon and utility label', () => {
 
 
 test('about opens inside app shell with top controls still present', () => {
+  const aboutRenderMatch = entrySource.match(/function renderAboutPage\(\) \{([\s\S]*?)\n\}/);
+  const aboutRenderSource = aboutRenderMatch?.[1] || '';
   assert.equal(appAboutHtml.includes('data-page="about"'), true);
   assert.equal(appAboutHtml.includes('<header class="topbar">'), true);
   assert.equal(appAboutHtml.includes('<div id="topNav"></div>'), true);
   assert.equal(entrySource.includes("if (page === 'about')"), true);
+  assert.equal(aboutRenderSource.includes('Open the dashboard'), false);
+  assert.equal(aboutRenderSource.includes('<button'), false);
+  assert.equal(aboutRenderSource.includes('<a '), false);
   assert.equal(entrySource.includes('Public repository'), false);
   assert.equal(entrySource.includes('<a class="text-link"'), false);
 });

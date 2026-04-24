@@ -68,11 +68,14 @@ export function renderTopNav(target, {
   if (!mount) return null;
 
   const path = currentPath || '/';
+  const normalizedPath = normalizePath(path);
+  const isAboutView = normalizedPath === '/app/about' || normalizedPath === '/app/about/index.html';
   const tabOptions = navManifest
     .map((item) => {
       const pagePath = toPagePath(item.href);
-      const normalizedPath = normalizePath(path);
-      const active = normalizedPath === normalizePath(item.href) || normalizedPath === normalizePath(pagePath);
+      const active = isAboutView
+        ? item.key === 'home'
+        : normalizedPath === normalizePath(item.href) || normalizedPath === normalizePath(pagePath);
       return `<option value="${pagePath}" data-destination="${item.key}" ${active ? 'selected' : ''}>${item.label}</option>`;
     })
     .join('');
