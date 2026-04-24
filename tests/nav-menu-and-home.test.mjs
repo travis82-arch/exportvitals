@@ -9,6 +9,7 @@ const landingHtml = readFileSync(new URL('../index.html', import.meta.url), 'utf
 const appIndexHtml = readFileSync(new URL('../app/index.html', import.meta.url), 'utf8');
 const appAboutHtml = readFileSync(new URL('../app/about/index.html', import.meta.url), 'utf8');
 const cssSource = readFileSync(new URL('../src/style.css', import.meta.url), 'utf8');
+const viteConfigSource = readFileSync(new URL('../vite.config.js', import.meta.url), 'utf8');
 
 const requiredMenuLabels = ['Home', 'Readiness', 'Sleep', 'Activity', 'Heart Rate', 'Stress', 'Strain'];
 
@@ -80,6 +81,10 @@ test('about opens inside app shell with top controls still present', () => {
   assert.equal(aboutRenderSource.includes('<a '), false);
   assert.equal(entrySource.includes('Public repository'), false);
   assert.equal(entrySource.includes('<a class="text-link"'), false);
+});
+
+test('app about route is registered as a dedicated MPA entry', () => {
+  assert.equal(viteConfigSource.includes("'app/about/index.html'"), true);
 });
 
 test('home remains default landing view and does not render redundant heading copy', () => {
