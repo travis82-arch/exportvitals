@@ -12,18 +12,29 @@ const sitemap = readFileSync(new URL('../public/sitemap.xml', import.meta.url), 
 
 const trustStatement = 'When you import an Oura export ZIP, parsing and metric generation run in your browser. Imported files and derived health data are stored locally on your device and are not sent to app server endpoints.';
 
-test('homepage follows conversion copy structure and points CTA to /app', () => {
+test('homepage starts with hero CTA and concise trust copy', () => {
   assert.equal(homeHtml.includes('<h1>Your data, in your browser</h1>'), true);
-  assert.equal(homeHtml.includes('Free and open source'), true);
-  assert.equal(homeHtml.includes('No data leaves your browser'), true);
-  assert.equal(homeHtml.includes('No account required'), true);
+  assert.equal(homeHtml.includes('<nav class="smallnav">'), false);
+  assert.equal(homeHtml.includes('Supports Oura export ZIPs today'), true);
+  assert.equal(homeHtml.includes('Fitbit support planned'), true);
+  assert.equal(homeHtml.includes('not affiliated with Oura'), true);
   assert.equal(homeHtml.includes('href="/app">Open the dashboard</a>'), true);
-  assert.equal(homeHtml.includes('Public repo coming soon'), true);
 });
 
-test('exact trust statement is present on both home and privacy pages', () => {
+test('exact trust statement is present on home and privacy pages and sourced by config on about', () => {
   assert.equal(homeHtml.includes(trustStatement), true);
   assert.equal(privacyHtml.includes(trustStatement), true);
+  assert.equal(aboutHtml.includes("SITE_COPY.trustStatement"), true);
+});
+
+test('about page contains compact sections for privacy, compatibility, repo status, and affiliation', () => {
+  assert.equal(aboutHtml.includes('What this is'), true);
+  assert.equal(aboutHtml.includes('Privacy / local processing'), true);
+  assert.equal(aboutHtml.includes('Compatibility'), true);
+  assert.equal(aboutHtml.includes('Open source / public repo'), true);
+  assert.equal(aboutHtml.includes('Affiliation'), true);
+  assert.equal(aboutHtml.includes('Public repo coming soon.'), true);
+  assert.equal(aboutHtml.includes('getPublicRepoUrl'), true);
 });
 
 test('marketing metadata and canonical URLs use deployed pages domain', () => {

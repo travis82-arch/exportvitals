@@ -62,7 +62,7 @@ function createMenuController({ mount, trigger, panel }) {
 export function renderTopNav(target, {
   currentPath = window.location.pathname,
   onUpload = null,
-  preferredTheme = 'dark',
+  preferredTheme = 'light',
   onThemeChange = null
 } = {}) {
   const mount = target || document.getElementById('topNav');
@@ -87,20 +87,15 @@ export function renderTopNav(target, {
     <button class="menu-trigger" id="menuTrigger" type="button" aria-expanded="false" aria-controls="appMenuPanel" aria-label="Open utility menu">☰</button>
     <div class="menu-panel" id="appMenuPanel" hidden>
       <button class="menu-upload menu-item" id="menuUploadAction" type="button">Upload / Import data</button>
-      <div class="menu-theme-group">
-        <button class="menu-item menu-theme-trigger" id="menuThemeTrigger" type="button" aria-expanded="false" aria-controls="menuThemeOptions">
-          <span>Theme</span>
-          <span class="menu-theme-value">${preferredTheme === 'light' ? 'Light' : 'Dark'}</span>
-        </button>
-        <div class="menu-theme-options" id="menuThemeOptions" hidden>
-          <button class="menu-item menu-theme-option ${preferredTheme === 'dark' ? 'active' : ''}" data-theme-option="dark" type="button" aria-pressed="${preferredTheme === 'dark' ? 'true' : 'false'}">Dark</button>
-          <button class="menu-item menu-theme-option ${preferredTheme === 'light' ? 'active' : ''}" data-theme-option="light" type="button" aria-pressed="${preferredTheme === 'light' ? 'true' : 'false'}">Light</button>
-        </div>
-      </div>
+      <a class="menu-link menu-item" href="/about">About</a>
+      <a class="menu-link menu-item" href="/">Landing page</a>
+      <label class="menu-item menu-toggle-item" for="menuDarkModeToggle">
+        <span>Dark Mode</span>
+        <input id="menuDarkModeToggle" class="menu-toggle" type="checkbox" role="switch" ${preferredTheme === 'dark' ? 'checked' : ''} aria-label="Dark Mode">
+      </label>
       ${publicRepoUrl
         ? `<a class="menu-link menu-item" href="${publicRepoUrl}" target="_blank" rel="noreferrer">Public repo</a>`
-        : '<button class="menu-item menu-link" type="button" disabled aria-label="Public repo coming soon">Public repo</button>'}
-      <a class="menu-link menu-item" href="/">Landing page</a>
+        : ''}
       <input id="menuUploadInput" type="file" accept=".zip,application/zip" hidden>
       <progress id="menuUploadProgress" class="menu-upload-progress" value="0" max="4" hidden></progress>
       <div class="menu-upload-status small muted" id="menuUploadStatus"></div>
@@ -112,16 +107,8 @@ export function renderTopNav(target, {
   const panel = mount.querySelector('#appMenuPanel');
   const uploadAction = mount.querySelector('#menuUploadAction');
   const uploadInput = mount.querySelector('#menuUploadInput');
-  const themeTrigger = mount.querySelector('#menuThemeTrigger');
-  const themeOptions = mount.querySelector('#menuThemeOptions');
-  const themeValue = mount.querySelector('.menu-theme-value');
+  const darkModeToggle = mount.querySelector('#menuDarkModeToggle');
   const menu = createMenuController({ mount, trigger, panel });
-
-  const setThemeExpanded = (expanded) => {
-    if (!themeTrigger || !themeOptions) return;
-    themeTrigger.setAttribute('aria-expanded', String(Boolean(expanded)));
-    themeOptions.hidden = !expanded;
-  };
 
   tabSelect?.addEventListener('change', () => {
     const next = tabSelect.value;
@@ -130,36 +117,20 @@ export function renderTopNav(target, {
   });
 
   trigger?.addEventListener('click', () => {
-    if (menu.isOpen()) setThemeExpanded(false);
     menu.toggle();
   });
 
   mount.querySelectorAll('.menu-link').forEach((link) => {
     link.addEventListener('click', () => {
-      setThemeExpanded(false);
       menu.close();
     });
   });
-  themeTrigger?.addEventListener('click', () => {
-    setThemeExpanded(themeOptions?.hidden);
-  });
-  mount.querySelectorAll('[data-theme-option]').forEach((button) => {
-    button.addEventListener('click', () => {
-      const nextTheme = button.getAttribute('data-theme-option');
-      if (!nextTheme) return;
-      onThemeChange?.(nextTheme);
-      themeValue.textContent = nextTheme === 'light' ? 'Light' : 'Dark';
-      mount.querySelectorAll('[data-theme-option]').forEach((option) => {
-        const isActive = option.getAttribute('data-theme-option') === nextTheme;
-        option.classList.toggle('active', isActive);
-        option.setAttribute('aria-pressed', String(isActive));
-      });
-      setThemeExpanded(false);
-    });
+
+  darkModeToggle?.addEventListener('change', () => {
+    onThemeChange?.(darkModeToggle.checked ? 'dark' : 'light');
   });
 
   uploadAction?.addEventListener('click', () => {
-    setThemeExpanded(false);
     menu.close();
     uploadInput?.click();
   });
@@ -168,7 +139,6 @@ export function renderTopNav(target, {
     const file = event.target.files?.[0];
     event.target.value = '';
     if (!file || !onUpload) return;
-    setThemeExpanded(false);
     menu.close();
     await onUpload(file);
   });

@@ -36,10 +36,18 @@ const listeners = new Set();
 
 const byDate = (rows) => Object.fromEntries((rows || []).map((r) => [r.date, r]));
 const secondsToMinutes = (value) => {
-  const numeric = toNumber(value);
+  const numeric = toOptionalNumber(value);
   if (!Number.isFinite(numeric)) return null;
   return numeric / 60;
 };
+
+const toOptionalNumber = (value) => {
+  if (value == null) return null;
+  if (typeof value === 'string' && value.trim() === '') return null;
+  const numeric = Number(value);
+  return Number.isFinite(numeric) ? numeric : null;
+};
+
 const toLocalDateKey = (timestamp) => {
   if (!timestamp) return null;
   const parsed = new Date(timestamp);
@@ -113,18 +121,18 @@ function normalizeRows(dataset, rows) {
     return rows
       .map((r) => ({
         date: pickRowValue(r, ['day', 'date']),
-        score: toNumber(pickRowValue(r, ['score', 'stress_score', 'daily_stress_score', 'stress'])),
+        score: toOptionalNumber(pickRowValue(r, ['score', 'stress_score', 'daily_stress_score', 'stress'])),
         high: (() => {
           const minuteField = pickRowValue(r, ['high', 'high_stress_duration', 'high_stress_duration_min', 'high_stress_duration_minutes']);
-          if (minuteField != null) return toNumber(minuteField);
+          if (minuteField != null) return toOptionalNumber(minuteField);
           const secondsField = pickRowValue(r, ['stress_high', 'high_stress_duration_seconds']);
           return secondsToMinutes(secondsField);
         })(),
-        medium: toNumber(pickRowValue(r, ['medium', 'medium_stress_duration', 'medium_stress_duration_min', 'medium_stress_duration_minutes'])),
-        low: toNumber(pickRowValue(r, ['low', 'low_stress_duration', 'low_stress_duration_min', 'low_stress_duration_minutes'])),
+        medium: toOptionalNumber(pickRowValue(r, ['medium', 'medium_stress_duration', 'medium_stress_duration_min', 'medium_stress_duration_minutes'])),
+        low: toOptionalNumber(pickRowValue(r, ['low', 'low_stress_duration', 'low_stress_duration_min', 'low_stress_duration_minutes'])),
         recovery: (() => {
           const minuteField = pickRowValue(r, ['recovery', 'restorative_time', 'restored_duration', 'restoration_duration', 'restorative_duration']);
-          if (minuteField != null) return toNumber(minuteField);
+          if (minuteField != null) return toOptionalNumber(minuteField);
           const secondsField = pickRowValue(r, ['recovery_high', 'restorative_duration_seconds']);
           return secondsToMinutes(secondsField);
         })(),
@@ -136,8 +144,8 @@ function normalizeRows(dataset, rows) {
     return rows
       .map((r) => {
         const timestamp = pickRowValue(r, ['timestamp', 'datetime', 'time', 'start_time']);
-        const score = toNumber(pickRowValue(r, ['stress_score', 'score', 'level', 'stress_level', 'stress_value']));
-        const recoveryValue = toNumber(pickRowValue(r, ['recovery_value', 'restored_value', 'recovery_score']));
+        const score = toOptionalNumber(pickRowValue(r, ['stress_score', 'score', 'level', 'stress_level', 'stress_value']));
+        const recoveryValue = toOptionalNumber(pickRowValue(r, ['recovery_value', 'restored_value', 'recovery_score']));
         const dateRaw = pickRowValue(r, ['day', 'date']);
         const date = dateRaw ?? toLocalDateKey(timestamp);
         return {

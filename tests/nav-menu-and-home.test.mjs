@@ -15,10 +15,9 @@ const requiredMenuLabels = ['Home', 'Readiness', 'Sleep', 'Activity', 'Heart Rat
 test('persistent tab strip is replaced by upper-right menu navigation', () => {
   assert.equal(topNavSource.includes('menu-trigger'), true);
   assert.equal(topNavSource.includes('menu-panel'), true);
-  assert.equal(topNavSource.includes('Upload'), true);
-  assert.equal(topNavSource.includes('About / Read me'), false);
+  assert.equal(topNavSource.includes('Upload / Import data'), true);
+  assert.equal(topNavSource.includes('About'), true);
   assert.equal(topNavSource.includes('Landing page'), true);
-  assert.equal(topNavSource.includes('Public repo'), true);
   const labels = navManifest.map((item) => item.label);
   requiredMenuLabels.forEach((label) => {
     assert.equal(labels.includes(label), true);
@@ -39,12 +38,12 @@ test('menu controller defaults closed and closes safely on navigation interactio
   assert.equal(topNavSource.includes('localStorage'), false);
 });
 
-test('utility menu keeps theme choices collapsed under a dedicated trigger', () => {
-  assert.equal(topNavSource.includes('menu-theme-trigger'), true);
-  assert.equal(topNavSource.includes('menu-theme-options'), true);
-  assert.equal(topNavSource.includes('setThemeExpanded'), true);
-  assert.equal(topNavSource.includes('name="themeChoice"'), false);
-  assert.equal(topNavSource.includes('Supports Oura export ZIP. Parsing runs locally.'), false);
+test('utility menu exposes a single dark mode toggle and no theme submenu', () => {
+  assert.equal(topNavSource.includes('menuDarkModeToggle'), true);
+  assert.equal(topNavSource.includes('Dark Mode'), true);
+  assert.equal(topNavSource.includes('menu-theme-trigger'), false);
+  assert.equal(topNavSource.includes('data-theme-option="dark"'), false);
+  assert.equal(topNavSource.includes('data-theme-option="light"'), false);
 });
 
 test('public repo link comes from centralized config and gracefully handles placeholder values', () => {
@@ -66,6 +65,7 @@ test('menu trigger uses hamburger icon and utility label', () => {
 
 test('home remains default landing view and does not render redundant heading copy', () => {
   assert.equal(landingHtml.includes('Your data, in your browser'), true);
+  assert.equal(landingHtml.includes('<nav class="smallnav">'), false);
   assert.equal(appIndexHtml.includes('data-page="index"'), true);
   assert.equal(entrySource.includes('OURA DASHBOARD'), false);
   assert.equal(entrySource.includes('PAGE_META ='), true);

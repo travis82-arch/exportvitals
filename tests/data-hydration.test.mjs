@@ -240,4 +240,6 @@ test('stress datasets hydrate selected-day and range rows', async () => {
   assert.equal(range.daytimeStress.length, 3);
   assert.equal(range.daytimeStress.some((row) => Number.isFinite(row.score)), true);
   assert.equal(range.daytimeStress.some((row) => Number.isFinite(row.recoveryValue)), true);
+  assert.equal(range.daytimeStress.find((row) => row.timestamp === '2026-07-02T08:00:00Z')?.score, null);
+  assert.equal(range.daytimeStress.find((row) => row.timestamp === '2026-07-02T12:00:00Z')?.recoveryValue, null);
 });
