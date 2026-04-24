@@ -6,6 +6,7 @@ const pages = [
   'about/index.html',
   'privacy/index.html',
   'app/index.html',
+  'app/about/index.html',
   'app/readiness/index.html',
   'app/sleep/index.html',
   'app/activity/index.html',
