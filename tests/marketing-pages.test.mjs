@@ -36,7 +36,7 @@ test('marketing metadata and canonical URLs use deployed pages domain', () => {
 
 test('branding and support/source values are centralized and neutral', () => {
   assert.equal(siteCopy.includes("productName: 'Local Health Export Viewer'"), true);
-  assert.equal(siteCopy.includes("sourceUrl: 'https://github.com/travis82-arch/oura-pwa-dashboard'"), true);
+  assert.equal(siteCopy.includes("publicRepoUrl: 'TBD_PUBLIC_REPO_URL'"), true);
   assert.equal(siteCopy.includes("canonicalBaseUrl: 'https://oura-pwa-dashboard.pages.dev'"), true);
   assert.equal(manifest.includes('"name": "Local Health Export Viewer"'), true);
   assert.equal(homeHtml.includes('Oura Dashboard'), false);

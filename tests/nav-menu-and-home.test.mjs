@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { navManifest } from '../src/nav/navManifest.js';
+import { SITE_COPY, getPublicRepoUrl } from '../src/config/siteCopy.js';
 
 const topNavSource = readFileSync(new URL('../src/components/TopNav.js', import.meta.url), 'utf8');
 const entrySource = readFileSync(new URL('../src/mpa-entry.js', import.meta.url), 'utf8');
@@ -15,6 +16,9 @@ test('persistent tab strip is replaced by upper-right menu navigation', () => {
   assert.equal(topNavSource.includes('menu-trigger'), true);
   assert.equal(topNavSource.includes('menu-panel'), true);
   assert.equal(topNavSource.includes('Upload'), true);
+  assert.equal(topNavSource.includes('About / Read me'), false);
+  assert.equal(topNavSource.includes('Landing page'), true);
+  assert.equal(topNavSource.includes('Public repo'), true);
   const labels = navManifest.map((item) => item.label);
   requiredMenuLabels.forEach((label) => {
     assert.equal(labels.includes(label), true);
@@ -30,9 +34,23 @@ test('menu controller defaults closed and closes safely on navigation interactio
   assert.equal(topNavSource.includes("window.addEventListener('popstate'"), true);
   assert.equal(topNavSource.includes("window.addEventListener('pagehide'"), true);
   assert.equal(topNavSource.includes("document.addEventListener('pointerdown'"), true);
-  assert.equal(topNavSource.includes("link.addEventListener('click', () => menu.close())"), true);
+  assert.equal(topNavSource.includes("link.addEventListener('click', () => {"), true);
   assert.equal(topNavSource.includes('uploadAction?.addEventListener'), true);
   assert.equal(topNavSource.includes('localStorage'), false);
+});
+
+test('utility menu keeps theme choices collapsed under a dedicated trigger', () => {
+  assert.equal(topNavSource.includes('menu-theme-trigger'), true);
+  assert.equal(topNavSource.includes('menu-theme-options'), true);
+  assert.equal(topNavSource.includes('setThemeExpanded'), true);
+  assert.equal(topNavSource.includes('name="themeChoice"'), false);
+  assert.equal(topNavSource.includes('Supports Oura export ZIP. Parsing runs locally.'), false);
+});
+
+test('public repo link comes from centralized config and gracefully handles placeholder values', () => {
+  assert.equal(topNavSource.includes('getPublicRepoUrl'), true);
+  assert.equal(SITE_COPY.support.publicRepoUrl.length > 0, true);
+  assert.equal(getPublicRepoUrl(), '');
 });
 
 test('menu panel uses hidden attribute as the single source of visibility truth', () => {

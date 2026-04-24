@@ -4,8 +4,7 @@ export const SITE_COPY = {
   description:
     'Free and open-source local dashboard for wearable export ZIP files. Supports Oura export ZIP now with Fitbit export planned.',
   support: {
-    repoPublic: false,
-    sourceUrl: 'https://github.com/travis82-arch/oura-pwa-dashboard',
+    publicRepoUrl: 'TBD_PUBLIC_REPO_URL',
     tipUrl: 'https://paypal.me/placeholder'
   },
   canonicalBaseUrl: 'https://oura-pwa-dashboard.pages.dev',
@@ -17,3 +16,8 @@ export const SITE_COPY = {
   },
   disclaimer: 'Unofficial tool. Not affiliated with Oura.'
 };
+
+export function getPublicRepoUrl() {
+  const candidate = String(SITE_COPY?.support?.publicRepoUrl || '').trim();
+  return /^https?:\/\//i.test(candidate) ? candidate : '';
+}
