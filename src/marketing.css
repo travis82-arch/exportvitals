@@ -30,8 +30,7 @@ body {
 }
 
 .hero,
-.section,
-.footer {
+.section {
   border: 1px solid var(--border);
   border-radius: 16px;
   background: linear-gradient(180deg, rgba(19, 30, 46, .96), rgba(12, 20, 32, .94));
@@ -41,6 +40,18 @@ body {
 .hero {
   padding-top: 30px;
   padding-bottom: 30px;
+}
+
+.hero-brand {
+  margin-bottom: 12px;
+}
+
+.hero-brand img {
+  width: 72px;
+  height: 72px;
+  border-radius: 16px;
+  border: 1px solid var(--border);
+  box-shadow: 0 10px 24px rgba(46, 112, 234, 0.22);
 }
 
 h1 {
@@ -72,7 +83,6 @@ p {
 }
 
 .smallnav a,
-.footer-links a,
 .text-link {
   color: var(--muted);
   text-decoration-color: rgba(150, 166, 193, .45);
@@ -182,20 +192,13 @@ p {
   gap: 8px;
 }
 
-.footer-links {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 14px;
-}
-
 @media (max-width: 640px) {
   .marketing-wrap {
     padding-top: 16px;
   }
 
   .hero,
-  .section,
-  .footer {
+  .section {
     padding: 18px;
   }
 }

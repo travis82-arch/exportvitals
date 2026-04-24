@@ -24,7 +24,7 @@ import { renderSleepStageChart } from './charts/SleepStageChart.js';
 import { activitySummary, heartRateSummary, stressSummary, stressDailyBreakdownRows, stressDayTimelineRows, stressCategorySeries, strainSummary } from './state/pageSummaries.js';
 import { computeBodyClockOffset, computeSleepDebtEstimate } from './domain/sleepRecoveryModel.js';
 import { buildActivityHeartRateBreakdown, DEFAULT_ZONE_SCHEME } from './domain/activityHeartRate.js';
-import { SITE_COPY, getPublicRepoUrl } from './config/siteCopy.js';
+import { SITE_COPY, PUBLIC_REPO_FALLBACK_TEXT, getPublicRepoUrl } from './config/siteCopy.js';
 import { applyTheme, initTheme } from './state/theme.js';
 
 const page = document.body.dataset.page || 'index';
@@ -1494,7 +1494,7 @@ function renderAboutPage() {
   const repoUrl = getPublicRepoUrl();
   const repoMarkup = repoUrl
     ? `<a class="text-link" href="${repoUrl}" target="_blank" rel="noreferrer">Public repository</a>`
-    : 'Public repo coming soon.';
+    : PUBLIC_REPO_FALLBACK_TEXT;
 
   return `
     <section class="card section-card"> 

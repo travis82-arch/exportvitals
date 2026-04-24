@@ -15,10 +15,19 @@ const trustStatement = 'When you import an Oura export ZIP, parsing and metric g
 test('homepage starts with hero CTA and concise trust copy', () => {
   assert.equal(homeHtml.includes('<h1>Your data, in your browser</h1>'), true);
   assert.equal(homeHtml.includes('<nav class="smallnav">'), false);
+  assert.equal(homeHtml.includes('src="/Icons/app-icon-512.png"'), true);
+  assert.equal(homeHtml.includes('alt="Local Health Export Viewer app icon"'), true);
   assert.equal(homeHtml.includes('Supports Oura export ZIPs today'), true);
   assert.equal(homeHtml.includes('Fitbit support planned'), true);
   assert.equal(homeHtml.includes('not affiliated with Oura'), true);
   assert.equal(homeHtml.includes('href="/app">Open the dashboard</a>'), true);
+});
+
+test('homepage removes footer utility links and keeps a single final CTA section', () => {
+  assert.equal(homeHtml.includes('href="/about"'), false);
+  assert.equal(homeHtml.includes('href="/privacy"'), false);
+  assert.equal(homeHtml.includes('<footer class="footer section">'), false);
+  assert.equal(homeHtml.includes('<h2>Open your dashboard</h2>'), true);
 });
 
 test('exact trust statement is present on home and privacy pages and sourced by config on about', () => {
@@ -50,6 +59,7 @@ test('marketing metadata and canonical URLs use deployed pages domain', () => {
 test('branding and support/source values are centralized and neutral', () => {
   assert.equal(siteCopy.includes("productName: 'Local Health Export Viewer'"), true);
   assert.equal(siteCopy.includes("publicRepoUrl: 'TBD_PUBLIC_REPO_URL'"), true);
+  assert.equal(siteCopy.includes("PUBLIC_REPO_FALLBACK_TEXT = 'Public repo coming soon.'"), true);
   assert.equal(siteCopy.includes("canonicalBaseUrl: 'https://oura-pwa-dashboard.pages.dev'"), true);
   assert.equal(manifest.includes('"name": "Local Health Export Viewer"'), true);
   assert.equal(homeHtml.includes('Oura Dashboard'), false);
