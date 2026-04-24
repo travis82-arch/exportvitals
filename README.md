@@ -1,6 +1,6 @@
-# Wearable Export Viewer
+# ExportVitals
 
-Wearable Export Viewer is an independent, open-source, local-first web app for viewing wearable export ZIP files in your browser.
+ExportVitals is an independent, open-source, local-first web app for viewing wearable export ZIP files in your browser.
 
 ## Current support
 - ✅ Oura export ZIP (available now)

@@ -13,10 +13,11 @@ const sitemap = readFileSync(new URL('../public/sitemap.xml', import.meta.url), 
 const trustStatement = 'When you import an Oura export ZIP, parsing and metric generation run in your browser. Imported files and derived health data are stored locally on your device and are not sent to app server endpoints.';
 
 test('homepage starts with hero CTA and concise trust copy', () => {
-  assert.equal(homeHtml.includes('<h1>Your data, in your browser</h1>'), true);
+  assert.equal(homeHtml.includes('<h1>ExportVitals</h1>'), true);
+  assert.equal(homeHtml.includes('Your data, in your browser'), true);
   assert.equal(homeHtml.includes('<nav class="smallnav">'), false);
   assert.equal(homeHtml.includes('src="/icons/app-icon-512.png"'), true);
-  assert.equal(homeHtml.includes('alt="Local Health Export Viewer app icon"'), true);
+  assert.equal(homeHtml.includes('alt="ExportVitals app icon"'), true);
   assert.equal(homeHtml.includes('Supports Oura export ZIPs today'), true);
   assert.equal(homeHtml.includes('Fitbit support planned'), true);
   assert.equal(homeHtml.includes('not affiliated with Oura'), true);
@@ -57,10 +58,11 @@ test('marketing metadata and canonical URLs use deployed pages domain', () => {
 });
 
 test('branding and support/source values are centralized and neutral', () => {
-  assert.equal(siteCopy.includes("productName: 'Local Health Export Viewer'"), true);
+  assert.equal(siteCopy.includes("productName: 'ExportVitals'"), true);
   assert.equal(siteCopy.includes("publicRepoUrl: 'TBD_PUBLIC_REPO_URL'"), true);
   assert.equal(siteCopy.includes("PUBLIC_REPO_FALLBACK_TEXT = 'Public repo coming soon.'"), true);
   assert.equal(siteCopy.includes("canonicalBaseUrl: 'https://oura-pwa-dashboard.pages.dev'"), true);
-  assert.equal(manifest.includes('"name": "Local Health Export Viewer"'), true);
+  assert.equal(manifest.includes('\"name\": \"ExportVitals\"'), true);
+  assert.equal(manifest.includes('\"short_name\": \"Vitals\"'), true);
   assert.equal(homeHtml.includes('Oura Dashboard'), false);
 });

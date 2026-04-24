@@ -1,6 +1,6 @@
 export const SITE_COPY = {
-  productName: 'Local Health Export Viewer',
-  shortName: 'Health Viewer',
+  productName: 'ExportVitals',
+  shortName: 'Vitals',
   description:
     'Free and open-source local dashboard for wearable export ZIP files. Supports Oura export ZIP now with Fitbit export planned.',
   support: {
