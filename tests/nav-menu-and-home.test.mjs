@@ -10,7 +10,7 @@ const appIndexHtml = readFileSync(new URL('../app/index.html', import.meta.url),
 const appAboutHtml = readFileSync(new URL('../app/about/index.html', import.meta.url), 'utf8');
 const cssSource = readFileSync(new URL('../src/style.css', import.meta.url), 'utf8');
 
-const requiredMenuLabels = ['Home', 'Readiness', 'Sleep', 'Activity', 'Heart Rate', 'Stress', 'Strain'];
+const requiredMenuLabels = ['Home', 'Readiness', 'Sleep', 'Activity', 'Heart Rate', 'Stress', 'Strain', 'About'];
 
 test('persistent tab strip is replaced by upper-right menu navigation', () => {
   assert.equal(topNavSource.includes('menu-trigger'), true);
@@ -72,6 +72,8 @@ test('about opens inside app shell with top controls still present', () => {
   assert.equal(appAboutHtml.includes('<header class="topbar">'), true);
   assert.equal(appAboutHtml.includes('<div id="topNav"></div>'), true);
   assert.equal(entrySource.includes("if (page === 'about')"), true);
+  assert.equal(entrySource.includes('Public repository'), false);
+  assert.equal(entrySource.includes('<a class="text-link"'), false);
 });
 
 test('home remains default landing view and does not render redundant heading copy', () => {
