@@ -35,6 +35,8 @@ test('about page contains compact sections for privacy, compatibility, repo stat
   assert.equal(aboutHtml.includes('Affiliation'), true);
   assert.equal(aboutHtml.includes('Public repo coming soon.'), true);
   assert.equal(aboutHtml.includes('getPublicRepoUrl'), true);
+  assert.equal(aboutHtml.includes('Open the dashboard'), false);
+  assert.equal(aboutHtml.includes('Landing page'), false);
 });
 
 test('marketing metadata and canonical URLs use deployed pages domain', () => {

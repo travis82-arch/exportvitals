@@ -24,7 +24,7 @@ import { renderSleepStageChart } from './charts/SleepStageChart.js';
 import { activitySummary, heartRateSummary, stressSummary, stressDailyBreakdownRows, stressDayTimelineRows, stressCategorySeries, strainSummary } from './state/pageSummaries.js';
 import { computeBodyClockOffset, computeSleepDebtEstimate } from './domain/sleepRecoveryModel.js';
 import { buildActivityHeartRateBreakdown, DEFAULT_ZONE_SCHEME } from './domain/activityHeartRate.js';
-import { SITE_COPY } from './config/siteCopy.js';
+import { SITE_COPY, getPublicRepoUrl } from './config/siteCopy.js';
 import { applyTheme, initTheme } from './state/theme.js';
 
 const page = document.body.dataset.page || 'index';
@@ -38,6 +38,7 @@ const PAGE_META = {
   'heart-rate': { title: 'Heart Rate', subtitle: '' },
   stress: { title: 'Stress', subtitle: '' },
   strain: { title: 'Strain', subtitle: '' },
+  about: { title: 'About', subtitle: '' },
   debug: { title: 'Debug', subtitle: '' }
 };
 
@@ -170,11 +171,12 @@ function metricDomainSummary(domain, range, day, rangeRows) {
 
   if (domain === 'stress') {
     const summary = stressSummary(range, day, rangeRows);
+    const stressValue = range.isSingleDay ? summary.highStress : summary.totalHighStress;
     return {
       domain,
-      title: 'Stress',
-      value: fmt(summary.stressScore),
-      sub: range.isSingleDay ? 'Daily stress score' : 'Average stress score'
+      title: range.isSingleDay ? 'Stress' : 'High stress',
+      value: fmtMinutes(stressValue),
+      sub: range.isSingleDay ? 'High stress minutes' : 'Total high stress minutes'
     };
   }
 
@@ -1021,6 +1023,7 @@ function renderHome(range, day, rangeRows) {
   const strain = strainSummary(range, rangeRows, rangeRows);
   const sleepTrend = buildDailyLine(sleepRows, 'score');
   const activityTrend = buildDailyLine(rangeRows.dailyActivity, 'score');
+  const stress = stressSummary(range, day, rangeRows);
   const stressTrend = buildDailyLine(rangeRows.dailyStress, 'high');
   const heartRateTrend = buildDailyLine(rangeRows.sleepModel, 'avgHeartRate');
   const strainTrend = (strain.trendStates || [])
@@ -1092,9 +1095,9 @@ function renderHome(range, day, rangeRows) {
       title: 'Stress',
       subtitle: '',
       metrics: [
-        { label: 'Stress score', value: fmt(range.isSingleDay ? day?.dailyStress?.score : average(rangeRows.dailyStress, 'score')) },
-        { label: 'High stress', value: fmtMinutes(range.isSingleDay ? day?.dailyStress?.high : average(rangeRows.dailyStress, 'high')) },
-        { label: 'Restored', value: fmtMinutes(range.isSingleDay ? day?.dailyStress?.recovery : average(rangeRows.dailyStress, 'recovery')) },
+        { label: range.isSingleDay ? 'Stress score' : 'Avg stress score', value: fmt(range.isSingleDay ? day?.dailyStress?.score : average(rangeRows.dailyStress, 'score')) },
+        { label: range.isSingleDay ? 'High stress' : 'Total high stress', value: fmtMinutes(range.isSingleDay ? stress.highStress : stress.totalHighStress) },
+        { label: range.isSingleDay ? 'Restored' : 'Total restored', value: fmtMinutes(range.isSingleDay ? stress.recoveryTime : stress.totalRecoveryTime) },
         { label: 'Daytime samples', value: fmt((rangeRows.daytimeStress || []).length, 0) }
       ],
       trend: !range.isSingleDay
@@ -1486,6 +1489,39 @@ function diagnosticsText(range, day, rangeRows) {
   );
 }
 
+
+function renderAboutPage() {
+  const repoUrl = getPublicRepoUrl();
+  const repoMarkup = repoUrl
+    ? `<a class="text-link" href="${repoUrl}" target="_blank" rel="noreferrer">Public repository</a>`
+    : 'Public repo coming soon.';
+
+  return `
+    <section class="card section-card"> 
+      <div class="section-head"><h3>What this is</h3></div>
+      <p>Local Health Export Viewer is an unofficial browser dashboard for wearable export files.</p>
+    </section>
+    <section class="card section-card">
+      <div class="section-head"><h3>Privacy / local processing</h3></div>
+      <p>${SITE_COPY.trustStatement}</p>
+    </section>
+    <section class="card section-card">
+      <div class="section-head"><h3>Compatibility</h3></div>
+      <p>Supports Oura export ZIPs.</p>
+      <p>Fitbit support planned.</p>
+    </section>
+    <section class="card section-card">
+      <div class="section-head"><h3>Open source / public repo</h3></div>
+      <p>${repoMarkup}</p>
+    </section>
+    <section class="card section-card">
+      <div class="section-head"><h3>Affiliation</h3></div>
+      <p>Unofficial.</p>
+      <p>Not affiliated with Oura.</p>
+    </section>
+  `;
+}
+
 function renderDebugPage(range, day, rangeRows) {
   const content = document.getElementById('pageContent');
   if (!content) return;
@@ -1553,6 +1589,11 @@ function renderPageContent(range, day, rangeRows, rerender) {
 
   if (page === 'debug') {
     renderDebugPage(range, day, rangeRows);
+    return;
+  }
+
+  if (page === 'about') {
+    content.innerHTML = renderAboutPage();
     return;
   }
 

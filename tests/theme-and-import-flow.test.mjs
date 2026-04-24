@@ -20,7 +20,7 @@ test('theme mode has a single source of truth with persistence and document-leve
 });
 
 test('import menu shows staged progress and returns users to home after success', () => {
-  assert.equal(topNavSource.includes('menuUploadProgress'), true);
+  assert.equal(topNavSource.includes('menuUploadProgress'), false);
   assert.equal(entrySource.includes('Reading ZIP'), true);
   assert.equal(entrySource.includes('Parsing files'), true);
   assert.equal(entrySource.includes('Computing metrics'), true);

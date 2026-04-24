@@ -1,4 +1,3 @@
-import { getPublicRepoUrl } from '../config/siteCopy.js';
 import { navManifest } from '../nav/navManifest.js';
 
 const toPagePath = (href) => `${href}/index.html`;
@@ -67,7 +66,6 @@ export function renderTopNav(target, {
 } = {}) {
   const mount = target || document.getElementById('topNav');
   if (!mount) return null;
-  const publicRepoUrl = getPublicRepoUrl();
 
   const path = currentPath || '/';
   const tabOptions = navManifest
@@ -87,18 +85,12 @@ export function renderTopNav(target, {
     <button class="menu-trigger" id="menuTrigger" type="button" aria-expanded="false" aria-controls="appMenuPanel" aria-label="Open utility menu">☰</button>
     <div class="menu-panel" id="appMenuPanel" hidden>
       <button class="menu-upload menu-item" id="menuUploadAction" type="button">Upload / Import data</button>
-      <a class="menu-link menu-item" href="/about">About</a>
-      <a class="menu-link menu-item" href="/">Landing page</a>
+      <a class="menu-link menu-item" href="/app/about/index.html">About</a>
       <label class="menu-item menu-toggle-item" for="menuDarkModeToggle">
         <span>Dark Mode</span>
         <input id="menuDarkModeToggle" class="menu-toggle" type="checkbox" role="switch" ${preferredTheme === 'dark' ? 'checked' : ''} aria-label="Dark Mode">
       </label>
-      ${publicRepoUrl
-        ? `<a class="menu-link menu-item" href="${publicRepoUrl}" target="_blank" rel="noreferrer">Public repo</a>`
-        : ''}
       <input id="menuUploadInput" type="file" accept=".zip,application/zip" hidden>
-      <progress id="menuUploadProgress" class="menu-upload-progress" value="0" max="4" hidden></progress>
-      <div class="menu-upload-status small muted" id="menuUploadStatus"></div>
     </div>
   </div>`;
 
@@ -148,25 +140,17 @@ export function renderTopNav(target, {
 
 export function setTopNavUploadStatus(text = '') {
   const status = document.getElementById('menuUploadStatus');
-  const progress = document.getElementById('menuUploadProgress');
   if (typeof text === 'string') {
     if (status) status.textContent = text;
-    if (progress) progress.hidden = true;
     return;
   }
   const phaseOrder = ['Reading ZIP', 'Parsing files', 'Computing metrics', 'Loading dashboard'];
   const phase = text?.phase || '';
-  const phaseIndex = phaseOrder.indexOf(phase);
   if (status) {
     status.textContent = text?.status === 'error'
       ? `Import failed: ${text?.message || 'Unknown error'}`
       : text?.status === 'success'
         ? 'Import complete.'
         : phase;
-  }
-  if (progress) {
-    progress.hidden = !(text?.status === 'loading');
-    progress.max = phaseOrder.length;
-    progress.value = phaseIndex >= 0 ? phaseIndex + 1 : 1;
   }
 }
