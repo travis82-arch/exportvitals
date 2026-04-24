@@ -15,7 +15,7 @@ const trustStatement = 'When you import an Oura export ZIP, parsing and metric g
 test('homepage starts with hero CTA and concise trust copy', () => {
   assert.equal(homeHtml.includes('<h1>Your data, in your browser</h1>'), true);
   assert.equal(homeHtml.includes('<nav class="smallnav">'), false);
-  assert.equal(homeHtml.includes('src="/Icons/app-icon-512.png"'), true);
+  assert.equal(homeHtml.includes('src="/icons/app-icon-512.png"'), true);
   assert.equal(homeHtml.includes('alt="Local Health Export Viewer app icon"'), true);
   assert.equal(homeHtml.includes('Supports Oura export ZIPs today'), true);
   assert.equal(homeHtml.includes('Fitbit support planned'), true);

@@ -24,7 +24,7 @@ import { renderSleepStageChart } from './charts/SleepStageChart.js';
 import { activitySummary, heartRateSummary, stressSummary, stressDailyBreakdownRows, stressDayTimelineRows, stressCategorySeries, strainSummary } from './state/pageSummaries.js';
 import { computeBodyClockOffset, computeSleepDebtEstimate } from './domain/sleepRecoveryModel.js';
 import { buildActivityHeartRateBreakdown, DEFAULT_ZONE_SCHEME } from './domain/activityHeartRate.js';
-import { SITE_COPY, PUBLIC_REPO_FALLBACK_TEXT, getPublicRepoUrl } from './config/siteCopy.js';
+import { SITE_COPY } from './config/siteCopy.js';
 import { applyTheme, initTheme } from './state/theme.js';
 
 const page = document.body.dataset.page || 'index';
@@ -1491,11 +1491,6 @@ function diagnosticsText(range, day, rangeRows) {
 
 
 function renderAboutPage() {
-  const repoUrl = getPublicRepoUrl();
-  const repoMarkup = repoUrl
-    ? `<a class="text-link" href="${repoUrl}" target="_blank" rel="noreferrer">Public repository</a>`
-    : PUBLIC_REPO_FALLBACK_TEXT;
-
   return `
     <section class="card section-card"> 
       <div class="section-head"><h3>What this is</h3></div>
@@ -1503,7 +1498,7 @@ function renderAboutPage() {
     </section>
     <section class="card section-card">
       <div class="section-head"><h3>Privacy / local processing</h3></div>
-      <p>${SITE_COPY.trustStatement}</p>
+      <p>When you import an Oura export ZIP, parsing and metric generation run in your browser. Imported files and derived health data are stored locally on your device and are not sent to app server endpoints.</p>
     </section>
     <section class="card section-card">
       <div class="section-head"><h3>Compatibility</h3></div>
@@ -1512,7 +1507,7 @@ function renderAboutPage() {
     </section>
     <section class="card section-card">
       <div class="section-head"><h3>Open source / public repo</h3></div>
-      <p>${repoMarkup}</p>
+      <p>Public repo coming soon.</p>
     </section>
     <section class="card section-card">
       <div class="section-head"><h3>Affiliation</h3></div>

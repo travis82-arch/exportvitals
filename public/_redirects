@@ -2,3 +2,4 @@
 /app/* /app/:splat/index.html 200
 /about /about/index.html 200
 /privacy /privacy/index.html 200
+/icons/* /Icons/:splat 200
