@@ -1,6 +1,6 @@
 {
-  "name": "Local Health Export Viewer",
-  "short_name": "Health Viewer",
+  "name": "ExportVitals",
+  "short_name": "Vitals",
   "start_url": "/app",
   "display": "standalone",
   "background_color": "#0b1220",

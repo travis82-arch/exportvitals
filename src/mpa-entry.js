@@ -1494,7 +1494,7 @@ function renderAboutPage() {
   return `
     <section class="card section-card"> 
       <div class="section-head"><h3>What this is</h3></div>
-      <p>Local Health Export Viewer is an unofficial browser dashboard for wearable export files.</p>
+      <p>ExportVitals is an unofficial browser dashboard for wearable export files.</p>
     </section>
     <section class="card section-card">
       <div class="section-head"><h3>Privacy / local processing</h3></div>
