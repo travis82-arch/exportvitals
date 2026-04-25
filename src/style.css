@@ -966,18 +966,37 @@ body[data-page='sleep'] .status-pill {
 .sleep-debt-none .sleep-debt-status { color: #98c8ff; }
 
 .body-clock-timeline {
+  --body-clock-panel-bg: color-mix(in oklab, var(--accent-surface), rgba(8, 14, 24, 0.7) 65%);
+  --body-clock-panel-border: color-mix(in oklab, var(--accent), transparent 70%);
+  --body-clock-axis-border: color-mix(in oklab, var(--muted), transparent 55%);
+  --body-clock-tick-line: color-mix(in oklab, var(--muted), transparent 40%);
+  --body-clock-tick-text: color-mix(in oklab, var(--text), var(--muted) 50%);
+  --body-clock-row-label: color-mix(in oklab, var(--text), var(--muted) 34%);
+  --body-clock-track-bg: color-mix(in oklab, var(--accent), transparent 85%);
+  --body-clock-midpoint-border: color-mix(in oklab, var(--card), white 28%);
   display: grid;
-  gap: 10px;
-  padding: 8px 10px 4px;
-  border: 1px solid color-mix(in oklab, var(--accent), transparent 70%);
+  gap: 12px;
+  padding: 10px 12px 6px;
+  border: 1px solid var(--body-clock-panel-border);
   border-radius: 12px;
-  background: color-mix(in oklab, var(--accent-surface), rgba(8, 14, 24, 0.7) 65%);
+  background: var(--body-clock-panel-bg);
+}
+
+:root[data-theme='light'] .body-clock-timeline {
+  --body-clock-panel-bg: #f8fbff;
+  --body-clock-panel-border: #bfd0e8;
+  --body-clock-axis-border: rgba(77, 103, 136, 0.46);
+  --body-clock-tick-line: rgba(77, 103, 136, 0.38);
+  --body-clock-tick-text: #335273;
+  --body-clock-row-label: #2d4a69;
+  --body-clock-track-bg: rgba(81, 116, 173, 0.18);
+  --body-clock-midpoint-border: #f8fbff;
 }
 
 .body-clock-axis {
   position: relative;
   height: 28px;
-  border-bottom: 1px solid color-mix(in oklab, var(--muted), transparent 55%);
+  border-bottom: 1px solid var(--body-clock-axis-border);
 }
 
 .body-clock-tick {
@@ -992,13 +1011,14 @@ body[data-page='sleep'] .status-pill {
 .body-clock-tick i {
   width: 1px;
   height: 8px;
-  background: color-mix(in oklab, var(--muted), transparent 40%);
+  background: var(--body-clock-tick-line);
 }
 
 .body-clock-tick em {
   font-style: normal;
-  font-size: 0.65rem;
-  color: var(--muted);
+  font-size: 0.68rem;
+  color: var(--body-clock-tick-text);
+  font-weight: 560;
   white-space: nowrap;
 }
 
@@ -1008,9 +1028,10 @@ body[data-page='sleep'] .status-pill {
 }
 
 .body-clock-row-label {
-  font-size: 0.72rem;
+  font-size: 0.73rem;
   letter-spacing: 0.04em;
-  color: var(--muted);
+  color: var(--body-clock-row-label);
+  font-weight: 620;
   text-transform: uppercase;
 }
 
@@ -1018,7 +1039,7 @@ body[data-page='sleep'] .status-pill {
   position: relative;
   height: 14px;
   border-radius: 999px;
-  background: color-mix(in oklab, var(--accent), transparent 85%);
+  background: var(--body-clock-track-bg);
   overflow: visible;
 }
 
@@ -1044,7 +1065,7 @@ body[data-page='sleep'] .status-pill {
   height: 10px;
   border-radius: 999px;
   transform: translateX(-50%);
-  border: 2px solid color-mix(in oklab, var(--card), white 28%);
+  border: 2px solid var(--body-clock-midpoint-border);
 }
 
 .body-clock-midpoint.baseline {
@@ -1060,7 +1081,7 @@ body[data-page='sleep'] .status-pill {
   flex-wrap: wrap;
   gap: 10px 14px;
   font-size: 0.74rem;
-  color: var(--muted);
+  color: color-mix(in oklab, var(--text), var(--muted) 45%);
 }
 
 .body-clock-legend span {
@@ -1086,6 +1107,11 @@ body[data-page='sleep'] .status-pill {
   border-radius: 999px;
   background: #d9e4ff;
   border: 2px solid #95adff;
+}
+
+:root[data-theme='light'] .legend-dot {
+  background: #ffffff;
+  border-color: #6f93d1;
 }
 
 .body-clock-stats {
