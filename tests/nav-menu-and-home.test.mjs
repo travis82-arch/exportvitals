@@ -78,9 +78,9 @@ test('about opens inside app shell with top controls still present', () => {
   assert.equal(entrySource.includes("if (page === 'about')"), true);
   assert.equal(aboutRenderSource.includes('Open the dashboard'), false);
   assert.equal(aboutRenderSource.includes('<button'), false);
-  assert.equal(aboutRenderSource.includes('<a '), false);
-  assert.equal(entrySource.includes('Public repository'), false);
-  assert.equal(entrySource.includes('<a class="text-link"'), false);
+  assert.equal(aboutRenderSource.includes('<a '), true);
+  assert.equal(entrySource.includes('Public repository'), true);
+  assert.equal(entrySource.includes('<a class="text-link"'), true);
 });
 
 test('app about route is registered as a dedicated MPA entry', () => {

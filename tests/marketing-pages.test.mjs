@@ -43,7 +43,7 @@ test('about page contains compact sections for privacy, compatibility, repo stat
   assert.equal(aboutHtml.includes('Compatibility'), true);
   assert.equal(aboutHtml.includes('Open source / public repo'), true);
   assert.equal(aboutHtml.includes('Affiliation'), true);
-  assert.equal(aboutHtml.includes('Public repo coming soon.'), true);
+  assert.equal(aboutHtml.includes('Public repository'), true);
   assert.equal(aboutHtml.includes('getPublicRepoUrl'), true);
   assert.equal(aboutHtml.includes('Open the dashboard'), false);
   assert.equal(aboutHtml.includes('Landing page'), false);
@@ -59,8 +59,8 @@ test('marketing metadata and canonical URLs use deployed pages domain', () => {
 
 test('branding and support/source values are centralized and neutral', () => {
   assert.equal(siteCopy.includes("productName: 'ExportVitals'"), true);
-  assert.equal(siteCopy.includes("publicRepoUrl: 'TBD_PUBLIC_REPO_URL'"), true);
-  assert.equal(siteCopy.includes("PUBLIC_REPO_FALLBACK_TEXT = 'Public repo coming soon.'"), true);
+  assert.equal(siteCopy.includes("publicRepoUrl: 'https://github.com/travis82-arch/exportvitals'"), true);
+  assert.equal(siteCopy.includes("PUBLIC_REPO_FALLBACK_TEXT = 'Repository link unavailable.'"), true);
   assert.equal(siteCopy.includes("canonicalBaseUrl: 'https://oura-pwa-dashboard.pages.dev'"), true);
   assert.equal(manifest.includes('\"name\": \"ExportVitals\"'), true);
   assert.equal(manifest.includes('\"short_name\": \"Vitals\"'), true);
