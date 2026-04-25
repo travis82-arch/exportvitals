@@ -340,32 +340,6 @@ export function getNightMidpoint(date, context = {}) {
   };
 }
 
-export function computeBodyClockBaseline({ selectedDate, lookbackDays = 35, dailySleepRows = [], sleepTimeRows = [], sleepModelRows = [], heartRateRows = [] } = {}) {
-  const allDates = [...new Set([...dailySleepRows.map((r) => r.date), ...sleepTimeRows.map((r) => r.date), ...sleepModelRows.map((r) => r.date)])]
-    .filter(Boolean)
-    .sort()
-    .filter((date) => !selectedDate || date <= selectedDate)
-    .slice(-Math.min(42, Math.max(21, lookbackDays)));
-
-  const context = { dailySleepRows, sleepTimeRows, sleepModelRows, heartRateRows };
-  const mids = allDates
-    .map((date) => ({ date, ...getNightMidpoint(date, context) }))
-    .filter((row) => Number.isFinite(row.midpointClockMinutes));
-
-  const baseline = circularMedianClockMinutes(mids.map((row) => row.midpointClockMinutes));
-  const sourcePath = mids.at(-1)?.sourcePath || 'none';
-  const confidence = mids.length >= 21 ? HIGH_CONFIDENCE : mids.length >= 10 ? MEDIUM_CONFIDENCE : LOW_CONFIDENCE;
-
-  return {
-    baselineMidpointClockMinutes: baseline,
-    windowStart: allDates[0] || null,
-    windowEnd: allDates.at(-1) || null,
-    nightCount: mids.length,
-    sourcePath,
-    confidence
-  };
-}
-
 function formatClockMinutes(minutes) {
   if (!Number.isFinite(minutes)) return '—';
   const normalized = normalizeClockMinutes(minutes);
@@ -374,44 +348,241 @@ function formatClockMinutes(minutes) {
   return `${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')}`;
 }
 
-export function formatAheadBehind(offsetMinutes) {
-  if (!Number.isFinite(offsetMinutes) || Math.abs(offsetMinutes) < 3) return 'in line with your body clock';
-  const abs = Math.abs(Math.round(offsetMinutes));
-  const h = Math.floor(abs / 60);
-  const m = abs % 60;
-  const duration = `${h} h ${m} min`;
-  return offsetMinutes > 0 ? `${duration} behind your body clock` : `${duration} ahead of your body clock`;
+function formatClockMinutes12h(minutes) {
+  if (!Number.isFinite(minutes)) return '—';
+  const normalized = normalizeClockMinutes(minutes);
+  const hh24 = Math.floor(normalized / 60);
+  const mm = normalized % 60;
+  const suffix = hh24 >= 12 ? 'PM' : 'AM';
+  const hh12 = (hh24 % 12) || 12;
+  return `${hh12}:${String(mm).padStart(2, '0')} ${suffix}`;
 }
 
-export function computeBodyClockOffset({ selectedDate, dailySleepRows = [], sleepTimeRows = [], sleepModelRows = [], heartRateRows = [] } = {}) {
-  const context = { dailySleepRows, sleepTimeRows, sleepModelRows, heartRateRows };
-  const selected = getNightMidpoint(selectedDate, context);
-  const baseline = computeBodyClockBaseline({ selectedDate, dailySleepRows, sleepTimeRows, sleepModelRows, heartRateRows });
+const THREE_HOURS_SEC = 3 * 60 * 60;
+const MIN_HISTORY_NIGHTS = 14;
+const STRONG_WINDOW_NIGHTS = 90;
+const ALIGNMENT_THRESHOLD_MIN = 30;
 
-  const offsetMinutes = Number.isFinite(selected.midpointClockMinutes) && Number.isFinite(baseline.baselineMidpointClockMinutes)
-    ? circularSignedDiffMinutes(selected.midpointClockMinutes, baseline.baselineMidpointClockMinutes)
+function toMs(value) {
+  const parsed = new Date(value || '').getTime();
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function toMinuteOfDay(timestampMs) {
+  const d = new Date(timestampMs);
+  return normalizeClockMinutes((d.getHours() * 60) + d.getMinutes());
+}
+
+function medianOfNumbers(values = []) {
+  const clean = values.filter(Number.isFinite);
+  return clean.length ? median(clean) : null;
+}
+
+function medianAbsoluteDeviation(values = [], center) {
+  if (!Number.isFinite(center)) return null;
+  const deltas = values
+    .filter(Number.isFinite)
+    .map((value) => circularDistanceMinutes(value, center));
+  return medianOfNumbers(deltas);
+}
+
+function summarizeSleepWindow(nights = []) {
+  if (!nights.length) {
+    return {
+      bedtimeMinute: null,
+      wakeMinute: null,
+      midpointMinute: null,
+      durationSec: null,
+      timeInBedSec: null,
+      variabilityMinutes: null
+    };
+  }
+  const bedtimeMinute = circularMedianClockMinutes(nights.map((night) => night.bedtimeStartMinuteOfDay));
+  const wakeMinute = circularMedianClockMinutes(nights.map((night) => night.bedtimeEndMinuteOfDay));
+  const midpointMinute = circularMedianClockMinutes(nights.map((night) => night.sleepMidpointMinuteOfDay));
+  return {
+    bedtimeMinute,
+    wakeMinute,
+    midpointMinute,
+    durationSec: medianOfNumbers(nights.map((night) => night.totalSleepDurationSec)),
+    timeInBedSec: medianOfNumbers(nights.map((night) => night.timeInBedSec)),
+    variabilityMinutes: medianAbsoluteDeviation(nights.map((night) => night.sleepMidpointMinuteOfDay), midpointMinute)
+  };
+}
+
+export function selectPrimaryLongSleepByDay(sleepModelRows = []) {
+  const byDate = new Map();
+  for (const row of sleepModelRows || []) {
+    const date = row?.date;
+    const type = String(row?.type || '').toLowerCase();
+    const totalSleepDurationSec = toNumber(row?.totalSleepSec);
+    const bedtimeStartMs = toMs(row?.bedtimeStart);
+    const bedtimeEndMs = toMs(row?.bedtimeEnd);
+    if (!date || type !== 'long_sleep') continue;
+    if (!Number.isFinite(totalSleepDurationSec) || totalSleepDurationSec < THREE_HOURS_SEC) continue;
+    if (!Number.isFinite(bedtimeStartMs) || !Number.isFinite(bedtimeEndMs) || bedtimeEndMs <= bedtimeStartMs) continue;
+    const current = byDate.get(date);
+    if (!current || totalSleepDurationSec > current.totalSleepDurationSec) {
+      const midpointMs = bedtimeStartMs + Math.round((bedtimeEndMs - bedtimeStartMs) / 2);
+      byDate.set(date, {
+        date,
+        bedtimeStartMs,
+        bedtimeEndMs,
+        sleepMidpointMs: midpointMs,
+        bedtimeStartMinuteOfDay: toMinuteOfDay(bedtimeStartMs),
+        bedtimeEndMinuteOfDay: toMinuteOfDay(bedtimeEndMs),
+        sleepMidpointMinuteOfDay: toMinuteOfDay(midpointMs),
+        totalSleepDurationSec,
+        timeInBedSec: toNumber(row?.timeInBedSec),
+        sourcePath: 'sleepModel.long_sleep'
+      });
+    }
+  }
+
+  return [...byDate.values()].sort((a, b) => a.date.localeCompare(b.date));
+}
+
+function estimateChronotypeLabel(midpointMinute) {
+  if (!Number.isFinite(midpointMinute)) return null;
+  // Estimated chronotype bands (simple midpoint-of-sleep buckets).
+  if (midpointMinute < 90) return 'Early morning';
+  if (midpointMinute < 150) return 'Morning';
+  if (midpointMinute < 210) return 'Late morning';
+  if (midpointMinute < 270) return 'Early evening';
+  if (midpointMinute < 330) return 'Evening';
+  return 'Late evening';
+}
+
+function baselineConfidenceLabel(nightCount) {
+  if (nightCount >= STRONG_WINDOW_NIGHTS) return HIGH_CONFIDENCE;
+  if (nightCount >= 30) return MEDIUM_CONFIDENCE;
+  return LOW_CONFIDENCE;
+}
+
+function describeDifference(offsetMinutes, isSingleDay) {
+  if (!Number.isFinite(offsetMinutes)) return 'A comparison could not be calculated.';
+  const rounded = Math.round(offsetMinutes);
+  const abs = Math.abs(rounded);
+  if (abs <= ALIGNMENT_THRESHOLD_MIN) {
+    return isSingleDay
+      ? 'Your sleep midpoint was closely aligned with your estimated body clock.'
+      : 'Your selected range was closely aligned with your estimated body clock.';
+  }
+  const direction = rounded < 0 ? 'earlier' : 'later';
+  return isSingleDay
+    ? `Your sleep midpoint was ${abs} min ${direction} than your estimated body clock.`
+    : `Your selected range averaged ${abs} min ${direction} than your estimated body clock.`;
+}
+
+export function computeBodyClockBaseline({ selectedDate, sleepModelRows = [] } = {}) {
+  const allPrimary = selectPrimaryLongSleepByDay(sleepModelRows).filter((night) => !selectedDate || night.date <= selectedDate);
+  const nightCount = allPrimary.length;
+  if (nightCount < MIN_HISTORY_NIGHTS) {
+    return {
+      available: false,
+      reason: nightCount === 0 ? 'missing_sleepmodel' : 'insufficient_history',
+      nightCount,
+      totalPrimaryNights: nightCount
+    };
+  }
+
+  const last90 = nightCount >= STRONG_WINDOW_NIGHTS ? allPrimary.slice(-STRONG_WINDOW_NIGHTS) : allPrimary;
+  const baselineNights = nightCount >= STRONG_WINDOW_NIGHTS
+    ? last90.slice(0, Math.max(1, Math.round(last90.length * 0.8)))
+    : last90;
+  const baselineWindow = summarizeSleepWindow(baselineNights);
+  const confidence = baselineConfidenceLabel(nightCount);
+
+  return {
+    available: true,
+    baseline: baselineWindow,
+    baselineChronotype: estimateChronotypeLabel(baselineWindow.midpointMinute),
+    confidence,
+    confidenceLabel: confidence === HIGH_CONFIDENCE
+      ? 'Strong estimate from 90+ nights'
+      : confidence === MEDIUM_CONFIDENCE
+        ? 'Medium confidence estimate from available history'
+        : 'Low confidence estimate (limited sleep history)',
+    totalPrimaryNights: nightCount,
+    baselineNightCount: baselineNights.length,
+    baselineWindowStart: baselineNights[0]?.date || null,
+    baselineWindowEnd: baselineNights.at(-1)?.date || null,
+    allPrimary
+  };
+}
+
+export function computeBodyClockOffset({
+  selectedDate,
+  rangeStartDate,
+  rangeEndDate,
+  sleepModelRows = []
+} = {}) {
+  const baselineModel = computeBodyClockBaseline({ selectedDate: rangeEndDate || selectedDate, sleepModelRows });
+  if (!baselineModel.available) {
+    const missingSleepModel = baselineModel.reason === 'missing_sleepmodel';
+    return {
+      display: {
+        title: 'Estimated body clock',
+        available: false,
+        emptyStateMessage: missingSleepModel
+          ? 'Body clock estimate unavailable. Sleep timing data was not found in this export.'
+          : 'More sleep history is needed to estimate your body clock.'
+      },
+      debug: {
+        metric: 'derivedBodyClockOffsetEstimate',
+        reason: baselineModel.reason,
+        primaryNightCount: baselineModel.nightCount
+      }
+    };
+  }
+
+  const primaryRows = baselineModel.allPrimary;
+  const selectedStart = rangeStartDate || selectedDate;
+  const selectedEnd = rangeEndDate || selectedDate;
+  const selectedNights = primaryRows.filter((night) => (!selectedStart || night.date >= selectedStart) && (!selectedEnd || night.date <= selectedEnd));
+  const selectedSummary = summarizeSleepWindow(selectedNights);
+  const selectedMidpoint = selectedSummary.midpointMinute;
+  const baselineMidpoint = baselineModel.baseline.midpointMinute;
+  const offsetMinutes = Number.isFinite(selectedMidpoint) && Number.isFinite(baselineMidpoint)
+    ? circularSignedDiffMinutes(selectedMidpoint, baselineMidpoint)
     : null;
+  const isSingleDay = selectedStart && selectedEnd ? selectedStart === selectedEnd : Boolean(selectedDate);
 
   return {
     display: {
-      title: 'Body Clock',
-      selectedMidpointClockMinutes: selected.midpointClockMinutes,
-      habitualMidpointClockMinutes: baseline.baselineMidpointClockMinutes,
+      title: 'Estimated body clock',
+      available: true,
+      estimatedChronotype: baselineModel.baselineChronotype,
+      baselineMidpointClockMinutes: baselineMidpoint,
+      selectedMidpointClockMinutes: selectedMidpoint,
+      baselineBedtimeClockMinutes: baselineModel.baseline.bedtimeMinute,
+      baselineWakeClockMinutes: baselineModel.baseline.wakeMinute,
+      selectedBedtimeClockMinutes: selectedSummary.bedtimeMinute,
+      selectedWakeClockMinutes: selectedSummary.wakeMinute,
       offsetMinutes,
-      narrative: Number.isFinite(offsetMinutes)
-        ? `Estimated sleep midpoint was ${formatAheadBehind(offsetMinutes)}.`
-        : 'Not enough recent nights to estimate body clock offset.'
+      narrative: describeDifference(offsetMinutes, isSingleDay),
+      confidence: baselineModel.confidence,
+      confidenceLabel: baselineModel.confidenceLabel,
+      nightCountLabel: `Based on ${baselineModel.totalPrimaryNights} primary long-sleep nights.`,
+      baselineMidpointLabel: formatClockMinutes12h(baselineMidpoint),
+      selectedMidpointLabel: formatClockMinutes12h(selectedMidpoint),
+      baselineWindowLabel: `${formatClockMinutes12h(baselineModel.baseline.bedtimeMinute)}–${formatClockMinutes12h(baselineModel.baseline.wakeMinute)}`,
+      selectedWindowLabel: `${formatClockMinutes12h(selectedSummary.bedtimeMinute)}–${formatClockMinutes12h(selectedSummary.wakeMinute)}`,
+      estimateLabel: 'This is an estimate from your export, not an official Oura chronotype.'
     },
     debug: {
       metric: 'derivedBodyClockOffsetEstimate',
       selectedDate,
-      selectedMidpoint: formatClockMinutes(selected.midpointClockMinutes),
-      habitualMidpoint: formatClockMinutes(baseline.baselineMidpointClockMinutes),
-      windowStart: baseline.windowStart,
-      windowEnd: baseline.windowEnd,
-      windowNightCount: baseline.nightCount,
-      sourcePath: selected.sourcePath,
-      confidence: baseline.confidence
+      rangeStartDate: selectedStart,
+      rangeEndDate: selectedEnd,
+      selectedMidpoint: formatClockMinutes(selectedMidpoint),
+      baselineMidpoint: formatClockMinutes(baselineMidpoint),
+      selectedNights: selectedNights.length,
+      baselineNightCount: baselineModel.baselineNightCount,
+      baselineWindowStart: baselineModel.baselineWindowStart,
+      baselineWindowEnd: baselineModel.baselineWindowEnd,
+      totalPrimaryNights: baselineModel.totalPrimaryNights,
+      confidence: baselineModel.confidence
     }
   };
 }

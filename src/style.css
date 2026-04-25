@@ -955,7 +955,7 @@ body[data-page='sleep'] .status-pill {
 
 .body-clock-arc {
   width: 100%;
-  height: 132px;
+  height: 220px;
 }
 
 .clock-track {
@@ -963,27 +963,74 @@ body[data-page='sleep'] .status-pill {
   stroke-linecap: round;
 }
 
-.clock-track.outer {
-  stroke: rgba(143, 161, 215, 0.22);
+.clock-grid {
+  fill: none;
+  stroke: rgba(123, 141, 188, 0.2);
+  stroke-width: 1;
+  stroke-dasharray: 2 5;
+}
+
+.clock-track.baseline {
+  stroke: rgba(176, 154, 243, 0.76);
+  stroke-width: 10;
+}
+
+.clock-track.selected {
+  stroke: rgba(148, 176, 255, 0.92);
   stroke-width: 12;
 }
 
-.clock-track.inner {
-  stroke: rgba(176, 154, 243, 0.35);
-  stroke-width: 8;
+.clock-dot.midpoint {
+  fill: #edf2ff;
+  stroke: #9ab0ff;
+  stroke-width: 2;
 }
 
-.clock-dot {
-  stroke: rgba(10, 16, 28, 0.85);
-  stroke-width: 1.8;
+.clock-label {
+  fill: #90a6d2;
+  font-size: 11px;
+  text-anchor: middle;
+  dominant-baseline: middle;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
 }
 
-.clock-dot.selected {
-  fill: #9ab0ff;
+.body-clock-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 14px;
+  font-size: 0.74rem;
+  color: #9cb1d7;
 }
 
-.clock-dot.habitual {
-  fill: #c1b1ff;
+.body-clock-legend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.legend-swatch {
+  display: inline-block;
+  width: 14px;
+  height: 0;
+  border-top: 4px solid transparent;
+  border-radius: 999px;
+}
+
+.legend-swatch.baseline { border-color: rgba(176, 154, 243, 0.92); }
+.legend-swatch.selected { border-color: rgba(148, 176, 255, 0.96); }
+
+.legend-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 999px;
+  background: #edf2ff;
+  border: 2px solid #9ab0ff;
+}
+
+.body-clock-stats {
+  display: grid;
+  gap: 4px;
 }
 
 .debug-meta {

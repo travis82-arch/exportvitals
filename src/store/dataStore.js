@@ -198,6 +198,7 @@ function normalizeRows(dataset, rows) {
     return rows
       .map((r) => ({
         date: r.day,
+        type: r.type ?? null,
         bedtimeStart: r.bedtime_start,
         bedtimeEnd: r.bedtime_end,
         totalSleepSec: toNumber(r.total_sleep_duration),

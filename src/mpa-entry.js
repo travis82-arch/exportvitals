@@ -683,10 +683,9 @@ function renderSleepPage(range, day, rangeRows) {
   });
   const bodyClockEstimate = computeBodyClockOffset({
     selectedDate,
-    dailySleepRows: snapshot.datasets?.dailySleep || [],
-    sleepTimeRows: snapshot.datasets?.sleepTime || [],
-    sleepModelRows: snapshot.datasets?.sleepModel || [],
-    heartRateRows: snapshot.datasets?.heartRate || []
+    rangeStartDate: range?.start || selectedDate,
+    rangeEndDate: range?.end || selectedDate,
+    sleepModelRows: snapshot.datasets?.sleepModel || []
   });
 
   const daySleep = day?.dailySleep;
@@ -742,36 +741,73 @@ function renderSleepPage(range, day, rangeRows) {
   `;
 
   const renderBodyClockArc = () => {
-    const selectedMidpoint = bodyClockEstimate.display.selectedMidpointClockMinutes;
-    const habitualMidpoint = bodyClockEstimate.display.habitualMidpointClockMinutes;
-    if (!Number.isFinite(selectedMidpoint) || !Number.isFinite(habitualMidpoint)) {
-      return '<div class="muted">Need more sleep timing history to estimate body clock.</div>';
+    if (!bodyClockEstimate.display.available) {
+      return `<div class="muted">${bodyClockEstimate.display.emptyStateMessage}</div>`;
     }
-    const toAngle = (minute) => ((minute / 1440) * 300) - 240;
-    const toPoint = (minute, radius) => {
+    const {
+      baselineBedtimeClockMinutes,
+      baselineWakeClockMinutes,
+      selectedBedtimeClockMinutes,
+      selectedWakeClockMinutes,
+      selectedMidpointClockMinutes
+    } = bodyClockEstimate.display;
+    if (![baselineBedtimeClockMinutes, baselineWakeClockMinutes, selectedBedtimeClockMinutes, selectedWakeClockMinutes, selectedMidpointClockMinutes]
+      .every((value) => Number.isFinite(value))) {
+      return '<div class="muted">More sleep history is needed to estimate your body clock.</div>';
+    }
+
+    const toAngle = (minute) => ((minute / 1440) * 360) - 90;
+    const pointAt = (minute, radius) => {
       const angle = (toAngle(minute) * Math.PI) / 180;
       const x = 160 + Math.cos(angle) * radius;
-      const y = 120 + Math.sin(angle) * radius;
+      const y = 160 + Math.sin(angle) * radius;
       return `${x},${y}`;
     };
-    const selected = toPoint(selectedMidpoint, 82);
-    const habitual = toPoint(habitualMidpoint, 60);
-    return `<svg class="body-clock-arc" viewBox="0 0 320 160" role="img" aria-label="Body clock arc estimate">
-      <path class="clock-track outer" d="M35,122 A125,125 0 0 1 285,122"></path>
-      <path class="clock-track inner" d="M62,122 A98,98 0 0 1 258,122"></path>
-      <circle class="clock-dot selected" cx="${selected.split(',')[0]}" cy="${selected.split(',')[1]}" r="6"></circle>
-      <circle class="clock-dot habitual" cx="${habitual.split(',')[0]}" cy="${habitual.split(',')[1]}" r="4.5"></circle>
-    </svg>`;
+    const arcPath = (startMinute, endMinute, radius) => {
+      const start = pointAt(startMinute, radius);
+      const end = pointAt(endMinute, radius);
+      const sweep = ((endMinute - startMinute) + 1440) % 1440;
+      const largeArc = sweep > 720 ? 1 : 0;
+      return `M ${start} A ${radius} ${radius} 0 ${largeArc} 1 ${end}`;
+    };
+    const midpoint = pointAt(selectedMidpointClockMinutes, 118).split(',');
+    return `<svg class="body-clock-arc" viewBox="0 0 320 320" role="img" aria-label="Estimated body clock and selected sleep windows">
+      <circle class="clock-grid" cx="160" cy="160" r="98"></circle>
+      <circle class="clock-grid" cx="160" cy="160" r="118"></circle>
+      <path class="clock-track baseline" d="${arcPath(baselineBedtimeClockMinutes, baselineWakeClockMinutes, 98)}"></path>
+      <path class="clock-track selected" d="${arcPath(selectedBedtimeClockMinutes, selectedWakeClockMinutes, 118)}"></path>
+      <circle class="clock-dot midpoint" cx="${midpoint[0]}" cy="${midpoint[1]}" r="5.5"></circle>
+      <text x="160" y="28" class="clock-label">12 AM</text>
+      <text x="278" y="165" class="clock-label">6 AM</text>
+      <text x="160" y="302" class="clock-label">12 PM</text>
+      <text x="42" y="165" class="clock-label">6 PM</text>
+    </svg>
+    <div class="body-clock-legend">
+      <span><i class="legend-swatch baseline"></i>Estimated body clock</span>
+      <span><i class="legend-swatch selected"></i>Selected sleep</span>
+      <span><i class="legend-dot"></i>Midpoint</span>
+    </div>`;
   };
 
   const bodyClockCard = `
     <section class="card section-card sleep-card sleep-card--secondary body-clock-card">
       <div class="section-head">
-        <h3>Body Clock</h3>
+        <h3>Estimated body clock</h3>
         <span class="small muted sleep-estimate-chip">Estimate</span>
       </div>
       ${renderBodyClockArc()}
-      <p class="sleep-card-copy">${bodyClockEstimate.display.narrative}</p>
+      ${bodyClockEstimate.display.available ? `
+        <div class="body-clock-stats">
+          <p class="sleep-card-copy"><strong>Estimated chronotype:</strong> ${bodyClockEstimate.display.estimatedChronotype || '—'}</p>
+          <p class="sleep-card-copy"><strong>Baseline midpoint:</strong> ${bodyClockEstimate.display.baselineMidpointLabel}</p>
+          <p class="sleep-card-copy"><strong>Selected midpoint:</strong> ${bodyClockEstimate.display.selectedMidpointLabel}</p>
+          <p class="sleep-card-copy"><strong>Estimated body-clock window:</strong> ${bodyClockEstimate.display.baselineWindowLabel}</p>
+          <p class="sleep-card-copy"><strong>Selected sleep window:</strong> ${bodyClockEstimate.display.selectedWindowLabel}</p>
+          <p class="sleep-card-copy">${bodyClockEstimate.display.narrative}</p>
+          <p class="sleep-card-copy">${bodyClockEstimate.display.confidenceLabel}. ${bodyClockEstimate.display.nightCountLabel}</p>
+          <p class="small muted">${bodyClockEstimate.display.estimateLabel} Based on your exported sleep timing.</p>
+        </div>
+      ` : `<p class="sleep-card-copy">${bodyClockEstimate.display.emptyStateMessage}</p>`}
       ${settings.developerMode ? `<details class="debug-meta"><summary>debug</summary><pre>${JSON.stringify(bodyClockEstimate.debug, null, 2)}</pre></details>` : ''}
     </section>
   `;
