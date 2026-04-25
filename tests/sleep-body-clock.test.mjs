@@ -1,6 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { computeBodyClockOffset, selectPrimaryLongSleepByDay } from '../src/domain/sleepRecoveryModel.js';
+import {
+  buildBodyClockTimelineGeometry,
+  computeBodyClockOffset,
+  selectPrimaryLongSleepByDay
+} from '../src/domain/sleepRecoveryModel.js';
 
 function row({ date, type = 'long_sleep', start, end, totalSleepSec = 8 * 60 * 60, timeInBedSec = 8.5 * 60 * 60 }) {
   return {
@@ -105,6 +109,76 @@ test('fallback behavior returns clear message when insufficient primary long sle
 
   assert.equal(result.display.available, false);
   assert.match(result.display.emptyStateMessage, /More sleep history is needed/);
+});
+
+test('dynamic timeline geometry handles overnight windows without hardcoded nighttime frame', () => {
+  const geometry = buildBodyClockTimelineGeometry({
+    baselineBedtimeClockMinutes: 23 * 60,
+    baselineWakeClockMinutes: 7 * 60,
+    selectedBedtimeClockMinutes: 22 * 60 + 30,
+    selectedWakeClockMinutes: 6 * 60 + 30
+  });
+
+  assert.ok(geometry);
+  assert.ok(geometry.startMinute < (22 * 60));
+  assert.ok(geometry.endMinute > (7 * 60));
+  assert.equal(geometry.ticks.length, 5);
+  assert.ok(geometry.baseline.startPct < geometry.baseline.endPct);
+});
+
+test('dynamic timeline geometry supports daytime/night-shift sleep windows', () => {
+  const geometry = buildBodyClockTimelineGeometry({
+    baselineBedtimeClockMinutes: 8 * 60,
+    baselineWakeClockMinutes: 16 * 60,
+    selectedBedtimeClockMinutes: 9 * 60,
+    selectedWakeClockMinutes: 17 * 60
+  });
+
+  assert.ok(geometry);
+  assert.ok(geometry.baseline.midpointPct > 0 && geometry.baseline.midpointPct < 100);
+  assert.ok(geometry.selected.midpointPct > geometry.baseline.midpointPct);
+});
+
+test('selected day and selected range produce different selected windows in body-clock display', () => {
+  const base = buildBaselineRows('2026-06-01', 20, '23:00:00', '07:00:00');
+  const rows = [
+    ...base,
+    row({ date: '2026-06-21', start: '2026-06-21T21:45:00-05:00', end: '2026-06-22T05:45:00-05:00' }),
+    row({ date: '2026-06-22', start: '2026-06-22T23:30:00-05:00', end: '2026-06-23T07:30:00-05:00' }),
+    row({ date: '2026-06-23', start: '2026-06-23T01:00:00-05:00', end: '2026-06-23T09:00:00-05:00' })
+  ];
+
+  const selectedDay = computeBodyClockOffset({
+    selectedDate: '2026-06-21',
+    rangeStartDate: '2026-06-21',
+    rangeEndDate: '2026-06-21',
+    sleepModelRows: rows
+  });
+  const selectedRange = computeBodyClockOffset({
+    selectedDate: '2026-06-23',
+    rangeStartDate: '2026-06-21',
+    rangeEndDate: '2026-06-23',
+    sleepModelRows: rows
+  });
+
+  assert.notEqual(selectedDay.display.selectedWindowLabel, selectedRange.display.selectedWindowLabel);
+  assert.notEqual(
+    selectedDay.display.timeline.selected.midpointPct,
+    selectedRange.display.timeline.selected.midpointPct
+  );
+});
+
+test('timeline fallback remains unavailable when body clock history is insufficient', () => {
+  const rows = buildBaselineRows('2026-04-01', 12, '23:00:00', '07:00:00');
+  const result = computeBodyClockOffset({
+    selectedDate: '2026-04-12',
+    rangeStartDate: '2026-04-12',
+    rangeEndDate: '2026-04-12',
+    sleepModelRows: rows
+  });
+
+  assert.equal(result.display.available, false);
+  assert.equal(result.display.timeline, undefined);
 });
 
 test('estimated chronotype label follows midpoint band mapping', () => {

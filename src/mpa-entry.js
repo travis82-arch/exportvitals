@@ -740,48 +740,42 @@ function renderSleepPage(range, day, rangeRows) {
     </section>
   `;
 
-  const renderBodyClockArc = () => {
+  const renderBodyClockTimeline = () => {
     if (!bodyClockEstimate.display.available) {
       return `<div class="muted">${bodyClockEstimate.display.emptyStateMessage}</div>`;
     }
     const {
-      baselineBedtimeClockMinutes,
-      baselineWakeClockMinutes,
-      selectedBedtimeClockMinutes,
-      selectedWakeClockMinutes,
-      selectedMidpointClockMinutes
+      timeline
     } = bodyClockEstimate.display;
-    if (![baselineBedtimeClockMinutes, baselineWakeClockMinutes, selectedBedtimeClockMinutes, selectedWakeClockMinutes, selectedMidpointClockMinutes]
-      .every((value) => Number.isFinite(value))) {
+    if (!timeline?.baseline || !timeline?.selected) {
       return '<div class="muted">More sleep history is needed to estimate your body clock.</div>';
     }
 
-    const toAngle = (minute) => ((minute / 1440) * 360) - 90;
-    const pointAt = (minute, radius) => {
-      const angle = (toAngle(minute) * Math.PI) / 180;
-      const x = 160 + Math.cos(angle) * radius;
-      const y = 160 + Math.sin(angle) * radius;
-      return `${x},${y}`;
-    };
-    const arcPath = (startMinute, endMinute, radius) => {
-      const start = pointAt(startMinute, radius);
-      const end = pointAt(endMinute, radius);
-      const sweep = ((endMinute - startMinute) + 1440) % 1440;
-      const largeArc = sweep > 720 ? 1 : 0;
-      return `M ${start} A ${radius} ${radius} 0 ${largeArc} 1 ${end}`;
-    };
-    const midpoint = pointAt(selectedMidpointClockMinutes, 118).split(',');
-    return `<svg class="body-clock-arc" viewBox="0 0 320 320" role="img" aria-label="Estimated body clock and selected sleep windows">
-      <circle class="clock-grid" cx="160" cy="160" r="98"></circle>
-      <circle class="clock-grid" cx="160" cy="160" r="118"></circle>
-      <path class="clock-track baseline" d="${arcPath(baselineBedtimeClockMinutes, baselineWakeClockMinutes, 98)}"></path>
-      <path class="clock-track selected" d="${arcPath(selectedBedtimeClockMinutes, selectedWakeClockMinutes, 118)}"></path>
-      <circle class="clock-dot midpoint" cx="${midpoint[0]}" cy="${midpoint[1]}" r="5.5"></circle>
-      <text x="160" y="28" class="clock-label">12 AM</text>
-      <text x="278" y="165" class="clock-label">6 AM</text>
-      <text x="160" y="302" class="clock-label">12 PM</text>
-      <text x="42" y="165" class="clock-label">6 PM</text>
-    </svg>
+    const baselineWidth = Math.max(2, timeline.baseline.endPct - timeline.baseline.startPct);
+    const selectedWidth = Math.max(2, timeline.selected.endPct - timeline.selected.startPct);
+    return `<div class="body-clock-timeline" role="img" aria-label="Estimated body clock and selected sleep windows">
+      <div class="body-clock-axis">
+        ${timeline.ticks.map((tick) => `
+          <span class="body-clock-tick" style="left:${tick.percent}%">
+            <i></i><em>${tick.label}</em>
+          </span>
+        `).join('')}
+      </div>
+      <div class="body-clock-row">
+        <span class="body-clock-row-label">Estimated body clock</span>
+        <div class="body-clock-track">
+          <span class="body-clock-window baseline" style="left:${timeline.baseline.startPct}%;width:${baselineWidth}%"></span>
+          <span class="body-clock-midpoint baseline" style="left:${timeline.baseline.midpointPct}%"></span>
+        </div>
+      </div>
+      <div class="body-clock-row">
+        <span class="body-clock-row-label">Selected sleep</span>
+        <div class="body-clock-track">
+          <span class="body-clock-window selected" style="left:${timeline.selected.startPct}%;width:${selectedWidth}%"></span>
+          <span class="body-clock-midpoint selected" style="left:${timeline.selected.midpointPct}%"></span>
+        </div>
+      </div>
+    </div>
     <div class="body-clock-legend">
       <span><i class="legend-swatch baseline"></i>Estimated body clock</span>
       <span><i class="legend-swatch selected"></i>Selected sleep</span>
@@ -795,7 +789,7 @@ function renderSleepPage(range, day, rangeRows) {
         <h3>Estimated body clock</h3>
         <span class="small muted sleep-estimate-chip">Estimate</span>
       </div>
-      ${renderBodyClockArc()}
+      ${renderBodyClockTimeline()}
       ${bodyClockEstimate.display.available ? `
         <div class="body-clock-stats">
           <p class="sleep-card-copy"><strong>Estimated chronotype:</strong> ${bodyClockEstimate.display.estimatedChronotype || '—'}</p>
