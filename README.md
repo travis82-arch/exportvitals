@@ -23,6 +23,10 @@ npm run check:mpa
 ## Cloudflare Pages deployment
 - Build command: `npm run build`
 - Output directory: `dist`
+- `dist/` is generated build output and should not be committed.
+
+## Public repository
+https://github.com/travis82-arch/exportvitals
 
 ## License
 AGPL-3.0-only
