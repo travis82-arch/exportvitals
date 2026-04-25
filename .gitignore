@@ -1,4 +1,27 @@
+# Dependencies and build output
+node_modules/
+dist/
+.vite/
+.cache/
+coverage/
+
+# Environment files
+.env
+.env.*
+!.env.example
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# OS/editor cruft
+.DS_Store
+
 # Local-only personal data (never commit)
+OPS/codex_runs/
 OPS/_local/
 OPS/_local/*.zip
 OPS/_local/*.json

@@ -1507,7 +1507,7 @@ function renderAboutPage() {
     </section>
     <section class="card section-card">
       <div class="section-head"><h3>Open source / public repo</h3></div>
-      <p>Public repo coming soon.</p>
+      <p><a class="text-link" href="https://github.com/travis82-arch/exportvitals" target="_blank" rel="noreferrer">Public repository</a></p>
     </section>
     <section class="card section-card">
       <div class="section-head"><h3>Affiliation</h3></div>
