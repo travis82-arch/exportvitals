@@ -358,6 +358,108 @@ function formatClockMinutes12h(minutes) {
   return `${hh12}:${String(mm).padStart(2, '0')} ${suffix}`;
 }
 
+function unwrapClockMinuteNearAnchor(minute, anchorMinute) {
+  if (!Number.isFinite(minute)) return null;
+  const normalized = normalizeClockMinutes(minute);
+  if (!Number.isFinite(anchorMinute)) return normalized;
+  const candidates = [normalized - 1440, normalized, normalized + 1440];
+  return candidates.reduce((best, current) => (
+    Math.abs(current - anchorMinute) < Math.abs(best - anchorMinute) ? current : best
+  ), candidates[1]);
+}
+
+function normalizeWindowOnTimeline(startMinute, endMinute, anchorMinute) {
+  if (!Number.isFinite(startMinute) || !Number.isFinite(endMinute)) return null;
+  const start = unwrapClockMinuteNearAnchor(startMinute, anchorMinute);
+  let end = unwrapClockMinuteNearAnchor(endMinute, start);
+  while (end <= start) end += 1440;
+  return {
+    start,
+    end,
+    midpoint: start + ((end - start) / 2)
+  };
+}
+
+function toClockLabelFromContinuousMinute(minute) {
+  return formatClockMinutes12h(normalizeClockMinutes(Math.round(minute)));
+}
+
+export function buildBodyClockTimelineGeometry({
+  baselineBedtimeClockMinutes,
+  baselineWakeClockMinutes,
+  selectedBedtimeClockMinutes,
+  selectedWakeClockMinutes,
+  paddingMinutes = 75,
+  minWindowMinutes = 360,
+  maxWindowMinutes = 1080
+} = {}) {
+  const baseline = normalizeWindowOnTimeline(baselineBedtimeClockMinutes, baselineWakeClockMinutes, null);
+  if (!baseline) return null;
+  let selected = normalizeWindowOnTimeline(selectedBedtimeClockMinutes, selectedWakeClockMinutes, baseline.start);
+  if (!selected) return null;
+  if (Math.abs(selected.midpoint - baseline.midpoint) > 720) {
+    selected = {
+      ...selected,
+      start: selected.start + (selected.midpoint < baseline.midpoint ? 1440 : -1440),
+      end: selected.end + (selected.midpoint < baseline.midpoint ? 1440 : -1440),
+      midpoint: selected.midpoint + (selected.midpoint < baseline.midpoint ? 1440 : -1440)
+    };
+  }
+
+  const earliestStart = Math.min(baseline.start, selected.start);
+  const latestEnd = Math.max(baseline.end, selected.end);
+  const safePadding = Number.isFinite(paddingMinutes) ? Math.max(45, Math.min(120, paddingMinutes)) : 75;
+  let chartStart = earliestStart - safePadding;
+  let chartEnd = latestEnd + safePadding;
+  let span = chartEnd - chartStart;
+
+  if (span < minWindowMinutes) {
+    const midpoint = (chartStart + chartEnd) / 2;
+    chartStart = midpoint - (minWindowMinutes / 2);
+    chartEnd = midpoint + (minWindowMinutes / 2);
+    span = chartEnd - chartStart;
+  }
+
+  if (span > maxWindowMinutes) {
+    const midpoint = (chartStart + chartEnd) / 2;
+    chartStart = midpoint - (maxWindowMinutes / 2);
+    chartEnd = midpoint + (maxWindowMinutes / 2);
+    span = chartEnd - chartStart;
+  }
+
+  const pct = (value) => Math.max(0, Math.min(100, ((value - chartStart) / Math.max(span, 1)) * 100));
+  const ticks = [0, 1, 2, 3, 4].map((step) => {
+    const minute = chartStart + ((span / 4) * step);
+    return {
+      percent: step * 25,
+      label: toClockLabelFromContinuousMinute(minute)
+    };
+  });
+
+  return {
+    startMinute: chartStart,
+    endMinute: chartEnd,
+    spanMinutes: span,
+    ticks,
+    baseline: {
+      startMinute: baseline.start,
+      endMinute: baseline.end,
+      midpointMinute: baseline.midpoint,
+      startPct: pct(baseline.start),
+      endPct: pct(baseline.end),
+      midpointPct: pct(baseline.midpoint)
+    },
+    selected: {
+      startMinute: selected.start,
+      endMinute: selected.end,
+      midpointMinute: selected.midpoint,
+      startPct: pct(selected.start),
+      endPct: pct(selected.end),
+      midpointPct: pct(selected.midpoint)
+    }
+  };
+}
+
 const THREE_HOURS_SEC = 3 * 60 * 60;
 const MIN_HISTORY_NIGHTS = 14;
 const STRONG_WINDOW_NIGHTS = 90;
@@ -568,7 +670,13 @@ export function computeBodyClockOffset({
       selectedMidpointLabel: formatClockMinutes12h(selectedMidpoint),
       baselineWindowLabel: `${formatClockMinutes12h(baselineModel.baseline.bedtimeMinute)}–${formatClockMinutes12h(baselineModel.baseline.wakeMinute)}`,
       selectedWindowLabel: `${formatClockMinutes12h(selectedSummary.bedtimeMinute)}–${formatClockMinutes12h(selectedSummary.wakeMinute)}`,
-      estimateLabel: 'This is an estimate from your export, not an official Oura chronotype.'
+      estimateLabel: 'This is an estimate from your export, not an official Oura chronotype.',
+      timeline: buildBodyClockTimelineGeometry({
+        baselineBedtimeClockMinutes: baselineModel.baseline.bedtimeMinute,
+        baselineWakeClockMinutes: baselineModel.baseline.wakeMinute,
+        selectedBedtimeClockMinutes: selectedSummary.bedtimeMinute,
+        selectedWakeClockMinutes: selectedSummary.wakeMinute
+      })
     },
     debug: {
       metric: 'derivedBodyClockOffsetEstimate',

@@ -35,3 +35,15 @@ test('light theme variables are present for major surfaces', () => {
   assert.equal(styleSource.includes('--text: #132238;'), true);
   assert.equal(styleSource.includes('.menu-toggle'), true);
 });
+
+test('sleep estimate cards use theme-aware styles in light mode', () => {
+  assert.equal(styleSource.includes(":root[data-theme='light'] .sleep-card--secondary"), true);
+  assert.equal(styleSource.includes(":root[data-theme='light'] body[data-page='sleep'] .card"), true);
+  assert.equal(styleSource.includes('color: var(--muted);'), true);
+});
+
+test('body clock visualization uses straight timeline markup instead of clock arc', () => {
+  assert.equal(entrySource.includes('class="body-clock-timeline"'), true);
+  assert.equal(entrySource.includes('class="body-clock-arc"'), false);
+  assert.equal(entrySource.includes('hardcoded nighttime frame'), false);
+});

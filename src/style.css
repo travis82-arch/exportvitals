@@ -853,6 +853,11 @@ body[data-page='sleep'] .card {
   border-color: rgba(128, 147, 203, 0.26);
   box-shadow: 0 12px 28px rgba(2, 7, 15, 0.42), inset 0 1px 0 rgba(180, 193, 255, 0.06);
 }
+:root[data-theme='light'] body[data-page='sleep'] .card {
+  background: var(--card);
+  border-color: #b6c5db;
+  box-shadow: var(--shadow);
+}
 
 body[data-page='sleep'] .hero-card .eyebrow,
 body[data-page='sleep'] .metric-label {
@@ -892,6 +897,13 @@ body[data-page='sleep'] .status-pill {
     linear-gradient(180deg, rgba(21, 29, 43, 0.95), rgba(11, 16, 27, 0.9)),
     radial-gradient(110% 95% at 10% 0%, rgba(86, 101, 136, 0.18), transparent 65%) !important;
 }
+:root[data-theme='light'] .sleep-card--secondary {
+  border-color: #b7c7de !important;
+  box-shadow: var(--shadow) !important;
+  background:
+    linear-gradient(180deg, #ffffff, #f8fbff),
+    radial-gradient(110% 95% at 10% 0%, rgba(74, 120, 214, 0.08), transparent 65%) !important;
+}
 
 .sleep-estimate-chip {
   text-transform: uppercase;
@@ -900,7 +912,7 @@ body[data-page='sleep'] .status-pill {
 
 .sleep-card-copy {
   margin: 2px 0 0;
-  color: #9badd2;
+  color: var(--muted);
   line-height: 1.4;
 }
 
@@ -914,7 +926,7 @@ body[data-page='sleep'] .status-pill {
 .sleep-debt-status {
   font-size: 0.72rem;
   letter-spacing: 0.11em;
-  color: #aebde0;
+  color: color-mix(in oklab, var(--muted), white 10%);
   font-weight: 700;
 }
 
@@ -945,7 +957,7 @@ body[data-page='sleep'] .status-pill {
   font-size: 0.64rem;
   letter-spacing: 0.06em;
   text-transform: uppercase;
-  color: #8597bb;
+  color: var(--muted);
 }
 
 .sleep-debt-high .sleep-debt-status { color: #d5a8ff; }
@@ -953,46 +965,94 @@ body[data-page='sleep'] .status-pill {
 .sleep-debt-low .sleep-debt-status { color: #9fb6ff; }
 .sleep-debt-none .sleep-debt-status { color: #98c8ff; }
 
-.body-clock-arc {
-  width: 100%;
-  height: 220px;
+.body-clock-timeline {
+  display: grid;
+  gap: 10px;
+  padding: 8px 10px 4px;
+  border: 1px solid color-mix(in oklab, var(--accent), transparent 70%);
+  border-radius: 12px;
+  background: color-mix(in oklab, var(--accent-surface), rgba(8, 14, 24, 0.7) 65%);
 }
 
-.clock-track {
-  fill: none;
-  stroke-linecap: round;
+.body-clock-axis {
+  position: relative;
+  height: 28px;
+  border-bottom: 1px solid color-mix(in oklab, var(--muted), transparent 55%);
 }
 
-.clock-grid {
-  fill: none;
-  stroke: rgba(123, 141, 188, 0.2);
-  stroke-width: 1;
-  stroke-dasharray: 2 5;
+.body-clock-tick {
+  position: absolute;
+  top: 0;
+  transform: translateX(-50%);
+  display: grid;
+  justify-items: center;
+  gap: 4px;
 }
 
-.clock-track.baseline {
-  stroke: rgba(176, 154, 243, 0.76);
-  stroke-width: 10;
+.body-clock-tick i {
+  width: 1px;
+  height: 8px;
+  background: color-mix(in oklab, var(--muted), transparent 40%);
 }
 
-.clock-track.selected {
-  stroke: rgba(148, 176, 255, 0.92);
-  stroke-width: 12;
+.body-clock-tick em {
+  font-style: normal;
+  font-size: 0.65rem;
+  color: var(--muted);
+  white-space: nowrap;
 }
 
-.clock-dot.midpoint {
-  fill: #edf2ff;
-  stroke: #9ab0ff;
-  stroke-width: 2;
+.body-clock-row {
+  display: grid;
+  gap: 6px;
 }
 
-.clock-label {
-  fill: #90a6d2;
-  font-size: 11px;
-  text-anchor: middle;
-  dominant-baseline: middle;
-  letter-spacing: 0.05em;
+.body-clock-row-label {
+  font-size: 0.72rem;
+  letter-spacing: 0.04em;
+  color: var(--muted);
   text-transform: uppercase;
+}
+
+.body-clock-track {
+  position: relative;
+  height: 14px;
+  border-radius: 999px;
+  background: color-mix(in oklab, var(--accent), transparent 85%);
+  overflow: visible;
+}
+
+.body-clock-window {
+  position: absolute;
+  top: 1px;
+  height: 12px;
+  border-radius: 999px;
+}
+
+.body-clock-window.baseline {
+  background: color-mix(in oklab, #b09af3, transparent 10%);
+}
+
+.body-clock-window.selected {
+  background: color-mix(in oklab, #94b0ff, transparent 8%);
+}
+
+.body-clock-midpoint {
+  position: absolute;
+  top: -3px;
+  width: 10px;
+  height: 10px;
+  border-radius: 999px;
+  transform: translateX(-50%);
+  border: 2px solid color-mix(in oklab, var(--card), white 28%);
+}
+
+.body-clock-midpoint.baseline {
+  background: #b09af3;
+}
+
+.body-clock-midpoint.selected {
+  background: #94b0ff;
 }
 
 .body-clock-legend {
@@ -1000,7 +1060,7 @@ body[data-page='sleep'] .status-pill {
   flex-wrap: wrap;
   gap: 10px 14px;
   font-size: 0.74rem;
-  color: #9cb1d7;
+  color: var(--muted);
 }
 
 .body-clock-legend span {
@@ -1024,8 +1084,8 @@ body[data-page='sleep'] .status-pill {
   width: 9px;
   height: 9px;
   border-radius: 999px;
-  background: #edf2ff;
-  border: 2px solid #9ab0ff;
+  background: #d9e4ff;
+  border: 2px solid #95adff;
 }
 
 .body-clock-stats {
@@ -1040,7 +1100,7 @@ body[data-page='sleep'] .status-pill {
 .debug-meta summary {
   cursor: pointer;
   font-size: 0.76rem;
-  color: #8ea3cb;
+  color: var(--muted);
   text-transform: uppercase;
   letter-spacing: 0.08em;
 }
@@ -1054,6 +1114,10 @@ body[data-page='sleep'] .status-pill {
   border: 1px solid rgba(120, 141, 191, 0.25);
   background: rgba(10, 16, 29, 0.85);
   padding: 8px;
+}
+:root[data-theme='light'] .debug-meta pre {
+  background: #f7faff;
+  border-color: #bfd0e8;
 }
 
 .progress {
