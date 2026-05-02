@@ -22,10 +22,12 @@ const pages = [
   'app/glossary/index.html',
   'app/settings/index.html',
   'app/my-health/index.html',
+  'wearable-export-viewer/index.html',
   'oura-export-viewer/index.html',
   'local-health-dashboard/index.html',
   'privacy-first-wearable-data/index.html',
-  'docs/how-to-export-oura-data/index.html'
+  'docs/how-to-export-oura-data/index.html',
+  'compare/local-vs-cloud-health-dashboard/index.html'
 ];
 
 export default defineConfig({
