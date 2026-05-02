@@ -48,9 +48,10 @@ test('utility menu exposes a single dark mode toggle and no theme submenu', () =
   assert.equal(topNavSource.includes('data-theme-option="light"'), false);
 });
 
-test('utility menu keeps only upload, about, and dark mode actions', () => {
+test('utility menu keeps only upload, about, support, and dark mode actions', () => {
   assert.equal(topNavSource.includes('Upload / Import data'), true);
   assert.equal(topNavSource.includes('href="/app/about/index.html"'), true);
+  assert.equal(topNavSource.includes('SITE_COPY.support.label'), true);
   assert.equal(topNavSource.includes('Dark Mode'), true);
   assert.equal(topNavSource.includes('Public repo'), false);
   assert.equal(topNavSource.includes('menu-upload-status'), false);
@@ -77,9 +78,9 @@ test('about opens inside app shell with top controls still present', () => {
   assert.equal(appAboutHtml.includes('<div id="topNav"></div>'), true);
   assert.equal(entrySource.includes("if (page === 'about')"), true);
   assert.equal(aboutRenderSource.includes('Open the dashboard'), false);
-  assert.equal(aboutRenderSource.includes('<button'), false);
+  assert.equal(aboutRenderSource.includes('Support development'), true);
   assert.equal(aboutRenderSource.includes('<a '), true);
-  assert.equal(entrySource.includes('Public repository'), true);
+  assert.equal(entrySource.includes('View source on GitHub'), true);
   assert.equal(entrySource.includes('<a class="text-link"'), true);
 });
 

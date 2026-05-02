@@ -4,6 +4,8 @@ export const SITE_COPY = {
   description:
     'Free and open-source local dashboard for wearable export ZIP files. Supports Oura export ZIP now with Fitbit export planned.',
   support: {
+    label: 'Support development',
+    supportUrl: 'https://ko-fi.com/tinytoolslab',
     publicRepoUrl: 'https://github.com/travis82-arch/exportvitals'
   },
   canonicalBaseUrl: 'https://oura-pwa-dashboard.pages.dev',
@@ -17,8 +19,14 @@ export const SITE_COPY = {
 };
 
 export const PUBLIC_REPO_FALLBACK_TEXT = 'Repository link unavailable.';
+export const SUPPORT_FALLBACK_TEXT = 'Support link unavailable.';
 
 export function getPublicRepoUrl() {
   const candidate = String(SITE_COPY?.support?.publicRepoUrl || '').trim();
+  return /^https?:\/\//i.test(candidate) ? candidate : '';
+}
+
+export function getSupportUrl() {
+  const candidate = String(SITE_COPY?.support?.supportUrl || '').trim();
   return /^https?:\/\//i.test(candidate) ? candidate : '';
 }

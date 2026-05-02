@@ -35,4 +35,5 @@ AGPL-3.0-only
 See [TRADEMARKS.md](./TRADEMARKS.md).
 
 ## Support
-Support link coming soon.
+ExportVitals is free to use. If it helped you, support future development:
+https://ko-fi.com/tinytoolslab
