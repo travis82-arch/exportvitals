@@ -1,7 +1,11 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
   <url><loc>https://exportvitals.pages.dev/</loc></url>
-  <url><loc>https://exportvitals.pages.dev/app/</loc></url>
-  <url><loc>https://exportvitals.pages.dev/privacy/</loc></url>
   <url><loc>https://exportvitals.pages.dev/about/</loc></url>
+  <url><loc>https://exportvitals.pages.dev/privacy/</loc></url>
+  <url><loc>https://exportvitals.pages.dev/app/</loc></url>
+  <url><loc>https://exportvitals.pages.dev/oura-export-viewer/</loc></url>
+  <url><loc>https://exportvitals.pages.dev/local-health-dashboard/</loc></url>
+  <url><loc>https://exportvitals.pages.dev/privacy-first-wearable-data/</loc></url>
+  <url><loc>https://exportvitals.pages.dev/docs/how-to-export-oura-data/</loc></url>
 </urlset>
