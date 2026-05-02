@@ -1,4 +1,5 @@
 import { navManifest } from '../nav/navManifest.js';
+import { SITE_COPY, getSupportUrl } from '../config/siteCopy.js';
 
 const toPagePath = (href) => `${href}/index.html`;
 const normalizePath = (path) => String(path || '').replace(/\/$/, '') || '/';
@@ -89,6 +90,7 @@ export function renderTopNav(target, {
     <div class="menu-panel" id="appMenuPanel" hidden>
       <button class="menu-upload menu-item" id="menuUploadAction" type="button">Upload / Import data</button>
       <a class="menu-link menu-item" href="/app/about/index.html">About</a>
+      <a class="menu-link menu-item" href="${getSupportUrl()}" target="_blank" rel="noreferrer">${SITE_COPY.support.label}</a>
       <label class="menu-item menu-toggle-item" for="menuDarkModeToggle">
         <span>Dark Mode</span>
         <input id="menuDarkModeToggle" class="menu-toggle" type="checkbox" role="switch" ${preferredTheme === 'dark' ? 'checked' : ''} aria-label="Dark Mode">

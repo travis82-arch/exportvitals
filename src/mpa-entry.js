@@ -1521,6 +1521,9 @@ function diagnosticsText(range, day, rangeRows) {
 
 
 function renderAboutPage() {
+  const repoUrl = String(SITE_COPY?.support?.publicRepoUrl || '').trim();
+  const supportUrl = String(SITE_COPY?.support?.supportUrl || '').trim();
+  const supportLabel = String(SITE_COPY?.support?.label || 'Support development');
   return `
     <section class="card section-card"> 
       <div class="section-head"><h3>What this is</h3></div>
@@ -1537,7 +1540,13 @@ function renderAboutPage() {
     </section>
     <section class="card section-card">
       <div class="section-head"><h3>Open source / public repo</h3></div>
-      <p><a class="text-link" href="https://github.com/travis82-arch/exportvitals" target="_blank" rel="noreferrer">Public repository</a></p>
+      <p><a class="text-link" href="${repoUrl}" target="_blank" rel="noreferrer">View source on GitHub</a></p>
+    </section>
+    <section class="card section-card">
+      <div class="section-head"><h3>Support</h3></div>
+      <p><strong>Free to use. Optional to support.</strong></p>
+      <p>ExportVitals is free to use. If it helped you, support future development.</p>
+      <p><a class="btn secondary" href="${supportUrl}" target="_blank" rel="noreferrer">${supportLabel}</a></p>
     </section>
     <section class="card section-card">
       <div class="section-head"><h3>Affiliation</h3></div>
