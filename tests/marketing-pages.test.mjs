@@ -50,11 +50,11 @@ test('about page contains compact sections for privacy, compatibility, repo stat
 });
 
 test('marketing metadata and canonical URLs use deployed pages domain', () => {
-  assert.equal(homeHtml.includes('<link rel="canonical" href="https://oura-pwa-dashboard.pages.dev/" />'), true);
-  assert.equal(aboutHtml.includes('https://oura-pwa-dashboard.pages.dev/about'), true);
-  assert.equal(privacyHtml.includes('https://oura-pwa-dashboard.pages.dev/privacy'), true);
-  assert.equal(robots.includes('https://oura-pwa-dashboard.pages.dev/sitemap.xml'), true);
-  assert.equal(sitemap.includes('https://oura-pwa-dashboard.pages.dev/app'), true);
+  assert.equal(homeHtml.includes('<link rel="canonical" href="https://exportvitals.pages.dev/" />'), true);
+  assert.equal(aboutHtml.includes('https://exportvitals.pages.dev/about/'), true);
+  assert.equal(privacyHtml.includes('https://exportvitals.pages.dev/privacy/'), true);
+  assert.equal(robots.includes('https://exportvitals.pages.dev/sitemap.xml'), true);
+  assert.equal(sitemap.includes('https://exportvitals.pages.dev/app/'), true);
 });
 
 test('branding and support/source values are centralized and neutral', () => {
@@ -63,7 +63,7 @@ test('branding and support/source values are centralized and neutral', () => {
   assert.equal(siteCopy.includes("supportUrl: 'https://ko-fi.com/tinytoolslab'"), true);
   assert.equal(siteCopy.includes("label: 'Support development'"), true);
   assert.equal(siteCopy.includes("PUBLIC_REPO_FALLBACK_TEXT = 'Repository link unavailable.'"), true);
-  assert.equal(siteCopy.includes("canonicalBaseUrl: 'https://oura-pwa-dashboard.pages.dev'"), true);
+  assert.equal(siteCopy.includes(String.raw`canonicalBaseUrl: SITE_URL.replace(/\/$/, '')`), true);
   assert.equal(manifest.includes('\"name\": \"ExportVitals\"'), true);
   assert.equal(manifest.includes('\"short_name\": \"Vitals\"'), true);
   assert.equal(homeHtml.includes('Oura Dashboard'), false);

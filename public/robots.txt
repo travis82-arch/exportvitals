@@ -1,4 +1,4 @@
 User-agent: *
 Allow: /
 
-Sitemap: https://oura-pwa-dashboard.pages.dev/sitemap.xml
+Sitemap: https://exportvitals.pages.dev/sitemap.xml
