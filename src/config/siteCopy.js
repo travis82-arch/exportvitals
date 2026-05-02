@@ -1,3 +1,5 @@
+export const SITE_URL = 'https://exportvitals.pages.dev/';
+
 export const SITE_COPY = {
   productName: 'ExportVitals',
   shortName: 'Vitals',
@@ -8,7 +10,7 @@ export const SITE_COPY = {
     supportUrl: 'https://ko-fi.com/tinytoolslab',
     publicRepoUrl: 'https://github.com/travis82-arch/exportvitals'
   },
-  canonicalBaseUrl: 'https://oura-pwa-dashboard.pages.dev',
+  canonicalBaseUrl: SITE_URL.replace(/\/$/, ''),
   trustStatement:
     'When you import an Oura export ZIP, parsing and metric generation run in your browser. Imported files and derived health data are stored locally on your device and are not sent to app server endpoints.',
   compatibility: {

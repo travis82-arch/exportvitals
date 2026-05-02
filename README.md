@@ -25,6 +25,9 @@ npm run check:mpa
 - Output directory: `dist`
 - `dist/` is generated build output and should not be committed.
 
+## Live app
+https://exportvitals.pages.dev/
+
 ## Public repository
 https://github.com/travis82-arch/exportvitals
 
