@@ -21,7 +21,11 @@ const pages = [
   'app/data-tools-export/index.html',
   'app/glossary/index.html',
   'app/settings/index.html',
-  'app/my-health/index.html'
+  'app/my-health/index.html',
+  'oura-export-viewer/index.html',
+  'local-health-dashboard/index.html',
+  'privacy-first-wearable-data/index.html',
+  'docs/how-to-export-oura-data/index.html'
 ];
 
 export default defineConfig({
