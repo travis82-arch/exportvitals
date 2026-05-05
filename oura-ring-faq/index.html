@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Oura Ring FAQ: App Problems, Syncing, Exports, Membership, and Data Access</title>
+  <meta name="description" content="Answers to common Oura Ring questions about app compatibility, Bluetooth syncing, missing data, membership, CSV exports, API access, and viewing your Oura data locally with ExportVitals."/>
+  <meta property="og:title" content="Oura Ring FAQ: App Problems, Syncing, Exports, Membership, and Data Access" />
+  <meta property="og:description" content="Answers to common Oura Ring questions about app compatibility, Bluetooth syncing, missing data, membership, CSV exports, API access, and viewing your Oura data locally with ExportVitals." />
+  <meta property="og:url" content="https://exportvitals.pages.dev/oura-ring-faq/" />
+  <link rel="canonical" href="https://exportvitals.pages.dev/oura-ring-faq/"/>
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"FAQPage","mainEntity":[{"@type":"Question","name":"Why won\u2019t the Oura app install on my Android phone?","acceptedAnswer":{"@type":"Answer","text":"If Google Play says the Oura app is not compatible with your device, the most common reason is that the phone does not meet the current app requirements. Oura currently lists Android 10 or newer, Google Play services, and Bluetooth 4.0 support as Android requirements. Updating the Google Play Store or Google Play services may help with some app problems, but it does not upgrade an Android 9 phone to Android 10. If the phone\u2019s operating system is too old, Google Play may continue to block installation."}},{"@type":"Question","name":"What Android version does the Oura app require?","acceptedAnswer":{"@type":"Answer","text":"Oura currently lists Android 10 or newer with Google Play services as the Android requirement for the Oura app. The phone must also support Bluetooth 4.0. This requirement can change, so the official Oura support page should be treated as the source of truth for final compatibility decisions."}},{"@type":"Question","name":"Can I sync my Oura Ring directly to a Windows PC?","acceptedAnswer":{"@type":"Answer","text":"Not through a normal official desktop workflow. A Windows PC may have Bluetooth, but Oura does not provide a standard Windows app that pairs with the ring, retrieves the raw ring data, syncs it to your Oura account, and prepares it for export. The normal path is: Oura Ring \u2192 official Oura mobile app \u2192 Oura account/cloud \u2192 official export tools."}},{"@type":"Question","name":"Does ExportVitals upload my Oura ZIP?","acceptedAnswer":{"@type":"Answer","text":"No. ExportVitals is designed around a local-first workflow. Your supported export file is parsed in your browser rather than uploaded to an ExportVitals server for parsing. This is one of the main reasons ExportVitals exists: many users want a readable dashboard without sending private wearable exports through another cloud service."}}]}</script>
+  <link rel="stylesheet" href="/src/marketing.css"/>
+</head>
+<body>
+  <main class="marketing-wrap"><section class="section"><h1>Oura Ring FAQ: App, Sync, Export, Membership, and Data Questions</h1>
+    <p>If your Oura app will not install, your ring will not sync, your data is missing, or your exported CSV files are hard to read, this FAQ collects the most common questions in one place.</p>
+    <p>ExportVitals is an unofficial local browser viewer for downloaded wearable export files, including Oura export ZIP files. It does not pair with your ring, sync new Bluetooth data, replace the Oura app, or bypass Oura account, membership, API, or export rules.</p>
+
+    <div class="actions"><a class="btn primary" href="/app/">Open ExportVitals</a><a class="text-link" href="/docs/how-to-export-oura-data/">How to export Oura data</a></div>
+
+    <h2>Quick answer</h2>
+    <ul class="trust-bullets">
+      <li>The Oura app currently requires a supported iPhone or Android phone.</li>
+      <li>Android users currently need Android 10 or newer with Google Play services, and the device must support Bluetooth 4.0.</li>
+      <li>A Windows PC or Mac cannot normally replace the Oura mobile app for Bluetooth syncing.</li>
+      <li>If an Oura Ring has not synced for several days, some unsynced data may be lost.</li>
+      <li>Oura data can be exported through Oura’s official account/export tools.</li>
+      <li>ExportVitals helps after you already have a downloaded Oura export ZIP.</li>
+    </ul>
+
+    <h2>Contents</h2>
+    <ul class="trust-bullets"><li>App compatibility and setup</li><li>Bluetooth, syncing, and desktop workarounds</li><li>Missing data and delayed syncing</li><li>Battery and charging</li><li>Exporting and viewing your data</li><li>Membership, API, and data access</li><li>ExportVitals-specific questions</li><li>Official references</li></ul>
+
+    <hr/>
+
+<h2>App compatibility and setup</h2><h3>Why won’t the Oura app install on my Android phone?</h3><p>If Google Play says the Oura app is not compatible with your device, the most common reason is that the phone does not meet the current app requirements. Oura currently lists Android 10 or newer, Google Play services, and Bluetooth 4.0 support as Android requirements.</p><p>Updating the Google Play Store or Google Play services may help with some app problems, but it does not upgrade an Android 9 phone to Android 10. If the phone’s operating system is too old, Google Play may continue to block installation.</p><h3>What Android version does the Oura app require?</h3><p>Oura currently lists Android 10 or newer with Google Play services as the Android requirement for the Oura app. The phone must also support Bluetooth 4.0.</p><p>This requirement can change, so the official Oura support page should be treated as the source of truth for final compatibility decisions.</p><hr/><h2>Bluetooth, syncing, and desktop workarounds</h2><h3>Can I sync my Oura Ring directly to a Windows PC?</h3><p>Not through a normal official desktop workflow. A Windows PC may have Bluetooth, but Oura does not provide a standard Windows app that pairs with the ring, retrieves the raw ring data, syncs it to your Oura account, and prepares it for export.</p><p>The normal path is: Oura Ring → official Oura mobile app → Oura account/cloud → official export tools.</p><hr/><h2>Exporting and viewing your data</h2><h3>Does ExportVitals upload my Oura ZIP?</h3><p>No. ExportVitals is designed around a local-first workflow. Your supported export file is parsed in your browser rather than uploaded to an ExportVitals server for parsing.</p><p>This is one of the main reasons ExportVitals exists: many users want a readable dashboard without sending private wearable exports through another cloud service.</p>
+
+    <h2>Official references</h2>
+
+    <p>For current requirements, account rules, device troubleshooting, and export details, check Oura’s official documentation:</p>
+
+    <ul class="trust-bullets">
+      <li><a class="text-link" href="https://support.ouraring.com/hc/en-us/articles/10470796678035-Software-Updates-for-Android" target="_blank" rel="noreferrer">Oura Software Updates for Android</a></li>
+      <li><a class="text-link" href="https://support.ouraring.com/hc/en-us/articles/360058634153-Set-Up-the-Oura-App" target="_blank" rel="noreferrer">Oura App setup</a></li>
+      <li><a class="text-link" href="https://support.ouraring.com/hc/en-us/articles/4411128662291-Set-Up-an-Oura-Ring" target="_blank" rel="noreferrer">Oura Ring setup</a></li>
+      <li><a class="text-link" href="https://support.ouraring.com/hc/en-us/articles/360025592013-Troubleshooting-Connection-Issues" target="_blank" rel="noreferrer">Oura connection troubleshooting</a></li>
+      <li><a class="text-link" href="https://support.ouraring.com/hc/en-us/articles/360025441594-Export-Share-Your-Oura-Data" target="_blank" rel="noreferrer">Oura export and share data</a></li>
+      <li><a class="text-link" href="https://support.ouraring.com/hc/en-us/articles/4409086524819-Oura-Membership" target="_blank" rel="noreferrer">Oura Membership</a></li>
+      <li><a class="text-link" href="https://support.ouraring.com/hc/en-us/articles/4415266939155-The-Oura-API" target="_blank" rel="noreferrer">Oura API</a></li>
+      <li><a class="text-link" href="https://support.ouraring.com/hc/en-us/articles/39695406607507-Troubleshooting-Gaps-in-Sleep-Data" target="_blank" rel="noreferrer">Oura troubleshooting gaps in sleep data</a></li>
+      <li><a class="text-link" href="https://support.ouraring.com/hc/en-us/articles/360046218953-Ring-Battery-Tips" target="_blank" rel="noreferrer">Oura Ring battery tips</a></li>
+      <li><a class="text-link" href="https://support.ouraring.com/hc/en-us/articles/34036777934227-Oura-Device-Firmware-Versions" target="_blank" rel="noreferrer">Oura firmware versions</a></li>
+      <li><a class="text-link" href="https://support.ouraring.com/hc/en-us/articles/46233324892691-Sleep-Debt" target="_blank" rel="noreferrer">Oura Sleep Debt</a></li>
+      <li><a class="text-link" href="https://support.ouraring.com/hc/en-us/articles/14594974129555-Body-Clock-and-Chronotype" target="_blank" rel="noreferrer">Oura Body Clock and Chronotype</a></li>
+      <li><a class="text-link" href="https://support.ouraring.com/hc/en-us/articles/360025592293-Transfer-Your-Ring-to-a-New-Phone-or-Tablet" target="_blank" rel="noreferrer">Oura transfer data to a new phone</a></li>
+    </ul>
+
+    <h2>Note</h2>
+
+    <p>Oura’s app requirements, membership rules, export options, API access, and feature availability can change. This FAQ summarizes public documentation and common user questions for convenience. ExportVitals is unofficial and not affiliated with Oura. For account-specific, warranty, billing, device-support, or official compatibility decisions, check Oura’s official documentation.</p>
+
+    <div class="actions"><a class="btn primary" href="/app/">Open ExportVitals</a><a class="text-link" href="/docs/how-to-export-oura-data/">How to export Oura data</a><a class="text-link" href="/oura-export-viewer/">Oura ZIP support page</a><a class="text-link" href="/wearable-export-viewer/">Wearable export viewer</a><a class="text-link" href="/privacy-first-wearable-data/">Privacy-first wearable data</a><a class="text-link" href="/">Back to homepage</a></div>
+  </section></main>
+</body>
+</html>
