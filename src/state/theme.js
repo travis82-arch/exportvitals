@@ -2,13 +2,14 @@ const THEME_KEY = 'ouraDashboardThemeV1';
 const THEME_OPTIONS = new Set(['dark', 'light']);
 
 function resolveStoredTheme(storage = (typeof localStorage !== 'undefined' ? localStorage : null)) {
-  if (!storage?.getItem) return 'light';
+  if (!storage?.getItem) return 'dark';
   const raw = storage.getItem(THEME_KEY);
-  return raw === 'dark' ? 'dark' : 'light';
+  if (raw === 'dark' || raw === 'light') return raw;
+  return 'dark';
 }
 
 export function applyTheme(mode, storage = (typeof localStorage !== 'undefined' ? localStorage : null)) {
-  const preferred = THEME_OPTIONS.has(mode) ? mode : 'light';
+  const preferred = THEME_OPTIONS.has(mode) ? mode : 'dark';
   document.documentElement.setAttribute('data-theme', preferred);
   document.body?.setAttribute('data-theme', preferred);
   document.documentElement.style.colorScheme = preferred;

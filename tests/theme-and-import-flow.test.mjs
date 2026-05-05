@@ -11,7 +11,7 @@ test('theme mode has a single source of truth with persistence and document-leve
   assert.equal(themeSource.includes("const THEME_KEY = 'ouraDashboardThemeV1'"), true);
   assert.equal(themeSource.includes("document.documentElement.setAttribute('data-theme'"), true);
   assert.equal(themeSource.includes("storage.setItem(THEME_KEY, preferred)"), true);
-  assert.equal(themeSource.includes("return raw === 'dark' ? 'dark' : 'light';"), true);
+  assert.equal(themeSource.includes("if (raw === 'dark' || raw === 'light') return raw;"), true);
   assert.equal(entrySource.includes('initTheme()'), true);
   assert.equal(topNavSource.includes('menuDarkModeToggle'), true);
   assert.equal(topNavSource.includes('data-theme-option="dark"'), false);
