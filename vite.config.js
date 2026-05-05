@@ -27,7 +27,8 @@ const pages = [
   'local-health-dashboard/index.html',
   'privacy-first-wearable-data/index.html',
   'docs/how-to-export-oura-data/index.html',
-  'compare/local-vs-cloud-health-dashboard/index.html'
+  'compare/local-vs-cloud-health-dashboard/index.html',
+  'oura-ring-faq/index.html'
 ];
 
 export default defineConfig({

@@ -10,6 +10,40 @@ const manifest = readFileSync(new URL('../manifest.webmanifest', import.meta.url
 const robots = readFileSync(new URL('../public/robots.txt', import.meta.url), 'utf8');
 const sitemap = readFileSync(new URL('../public/sitemap.xml', import.meta.url), 'utf8');
 
+
+const faqHtml = readFileSync(new URL('../oura-ring-faq/index.html', import.meta.url), 'utf8');
+const viteConfig = readFileSync(new URL('../vite.config.js', import.meta.url), 'utf8');
+
+test('oura faq page is included in mpa build and contains robust content and anchors', () => {
+  assert.equal(viteConfig.includes("'oura-ring-faq/index.html'"), true);
+  assert.equal(faqHtml.includes('Oura Ring FAQ: App, Sync, Export, Membership, and Data Questions'), true);
+  assert.equal(faqHtml.includes('Can updating Google Play fix an unsupported Android phone?'), true);
+  assert.equal(faqHtml.includes('Battery and charging'), true);
+  assert.equal(faqHtml.includes('Do I need Oura Membership to use the ring?'), true);
+  assert.equal(faqHtml.includes('Does ExportVitals require an account?'), true);
+  assert.equal(faqHtml.includes('Official references'), true);
+  assert.equal(faqHtml.includes('Oura’s app requirements, membership rules, export options, API access, and feature availability can change.'), true);
+  assert.equal(faqHtml.includes('id="does-exportvitals-upload-my-oura-zip"'), true);
+  assert.equal(faqHtml.includes('id="can-exportvitals-sync-directly-with-my-oura-ring"'), true);
+  assert.equal(faqHtml.includes('id="can-exportvitals-help-if-my-phone-is-too-old-for-the-oura-app"'), true);
+  assert.equal(faqHtml.includes('id="can-exportvitals-replace-oura-on-the-web"'), true);
+  assert.equal(faqHtml.includes('id="what-should-i-do-first-sync-export-or-import-into-exportvitals"'), true);
+  assert.equal(faqHtml.includes('https://exportvitals.pages.dev/oura-ring-faq/'), true);
+});
+
+test('homepage shows faq answer previews and read more faqs link', () => {
+  assert.equal(homeHtml.includes('No. ExportVitals is designed around a local-first workflow.'), true);
+  assert.equal(homeHtml.includes('No. ExportVitals does not pair with the ring, connect over Bluetooth, or sync new ring data.'), true);
+  assert.equal(homeHtml.includes('Partly. ExportVitals cannot install the Oura app on an unsupported phone'), true);
+  assert.equal(homeHtml.includes('Read more FAQs'), true);
+});
+
+test('sitemap includes oura faq page and faq json-ld is parseable', () => {
+  assert.equal(sitemap.includes('https://exportvitals.pages.dev/oura-ring-faq/'), true);
+  const m = faqHtml.match(/<script type="application\/ld\+json">([\s\S]*?)<\/script>/);
+  assert.notEqual(m, null);
+  assert.doesNotThrow(() => JSON.parse(m[1]));
+});
 const trustStatement = 'When you import an Oura export ZIP, parsing and metric generation run in your browser. Imported files and derived health data are stored locally on your device and are not sent to app server endpoints.';
 
 test('homepage starts with hero CTA and concise trust copy', () => {
