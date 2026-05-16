@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 
 const homeHtml = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
 const aboutHtml = readFileSync(new URL('../about/index.html', import.meta.url), 'utf8');
@@ -9,7 +9,22 @@ const siteCopy = readFileSync(new URL('../src/config/siteCopy.js', import.meta.u
 const manifest = readFileSync(new URL('../manifest.webmanifest', import.meta.url), 'utf8');
 const robots = readFileSync(new URL('../public/robots.txt', import.meta.url), 'utf8');
 const sitemap = readFileSync(new URL('../public/sitemap.xml', import.meta.url), 'utf8');
+const sitemapPages = readFileSync(new URL('../public/sitemap-pages.xml', import.meta.url), 'utf8');
+const sitemapIndex = readFileSync(new URL('../public/sitemap-index.xml', import.meta.url), 'utf8');
 
+const requiredSitemapUrls = [
+  'https://exportvitals.pages.dev/',
+  'https://exportvitals.pages.dev/about/',
+  'https://exportvitals.pages.dev/privacy/',
+  'https://exportvitals.pages.dev/app/',
+  'https://exportvitals.pages.dev/wearable-export-viewer/',
+  'https://exportvitals.pages.dev/oura-export-viewer/',
+  'https://exportvitals.pages.dev/local-health-dashboard/',
+  'https://exportvitals.pages.dev/privacy-first-wearable-data/',
+  'https://exportvitals.pages.dev/docs/how-to-export-oura-data/',
+  'https://exportvitals.pages.dev/compare/local-vs-cloud-health-dashboard/',
+  'https://exportvitals.pages.dev/oura-ring-faq/'
+];
 
 const faqHtml = readFileSync(new URL('../oura-ring-faq/index.html', import.meta.url), 'utf8');
 const viteConfig = readFileSync(new URL('../vite.config.js', import.meta.url), 'utf8');
@@ -101,4 +116,34 @@ test('branding and support/source values are centralized and neutral', () => {
   assert.equal(manifest.includes('\"name\": \"ExportVitals\"'), true);
   assert.equal(manifest.includes('\"short_name\": \"Vitals\"'), true);
   assert.equal(homeHtml.includes('Oura Dashboard'), false);
+});
+
+
+test('sitemap and robots files exist and include alternate sitemap discovery path', () => {
+  assert.equal(existsSync(new URL('../public/sitemap.xml', import.meta.url)), true);
+  assert.equal(existsSync(new URL('../public/sitemap-pages.xml', import.meta.url)), true);
+  assert.equal(existsSync(new URL('../public/sitemap-index.xml', import.meta.url)), true);
+  assert.equal(robots.includes('Sitemap: https://exportvitals.pages.dev/sitemap.xml'), true);
+  assert.equal(robots.includes('Sitemap: https://exportvitals.pages.dev/sitemap-index.xml'), true);
+});
+
+test('alternate sitemap files contain required URLs and preserve faq URL in both sitemaps', () => {
+  for (const url of requiredSitemapUrls) {
+    assert.equal(sitemapPages.includes(url), true);
+  }
+  assert.equal(sitemap.includes('https://exportvitals.pages.dev/oura-ring-faq/'), true);
+  assert.equal(sitemapPages.includes('https://exportvitals.pages.dev/oura-ring-faq/'), true);
+  assert.equal(sitemapIndex.includes('https://exportvitals.pages.dev/sitemap-pages.xml'), true);
+});
+
+test('sitemap XML files have expected structure', () => {
+  assert.match(sitemap, /^<\?xml version="1\.0" encoding="UTF-8"\?>/);
+  assert.match(sitemapPages, /^<\?xml version="1\.0" encoding="UTF-8"\?>/);
+  assert.match(sitemapIndex, /^<\?xml version="1\.0" encoding="UTF-8"\?>/);
+  assert.equal(sitemap.includes('<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">'), true);
+  assert.equal(sitemapPages.includes('<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">'), true);
+  assert.equal(sitemapIndex.includes('<sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">'), true);
+  assert.equal(sitemap.trim().endsWith('</urlset>'), true);
+  assert.equal(sitemapPages.trim().endsWith('</urlset>'), true);
+  assert.equal(sitemapIndex.trim().endsWith('</sitemapindex>'), true);
 });
